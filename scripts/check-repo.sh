@@ -31,7 +31,7 @@ while IFS= read -r path; do
     echo "text file is missing a final newline: $path" >&2
     exit 1
   fi
-done < <(git ls-files '*.md' '*.yml' '*.yaml' '*.sh' '.editorconfig' '.gitignore' 'LICENSE')
+done < <(git ls-files '*.md' '*.yml' '*.yaml' '*.sh' '*.go' 'go.mod' 'go.sum' '.editorconfig' '.gitignore' 'LICENSE')
 
 while IFS= read -r script; do
   bash -n "$script"
