@@ -52,8 +52,8 @@ func TestServerStatusRoundTripAndPrivateFiles(t *testing.T) {
 	server, _ := startTestServer(t, nil)
 
 	for path, want := range map[string]os.FileMode{
-		server.SocketPath():                              0o600,
-		filepath.Join(server.stateDir, AuthFilename):     0o600,
+		server.SocketPath():                          0o600,
+		filepath.Join(server.stateDir, AuthFilename): 0o600,
 	} {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -162,10 +162,19 @@ func TestWrongPeerUIDIsRejectedBeforeRequestAuthorization(t *testing.T) {
 	server, _ := startTestServer(t, func(net.Conn) (PeerIdentity, error) {
 		return PeerIdentity{UID: os.Geteuid() + 1, Verified: true}, nil
 	})
-	client := NewClient(server.stateDir)
-	_, err := client.Call(context.Background(), api.MethodStatus)
-	if err == nil || !strings.Contains(err.Error(), "unauthorized") {
-		t.Fatalf("wrong peer UID was not rejected: %v", err)
+
+	conn, err := net.Dial("unix", server.SocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	var response api.Response
+	if err := json.NewDecoder(conn).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error == nil || response.Error.Code != "unauthorized" {
+		t.Fatalf("wrong peer UID unexpectedly accepted: %+v", response)
 	}
 }
 
