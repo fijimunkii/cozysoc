@@ -35,6 +35,8 @@ A future implementation that cannot satisfy these requirements triggers an archi
 
 ## Issue #5 — real feasibility experiments
 
+**Harness result:** [`experiments/foundation/feasibility/`](../../experiments/foundation/feasibility/). Real-machine evidence remains tracked by #56.
+
 ### Desktop service lifetime
 
 On the first reference desktop candidate, prove:
@@ -74,26 +76,41 @@ Revisit a Proposed ADR if the reference platform cannot meet independent service
 
 ## Issue #6 — integration and redistribution evaluation
 
-Validate candidate engines separately rather than allowing the architecture to imply a mandatory stack.
+**Baseline result:** [`docs/integrations/evaluation-2026-09-08.md`](../integrations/evaluation-2026-09-08.md) and [ADR 0007](../adr/0007-integration-engine-strategy.md).
 
-For each selected candidate, establish:
+The Foundation integration decision establishes that:
 
-- maintained version and compatible architecture;
-- API/event contract;
+- v0.1 has no mandatory third-party engine;
+- native discovery is the base inventory path;
+- AdGuard Home is the v0.2 DNS candidate, external/read-only first;
+- OPNsense is the first v0.2 read-only router reference;
+- Suricata EVE is the first v0.3 traffic IDS/telemetry boundary;
+- Kismet is the v0.4 wireless engine on exact validated Linux radio/driver combinations;
+- Zeek, RITA, and managed NetAlertX are deferred until measured incremental value justifies their footprint;
+- OpenCanary, Wazuh, and Nmap remain optional v0.5 paths with deliberately constrained ownership; and
+- Nmap/Npcap are not silently redistributed under the ordinary base product distribution.
+
+### Integration contract carried into implementation
+
+Every implemented integration must still establish:
+
+- exact tested version and compatible architecture;
+- supported API/event contract rather than internal-database coupling;
 - required privileges and observation prerequisites;
-- managed versus external ownership semantics;
+- managed, external, or user-supplied ownership semantics;
 - resource/retention cost;
-- deep-link/evidence-view behavior;
-- update/security maintenance path; and
-- license/redistribution obligations for binaries, drivers, feeds, rules, and bundled assets.
+- deep-link versus Cozy SOC-native evidence-view behavior;
+- update/security maintenance and artifact provenance path;
+- license/distribution review for the exact binaries, drivers, feeds, rules, and assets actually shipped or installed; and
+- uninstall/recovery ownership boundaries.
 
 ### Security evidence required by #4
 
-For each candidate, #6 must also document how the integration satisfies or constrains applicable requirements for hostile input, endpoint identity/SSRF, TLS, external ownership, secret handling, artifact provenance, resource bounds, and untrusted-engine isolation (notably SEC-007–SEC-008, SEC-011–SEC-014, SEC-019, SEC-022, SEC-028–SEC-029).
+Each implementation must document how it satisfies or constrains applicable requirements for hostile input, endpoint identity/SSRF, TLS, external ownership, secret handling, artifact provenance, resource bounds, and untrusted-engine isolation, notably SEC-007–SEC-008, SEC-011–SEC-014, SEC-019, SEC-022, and SEC-028–SEC-029.
 
 ### Stop/reconsider conditions
 
-Do not bundle or manage an engine when its license, update provenance, privilege model, footprint, endpoint behavior, or failure behavior cannot meet the relevant architecture/security constraints. Prefer connect-to-existing or defer the capability.
+Do not bundle or manage an engine when its license/distribution path, update provenance, privilege model, footprint, endpoint behavior, or failure behavior cannot meet the relevant architecture/security constraints. Prefer external/read-only, user-supplied, or deferred capability instead.
 
 ## Proposed ADR promotion checklist
 
@@ -108,9 +125,11 @@ A Proposed architecture ADR becomes Accepted only when:
 
 ## Closure rule for issue #3
 
-Issue #3 remains open after the architecture and threat-model baselines. Close it only after #5–#6 have produced enough evidence to either:
+After the integration-strategy baseline is merged, issue #3 remains open only for the release-driving real-machine evidence in #5/#56 needed to accept or revise the Proposed shell/reference-platform decisions.
+
+Close #3 only when that evidence is sufficient to either:
 
 - accept the Proposed shell/platform/packaging decisions; or
 - revise them and merge the superseding architecture changes.
 
-Closing #3 marks the Foundation architecture/security contract as ready for v0.1 implementation; it is not itself a software release.
+Closing #3 marks the Foundation architecture/security/integration contract as ready for v0.1 implementation; it is not itself a software release.
