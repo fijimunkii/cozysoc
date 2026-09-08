@@ -85,7 +85,7 @@ func (c *Controller) Health() api.Health {
 	defer c.mu.RUnlock()
 
 	state := "ok"
-	if c.gapCount > 0 {
+	if time.Since(c.lastTick) > c.tickInterval*gapMultiplier {
 		state = "degraded"
 	}
 
