@@ -15,7 +15,7 @@ Cozy SOC is security software that intentionally observes sensitive household-ne
 
 This document models the second responsibility and the integrity/confidentiality requirements needed for trustworthy observations, findings, and actions.
 
-The process follows the OWASP threat-modeling questions: what are we building, what can go wrong, what will we do about it, and how will we validate the result. STRIDE terms are used as tags where useful, but the model is organized around concrete Cozy SOC abuse cases rather than completing a checklist for its own sake.
+The process follows the OWASP threat-modeling questions: what are we building, what can go wrong, what will we do about it, and how will we validate the result. STRIDE informed the adversarial review, but the maintained model is organized around concrete Cozy SOC abuse cases and testable controls rather than a checklist for its own sake.
 
 References researched for this baseline:
 
@@ -187,7 +187,7 @@ Severity here is **design priority**, not a CVSS score for an implemented vulner
 | ID | Priority | Abuse case | Consequence | Required response / regression owner |
 | --- | --- | --- | --- | --- |
 | TM-001 | Critical | Compromised renderer invokes a generic shell/process/file/service command exposed by the native shell. | User-level compromise becomes root/admin or arbitrary code execution. | No generic bridge; command allowlist and argument validation. SEC-005–SEC-010; #8/#29. |
-| TM-002 | Critical | A malicious website sends requests to an unauthenticated localhost controller endpoint. | Remote website changes configuration, reads household data, or triggers actions. | No unauthenticated management listener; OS-principal local IPC; browser defenses when HTTP exists. SEC-002–SEC-004, SEC-031; #8/#29. |
+| TM-002 | Critical | A malicious website sends requests to an unauthenticated localhost controller endpoint. | Remote website changes configuration, reads household data, or triggers actions. | No unauthenticated management listener; authenticated local IPC; browser defenses when HTTP exists. SEC-002–SEC-004, SEC-031; #8/#29. |
 | TM-003 | Critical | User-supplied or discovered integration URL causes SSRF or redirects credentials to another authority. | Controller attacks local/internal services or leaks router/resolver tokens. | Approved-origin binding, restricted schemes, redirect policy, address revalidation, credential scoping. SEC-011–SEC-014; #16/#17/#29. |
 | TM-004 | Critical | Compromised remote sensor sends a message interpreted as a controller command or enforcement request. | Sensor compromise becomes control-plane/router authority. | Sensor identity is scoped data-plane authority only; action APIs reject sensor principals. SEC-015–SEC-017, SEC-025; #15/#27/#29. |
 | TM-005 | Critical | Malicious update/dependency/engine artifact is installed as trusted code. | Persistent arbitrary code execution, potentially privileged. | Provenance/signature/integrity validation, pinned CI dependencies, isolated signing, rollback policy. SEC-022; #9/#20/#28/#29. |
