@@ -5,21 +5,19 @@ import (
 	"time"
 )
 
-func TestRecordTickTracksFreshnessGap(t *testing.T) {
+func TestHealthDegradesWhenTickerIsStaleAndRecovers(t *testing.T) {
 	controller := New("test", 1, time.Second)
-	base := time.Now()
-	controller.startedAt = base
-	controller.lastTick = base
+	controller.lastTick = time.Now().Add(-4 * time.Second)
 
-	controller.RecordTick(base.Add(2 * time.Second))
-	if got := controller.Health(); got.State != "ok" || got.GapCount != 0 {
-		t.Fatalf("unexpected healthy state: %+v", got)
+	stale := controller.Health()
+	if stale.State != "degraded" {
+		t.Fatalf("stale controller should be degraded: %+v", stale)
 	}
 
-	controller.RecordTick(base.Add(6 * time.Second))
-	got := controller.Health()
-	if got.State != "degraded" || got.GapCount != 1 || got.LastGapAt == nil {
-		t.Fatalf("gap not recorded: %+v", got)
+	controller.RecordTick(time.Now())
+	recovered := controller.Health()
+	if recovered.State != "ok" || recovered.GapCount != 1 || recovered.LastGapAt == nil {
+		t.Fatalf("controller did not recover while retaining gap history: %+v", recovered)
 	}
 }
 
