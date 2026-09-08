@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/fijimunkii/cozysoc/security
+    about: Read SECURITY.md and use private vulnerability reporting when available. Do not post sensitive vulnerability details publicly.

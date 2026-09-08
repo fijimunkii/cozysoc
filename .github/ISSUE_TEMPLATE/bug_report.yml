@@ -1,0 +1,74 @@
+name: Bug report
+description: Report reproducible incorrect Cozy SOC behavior
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Cozy SOC. **Do not include credentials, private keys, private packet captures, browsing history, or sensitive household-network details in a public issue.** Use the private path in SECURITY.md for security vulnerabilities.
+
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security check
+      options:
+        - label: This is not a vulnerability report and does not require sharing sensitive security details.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release version or commit SHA where you observed the problem.
+      placeholder: e.g. 1.2.3 or abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, OS version, architecture, and relevant sensor/hub type.
+      placeholder: e.g. macOS 27 arm64; Linux sensor Ubuntu 26.04 amd64
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior using sanitized examples.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Give the smallest safe sequence that reproduces the issue. Replace private names, addresses, and data with synthetic values.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: coverage
+    attributes:
+      label: Relevant coverage or sensor state
+      description: If applicable, describe what the app reported as active, degraded, stale, or unavailable. Do not paste sensitive traffic data.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional sanitized context
+      description: Screenshots or logs are optional. Redact household identifiers and secrets before attaching them.
