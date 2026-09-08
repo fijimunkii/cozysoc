@@ -60,14 +60,14 @@ Useful integration properties:
 
 - modern REST/GraphQL API surface;
 - device, event, setting, and plugin data suitable for inventory enrichment;
-- broad existing discovery/import plugins;
+- broad existing discovery/import plugins; and
 - useful own web UI for advanced deep links.
 
 Costs for Cozy SOC's base product:
 
 - its typical Docker deployment uses host networking for layer-2 discovery;
-- documented/container configuration requires broad network capabilities for its scanner workload;
-- its image currently incorporates tools including Nmap, creating a separate redistribution/compliance question for any Cozy SOC-managed distribution path;
+- documented/container configuration requires elevated network capabilities for its scanner workload;
+- its image currently incorporates tools including Nmap, creating a separate distribution/compliance question for any Cozy SOC-managed distribution path;
 - its baseline footprint is much larger than a small native discovery adapter; and
 - API/plugin structure is actively evolving, so coupling the v0.1 identity model to NetAlertX would make an external project part of the product's most fundamental path.
 
@@ -79,9 +79,9 @@ A later **external/read-only NetAlertX adapter** may be useful for users who alr
 
 Primary references:
 
-- <https://github.com/jokob-sk/NetAlertX/releases>
+- <https://github.com/netalertx/NetAlertX/releases>
 - <https://docs.netalertx.com/API/>
-- <https://github.com/jokob-sk/NetAlertX/blob/main/LICENSE>
+- <https://github.com/netalertx/NetAlertX/blob/main/LICENSE>
 
 ## DNS — AdGuard Home
 
@@ -93,7 +93,7 @@ AdGuard Home creates a genuinely new observation/control point: DNS activity and
 
 ### Initial contract
 
-**v0.2 starts external/read-only.** Cozy SOC validates a user-approved endpoint, authenticates with least privilege available to the product, ingests only the data needed for device/activity views, and leaves lifecycle/configuration ownership with the user.
+**v0.2 starts external/read-only.** Cozy SOC validates a user-approved endpoint, authenticates with the minimum authority needed, ingests only the data needed for device/activity views, and leaves lifecycle/configuration ownership with the user.
 
 Managed deployment is a later slice of #16 and remains gated on:
 
@@ -245,7 +245,7 @@ Primary references:
 
 ## Optional active assessment — Nmap and Npcap
 
-Nmap's project license is the Nmap Public Source License (NPSL), not an ordinary permissive license. Nmap's official OEM page states that OEM licensing is the redistribution path for proprietary distributed products. Npcap likewise has separate OEM redistribution licensing.
+Nmap's project license is the Nmap Public Source License (NPSL), not an ordinary permissive license. Nmap's official OEM page describes OEM licensing for redistributing Nmap within other products. Npcap likewise has separate OEM redistribution licensing.
 
 ### Decision
 
@@ -257,7 +257,7 @@ Nmap's project license is the Nmap Public Source License (NPSL), not an ordinary
 - scope is revalidated before execution; and
 - absence of Nmap simply means the optional capability is unavailable.
 
-If the project later wants a one-click managed Nmap/Npcap deployment, obtain and review the appropriate redistribution rights before changing this decision.
+If the project later wants a one-click managed Nmap/Npcap deployment, obtain and review the applicable redistribution rights before changing this decision.
 
 Primary references:
 
