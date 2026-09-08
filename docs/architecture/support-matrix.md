@@ -6,7 +6,7 @@ This document separates framework/platform possibility from **Cozy SOC product s
 
 ## Status vocabulary
 
-- **Candidate** — preferred P0 validation target; not yet supported.
+- **Candidate** — preferred Foundation validation target; not yet supported.
 - **Planned** — intended later; no current support claim.
 - **Tested** — passed the named hardware/software acceptance matrix. No entry has this state yet.
 - **Limited** — tested but with explicit missing capabilities.
