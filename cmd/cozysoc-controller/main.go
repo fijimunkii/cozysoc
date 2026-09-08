@@ -63,8 +63,8 @@ Usage:
   cozysoc-controller status [--state-dir PATH]
   cozysoc-controller health [--state-dir PATH]
 
-The current v0.1 bootstrap API is read-only and uses a permissioned local Unix socket.
-Platform peer-authentication and privileged helper boundaries remain owned by issue #8.
+The v0.1 API is read-only, uses a permissioned local Unix socket, and requires a per-controller session secret.
+Linux additionally verifies kernel-reported peer credentials. Stronger macOS client identity and privileged helper boundaries remain owned by issue #8.
 `
 }
 
@@ -130,7 +130,7 @@ func runReadCommand(ctx context.Context, method string, args []string, stdout, s
 		return err
 	}
 
-	client := localapi.NewClient(filepath.Join(dir, localapi.SocketFilename))
+	client := localapi.NewClient(dir)
 	result, err := client.Call(ctx, method)
 	if err != nil {
 		return err
