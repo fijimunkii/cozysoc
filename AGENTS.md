@@ -26,7 +26,7 @@ These instructions apply to automated and human-assisted coding agents working i
 - Use conventional commit subjects and a conventional PR title.
 - Add regression coverage for substantive bug or security fixes.
 - Update support/coverage documentation whenever observed behavior, privileges, or prerequisites change.
-- Run `./scripts/check-repo.sh` plus all stack-specific checks introduced by the affected code.
+- Run `bash scripts/check-repo.sh` plus all stack-specific checks introduced by the affected code.
 
 ## Review discipline
 
