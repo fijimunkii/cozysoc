@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a user-facing capability or focused improvement
+title: "[Feature] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cozy SOC favors small capabilities tied to a concrete household-security outcome. Check roadmap issue #1 before proposing broad platform work.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What should a household be able to understand or do that is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the user-facing result rather than prescribing an implementation when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Observation or data required
+      description: What evidence would Cozy SOC need to make this capability trustworthy? Note known blind spots or prerequisites.
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Security, privacy, or network impact
+      description: Would this add privileges, active scanning, data retention, a cloud dependency, or a network-changing action?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing tools or alternatives
+      description: Is there a maintained tool Cozy SOC could integrate rather than reimplementing the capability?
+
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Product principles
+      options:
+        - label: I have not described discovery or process health as proof of whole-network coverage.
+          required: true
+        - label: I have called out active or network-changing behavior rather than assuming it is harmless.
+          required: true
