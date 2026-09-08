@@ -85,7 +85,7 @@ The helper MUST authenticate its expected caller and independently validate secu
 **Owners:** #8, #27  
 **Regression:** path/target/scope/caller-negative tests in #29
 
-## Integration endpoints and SSRF
+## Integration endpoints and ownership
 
 ### SEC-011 — Approved authority binding
 
@@ -168,20 +168,6 @@ Exports, support bundles, and diagnostic captures MUST be explicit, bounded, pre
 **Owners:** #30  
 **Regression:** diagnostic/export redaction corpus in #29
 
-### SEC-026 — Notification minimization
-
-Lock-screen and external notifications MUST minimize household activity details by default. Sensitive DNS/destination/file/path evidence SHOULD require opening the authenticated UI.
-
-**Owners:** #18, #30  
-**Regression:** notification content tests in #29
-
-### SEC-033 — Backup trust does not clone authority
-
-Ordinary configuration/history backups MUST NOT silently clone or revive revoked credentials, sensor identities, router-write authority, or signing material. Restores to a new host MUST require explicit reauthorization/re-enrollment for trust material that should not be portable.
-
-**Owners:** #15, #30  
-**Regression:** backup/restore identity tests in #29
-
 ## Supply chain and updates
 
 ### SEC-022 — Authenticated artifact provenance
@@ -216,14 +202,14 @@ A finding, IDS rule, anomaly detector, external engine, AI/LLM output, or remote
 **Owners:** #18, #27  
 **Regression:** false-positive/action-boundary tests in #29
 
-### SEC-034 — Fail closed on security-critical uncertainty
+## User-visible privacy and evidence
 
-A security-sensitive operation that cannot confidently establish caller identity, target identity, authorization scope, endpoint authority, or required preconditions MUST refuse or require reauthorization. The product MAY degrade observation coverage, but MUST NOT silently broaden control authority to preserve convenience.
+### SEC-026 — Notification minimization
 
-**Owners:** #8, #11, #15, #16, #17, #25, #27  
-**Regression:** ambiguity/failure-path tests in #29
+Lock-screen and external notifications MUST minimize household activity details by default. Sensitive DNS/destination/file/path evidence SHOULD require opening the authenticated UI.
 
-## Coverage, evidence, and integration trust
+**Owners:** #18, #30  
+**Regression:** notification content tests in #29
 
 ### SEC-027 — Coverage requires fresh evidence
 
@@ -253,7 +239,7 @@ The controller MUST record a durable audit event for security-relevant trust/con
 **Owners:** #10, #15, #16, #18, #27, #30  
 **Regression:** audit completeness/state-transition tests in #29
 
-## Browser management and deep links
+## Browser management, navigation, and backups
 
 ### SEC-031 — Hub browser management is explicit and hardened
 
@@ -269,7 +255,21 @@ Deep links to third-party/admin tools MUST use approved schemes/origins, MUST NO
 **Owners:** #13, #16, #17, #26  
 **Regression:** scheme/origin/credential/context tests in #29
 
-## Testing requirement
+### SEC-033 — Backup trust does not clone authority
+
+Ordinary configuration/history backups MUST NOT silently clone or revive revoked credentials, sensor identities, router-write authority, or signing material. Restores to a new host MUST require explicit reauthorization/re-enrollment for trust material that should not be portable.
+
+**Owners:** #15, #30  
+**Regression:** backup/restore identity tests in #29
+
+## Failure policy and test evidence
+
+### SEC-034 — Fail closed on security-critical uncertainty
+
+A security-sensitive operation that cannot confidently establish caller identity, target identity, authorization scope, endpoint authority, or required preconditions MUST refuse or require reauthorization. The product MAY degrade observation coverage, but MUST NOT silently broaden control authority to preserve convenience.
+
+**Owners:** #8, #11, #15, #16, #17, #25, #27  
+**Regression:** ambiguity/failure-path tests in #29
 
 ### SEC-035 — Negative paths are release evidence
 
