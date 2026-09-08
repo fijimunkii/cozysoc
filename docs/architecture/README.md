@@ -2,7 +2,7 @@
 
 This directory describes the **current architecture contract** for Cozy SOC. Architectural decision records in [`../adr/`](../adr/) explain why significant choices were made and which choices remain provisional.
 
-The canonical roadmap remains [issue #1](https://github.com/fijimunkii/cozysoc/issues/1). This architecture baseline advances [issue #3](https://github.com/fijimunkii/cozysoc/issues/3); it does **not** close it. Hardware, platform, threat-model, and integration assumptions still require the evidence defined in issues [#4](https://github.com/fijimunkii/cozysoc/issues/4), [#5](https://github.com/fijimunkii/cozysoc/issues/5), and [#6](https://github.com/fijimunkii/cozysoc/issues/6).
+The canonical roadmap remains [issue #1](https://github.com/fijimunkii/cozysoc/issues/1). This architecture baseline advances [issue #3](https://github.com/fijimunkii/cozysoc/issues/3); it does **not** close it. Hardware, platform, threat-model, and integration assumptions still require the Foundation evidence defined in issues [#4](https://github.com/fijimunkii/cozysoc/issues/4), [#5](https://github.com/fijimunkii/cozysoc/issues/5), and [#6](https://github.com/fijimunkii/cozysoc/issues/6).
 
 ## Documents
 
@@ -18,7 +18,7 @@ The canonical roadmap remains [issue #1](https://github.com/fijimunkii/cozysoc/i
 ADRs use these states:
 
 - **Accepted** — the architectural choice is the current implementation contract. It may still have tests and release gates.
-- **Proposed** — the preferred direction, but a named P0 validation result can still change it without a migration commitment.
+- **Proposed** — the preferred direction, but a named Foundation validation result can still change it without a migration commitment.
 - **Superseded** — replaced by a later ADR.
 - **Rejected** — considered and intentionally not selected.
 
@@ -38,6 +38,10 @@ These do not depend on the result of a particular USB adapter or packet-capture 
 8. **Desktop mode remains useful by itself.** An always-on hub increases continuity and observation options; it is not required to discover the local network or use the app.
 9. **One core service supports desktop and hub deployment modes.** Platform adapters vary; the domain model does not fork into separate products.
 10. **No arbitrary plugin execution.** Integrations are curated adapters with declared capabilities and ownership.
+
+## Roadmap relationship
+
+Foundation establishes and validates the architecture contract. **v0.1** is the first implementation/release line built on that contract; later capability releases are grouped as v0.2–v0.5. Version names are release groupings, not priority labels.
 
 ## Explicit architecture non-goals
 
