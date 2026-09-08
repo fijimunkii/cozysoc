@@ -73,10 +73,15 @@ func NewServer(stateDir string, handler Handler, logger *slog.Logger) (*Server, 
 }
 
 func prepareSocket(socket string) error {
-	if _, err := os.Lstat(socket); errors.Is(err, os.ErrNotExist) {
+	info, err := os.Lstat(socket)
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return fmt.Errorf("inspect controller socket: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("refusing to replace non-socket path at %s", socket)
 	}
 
 	conn, err := net.DialTimeout("unix", socket, 250*time.Millisecond)
