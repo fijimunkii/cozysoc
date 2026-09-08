@@ -189,7 +189,10 @@ func runService(ctx context.Context, path string, interval time.Duration, stdout
 	if err != nil {
 		return fmt.Errorf("open heartbeat file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Sync()
+		_ = file.Close()
+	}()
 
 	enc := json.NewEncoder(file)
 	ticker := time.NewTicker(interval)
@@ -208,9 +211,6 @@ func runService(ctx context.Context, path string, interval time.Duration, stdout
 		if err := enc.Encode(record); err != nil {
 			return fmt.Errorf("write heartbeat: %w", err)
 		}
-		if err := file.Sync(); err != nil {
-			return fmt.Errorf("sync heartbeat: %w", err)
-		}
 		previous = now.UTC()
 		return nil
 	}
@@ -223,8 +223,8 @@ func runService(ctx context.Context, path string, interval time.Duration, stdout
 		select {
 		case <-ctx.Done():
 			return nil
-		case now := <-ticker.C:
-			if err := write(now); err != nil {
+		case <-ticker.C:
+			if err := write(time.Now()); err != nil {
 				return err
 			}
 		}
