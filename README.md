@@ -4,7 +4,7 @@
 
 Cozy SOC is a friendly, local-first home network security hub. The goal is to make useful network visibility and security capabilities approachable without requiring someone to become a security analyst or network administrator first.
 
-> **Status:** P0 architecture and feasibility. Cozy SOC does not have a released or functional build yet. Capabilities described below are roadmap targets, not current protection claims.
+> **Status:** Foundation architecture and feasibility. Cozy SOC does not have a released or functional build yet. Capabilities described below are roadmap targets, not current protection claims.
 
 ## Product direction
 
@@ -54,7 +54,7 @@ Accepted direction:
 - a modular-monolith core with narrow platform and integration adapters; and
 - narrowly scoped privileged helpers only where elevation is genuinely required.
 
-Still provisional pending P0 validation:
+Still provisional pending Foundation validation:
 
 - **Tauri v2** as the first thin desktop shell;
 - **macOS 13+ Apple Silicon** as the first desktop reference candidate; and
@@ -66,12 +66,14 @@ These are not current support claims. Issue #5 must prove real service lifetime,
 
 The canonical roadmap is [GitHub issue #1](https://github.com/fijimunkii/cozysoc/issues/1).
 
-Repository bootstrap is complete. Current P0 work is intentionally concentrated in:
+Repository bootstrap is complete. Current Foundation work is intentionally concentrated in:
 
 - [#3 — architecture and product boundaries](https://github.com/fijimunkii/cozysoc/issues/3);
 - [#4 — threat model](https://github.com/fijimunkii/cozysoc/issues/4);
 - [#5 — real service/capture/USB feasibility experiments](https://github.com/fijimunkii/cozysoc/issues/5); and
 - [#6 — integration, license, packaging, and minimum-engine evaluation](https://github.com/fijimunkii/cozysoc/issues/6).
+
+The first software release line is **v0.1**, the desktop alpha. Later roadmap stages use v0.2–v0.5, with v1.0 reserved for the first broadly ready release.
 
 ## Security and privacy
 
