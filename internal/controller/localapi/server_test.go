@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,32 @@ func TestSecondServerIsRejected(t *testing.T) {
 	}
 	if !errors.Is(err, ErrAlreadyRunning) {
 		t.Fatalf("second server error = %v, want ErrAlreadyRunning", err)
+	}
+}
+
+func TestNonSocketPathIsNeverRemoved(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix socket test")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, SocketFilename)
+	if err := os.WriteFile(path, []byte("keep-me\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	server, err := NewServer(dir, testHandler{}, nil)
+	if server != nil {
+		server.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "non-socket") {
+		t.Fatalf("expected non-socket refusal, got %v", err)
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != "keep-me\n" {
+		t.Fatalf("non-socket path was modified: %q", got)
 	}
 }
 
