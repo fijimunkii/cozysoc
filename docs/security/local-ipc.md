@@ -22,12 +22,14 @@ This secret is an **ephemeral local session credential**, not a persistent integ
 
 On Linux, accepted Unix connections are checked with `SO_PEERCRED`; the peer UID must match the controller effective UID before request authentication is processed. Failure to obtain peer credentials fails closed.
 
-On macOS, this slice still relies on the private socket directory plus the ephemeral session secret. Apple provides reliable UNIX-domain peer credential primitives such as `getpeereid`; adopting the final macOS client/code-identity policy remains an explicit #8 item rather than being approximated here.
+On macOS, accepted Unix connections are checked with Darwin `LOCAL_PEERCRED` via `x/sys/unix`; the returned `xucred` version must be recognized and its effective UID must match the controller effective UID before request authentication is processed. Failure to obtain or validate the credential fails closed.
+
+This establishes same-OS-user peer identity on both reference operating systems. It does **not** establish application/code-signing identity: another process already running as the same user remains inside this boundary until the desktop-shell/client-identity policy is implemented.
 
 ## What this blocks now
 
 - unauthenticated callers that can merely reach the socket;
-- unrelated Linux users even if filesystem permissions are misconfigured broadly enough to permit a connection;
+- unrelated Linux or macOS users even if filesystem permissions are misconfigured broadly enough to permit a connection;
 - browser-to-localhost attacks because there is no HTTP/TCP listener;
 - stale auth material surviving a normal controller restart; and
 - accidental credential disclosure through normal status/health responses and logging.
@@ -37,7 +39,7 @@ On macOS, this slice still relies on the private socket directory plus the ephem
 This is not the completed #8 security model. In particular:
 
 - another process running as the same OS user may be able to read the ephemeral token if it already has equivalent filesystem authority;
-- macOS peer/code-signing identity validation is not yet implemented;
+- macOS code-signing/application identity validation is not yet implemented;
 - persistent secrets are not yet stored in Keychain/Secret Service or a defined headless backend;
 - the Tauri renderer/native-command policy is not yet implemented; and
 - no privileged helper exists yet, so helper caller/scope validation remains future work before any privileged operation ships.

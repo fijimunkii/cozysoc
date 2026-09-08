@@ -46,7 +46,9 @@ jobs:
           GOOS: darwin
           GOARCH: arm64
           CGO_ENABLED: '0'
-        run: go build ./cmd/cozysoc-controller
+        run: |
+          go build ./cmd/cozysoc-controller
+          go test -c ./internal/controller/localapi -o "${RUNNER_TEMP}/localapi-darwin.test"
 
       - name: Run Foundation feasibility checks
         working-directory: experiments/foundation/feasibility
