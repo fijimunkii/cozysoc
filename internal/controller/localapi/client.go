@@ -5,20 +5,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"path/filepath"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 )
 
 type Client struct {
-	socket string
+	stateDir string
+	socket   string
 }
 
-func NewClient(socket string) *Client {
-	return &Client{socket: socket}
+func NewClient(stateDir string) *Client {
+	return &Client{
+		stateDir: stateDir,
+		socket:   filepath.Join(stateDir, SocketFilename),
+	}
 }
 
 func (c *Client) Call(ctx context.Context, method string) (json.RawMessage, error) {
+	secret, err := loadSessionSecret(c.stateDir)
+	if err != nil {
+		return nil, err
+	}
+
 	dialer := net.Dialer{Timeout: requestTimeout}
 	conn, err := dialer.DialContext(ctx, "unix", c.socket)
 	if err != nil {
@@ -31,6 +41,7 @@ func (c *Client) Call(ctx context.Context, method string) (json.RawMessage, erro
 		Version: api.Version,
 		ID:      "cli",
 		Method:  method,
+		Auth:    secret,
 	}
 	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		return nil, fmt.Errorf("send controller request: %w", err)

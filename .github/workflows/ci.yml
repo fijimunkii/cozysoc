@@ -41,6 +41,13 @@ jobs:
           go vet ./...
           go test ./...
 
+      - name: Verify macOS controller build
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: '0'
+        run: go build ./cmd/cozysoc-controller
+
       - name: Run Foundation feasibility checks
         working-directory: experiments/foundation/feasibility
         run: |

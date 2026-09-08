@@ -4,6 +4,7 @@ This directory contains the maintained security-design contract for Cozy SOC.
 
 - [Threat model](threat-model.md) — assets, adversaries, trust boundaries, abuse cases, residual risks, and review triggers.
 - [Security requirements](security-requirements.md) — normative requirements with implementation owners and regression-test expectations.
+- [Local controller IPC security](local-ipc.md) — implemented v0.1 local transport/authentication controls and explicit residual boundaries.
 - [`SECURITY.md`](../../SECURITY.md) — vulnerability reporting policy for the public repository.
 
 The initial threat model is a **Foundation design baseline**, not a certification or a claim that unimplemented controls already exist. A requirement becomes a product guarantee only after its owning implementation issue and release tests pass.

@@ -27,30 +27,44 @@ func (testHandler) Health() api.Health {
 	return api.Health{State: "ok", LastTickAt: time.Unix(1, 0).UTC()}
 }
 
-func TestServerStatusRoundTripAndSocketMode(t *testing.T) {
+func startTestServer(t *testing.T, verifier peerVerifier) (*Server, context.CancelFunc) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("Unix socket permission test")
+		t.Skip("Unix socket test")
 	}
-	dir := t.TempDir()
-	server, err := NewServer(dir, testHandler{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if verifier == nil {
+		verifier = verifyPeer
+	}
+	server, err := newServer(t.TempDir(), testHandler{}, slog.New(slog.NewTextHandler(io.Discard, nil)), verifier)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
-
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	go func() { _ = server.Serve(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = server.Close()
+	})
+	return server, cancel
+}
 
-	info, err := os.Stat(filepath.Join(dir, SocketFilename))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("socket mode = %o, want 600", got)
+func TestServerStatusRoundTripAndPrivateFiles(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+
+	for path, want := range map[string]os.FileMode{
+		server.SocketPath():                              0o600,
+		filepath.Join(server.stateDir, AuthFilename):     0o600,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("%s mode = %o, want %o", path, got, want)
+		}
 	}
 
-	client := NewClient(server.SocketPath())
+	client := NewClient(server.stateDir)
 	result, err := client.Call(context.Background(), api.MethodStatus)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +78,7 @@ func TestServerStatusRoundTripAndSocketMode(t *testing.T) {
 	}
 }
 
-func TestSecondServerIsRejected(t *testing.T) {
+func TestSessionSecretRotatesBetweenServerInstances(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix socket test")
 	}
@@ -73,18 +87,85 @@ func TestSecondServerIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() { _ = first.Serve(ctx) }()
+	firstSecret, err := loadSessionSecret(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	second, err := NewServer(dir, testHandler{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	secondSecret, err := loadSessionSecret(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstSecret == secondSecret {
+		t.Fatal("controller session secret did not rotate")
+	}
+}
+
+func TestSecondServerDoesNotRotateActiveSecret(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	before, err := loadSessionSecret(server.stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewServer(server.stateDir, testHandler{}, nil)
 	if second != nil {
-		second.Close()
+		_ = second.Close()
 	}
 	if !errors.Is(err, ErrAlreadyRunning) {
 		t.Fatalf("second server error = %v, want ErrAlreadyRunning", err)
+	}
+	after, err := loadSessionSecret(server.stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Fatal("failed second server rotated the active controller secret")
+	}
+}
+
+func TestMissingAndWrongSecretsAreRejected(t *testing.T) {
+	server, _ := startTestServer(t, func(net.Conn) (PeerIdentity, error) {
+		return PeerIdentity{UID: os.Geteuid(), Verified: true}, nil
+	})
+
+	for _, auth := range []string{"", "wrong-secret"} {
+		conn, err := net.Dial("unix", server.SocketPath())
+		if err != nil {
+			t.Fatal(err)
+		}
+		request := api.Request{Version: api.Version, ID: "x", Method: api.MethodStatus, Auth: auth}
+		if err := json.NewEncoder(conn).Encode(request); err != nil {
+			_ = conn.Close()
+			t.Fatal(err)
+		}
+		var response api.Response
+		if err := json.NewDecoder(conn).Decode(&response); err != nil {
+			_ = conn.Close()
+			t.Fatal(err)
+		}
+		_ = conn.Close()
+		if response.Error == nil || response.Error.Code != "unauthorized" {
+			t.Fatalf("auth %q unexpectedly accepted: %+v", auth, response)
+		}
+	}
+}
+
+func TestWrongPeerUIDIsRejectedBeforeRequestAuthorization(t *testing.T) {
+	server, _ := startTestServer(t, func(net.Conn) (PeerIdentity, error) {
+		return PeerIdentity{UID: os.Geteuid() + 1, Verified: true}, nil
+	})
+	client := NewClient(server.stateDir)
+	_, err := client.Call(context.Background(), api.MethodStatus)
+	if err == nil || !strings.Contains(err.Error(), "unauthorized") {
+		t.Fatalf("wrong peer UID was not rejected: %v", err)
 	}
 }
 
@@ -100,7 +181,7 @@ func TestNonSocketPathIsNeverRemoved(t *testing.T) {
 
 	server, err := NewServer(dir, testHandler{}, nil)
 	if server != nil {
-		server.Close()
+		_ = server.Close()
 	}
 	if err == nil || !strings.Contains(err.Error(), "non-socket") {
 		t.Fatalf("expected non-socket refusal, got %v", err)
@@ -114,26 +195,19 @@ func TestNonSocketPathIsNeverRemoved(t *testing.T) {
 	}
 }
 
-func TestUnknownMethodReturnsTypedError(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix socket test")
-	}
-	dir := t.TempDir()
-	server, err := NewServer(dir, testHandler{}, nil)
+func TestUnknownMethodReturnsTypedErrorAfterAuthentication(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	secret, err := loadSessionSecret(server.stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() { _ = server.Serve(ctx) }()
-
 	conn, err := net.Dial("unix", server.SocketPath())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Write([]byte("{\"version\":1,\"id\":\"x\",\"method\":\"mutate\"}\n")); err != nil {
+	request := api.Request{Version: api.Version, ID: "x", Method: "mutate", Auth: secret}
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		t.Fatal(err)
 	}
 	var response api.Response

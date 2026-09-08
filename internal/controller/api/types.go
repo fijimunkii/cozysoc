@@ -16,6 +16,7 @@ type Request struct {
 	Version int    `json:"version"`
 	ID      string `json:"id"`
 	Method  string `json:"method"`
+	Auth    string `json:"auth"`
 }
 
 type Response struct {

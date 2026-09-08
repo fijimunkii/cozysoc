@@ -3,6 +3,7 @@ package localapi
 import (
 	"bufio"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,16 +32,26 @@ type Handler interface {
 }
 
 type Server struct {
-	listener net.Listener
-	socket   string
-	handler  Handler
-	logger   *slog.Logger
-	sem      chan struct{}
+	listener   net.Listener
+	stateDir   string
+	socket     string
+	secret     string
+	handler    Handler
+	logger     *slog.Logger
+	sem        chan struct{}
+	verifyPeer peerVerifier
 }
 
 func NewServer(stateDir string, handler Handler, logger *slog.Logger) (*Server, error) {
+	return newServer(stateDir, handler, logger, verifyPeer)
+}
+
+func newServer(stateDir string, handler Handler, logger *slog.Logger, verifier peerVerifier) (*Server, error) {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	if verifier == nil {
+		return nil, fmt.Errorf("local API peer verifier is required")
 	}
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
@@ -57,18 +68,29 @@ func NewServer(stateDir string, handler Handler, logger *slog.Logger) (*Server, 
 	if err != nil {
 		return nil, fmt.Errorf("listen on local controller socket: %w", err)
 	}
-	if err := os.Chmod(socket, 0o600); err != nil {
+	cleanup := func() {
 		_ = listener.Close()
 		_ = os.Remove(socket)
+	}
+	if err := os.Chmod(socket, 0o600); err != nil {
+		cleanup()
 		return nil, fmt.Errorf("secure controller socket: %w", err)
+	}
+	secret, err := createSessionSecret(stateDir)
+	if err != nil {
+		cleanup()
+		return nil, err
 	}
 
 	return &Server{
-		listener: listener,
-		socket:   socket,
-		handler:  handler,
-		logger:   logger,
-		sem:      make(chan struct{}, maxConcurrentClient),
+		listener:   listener,
+		stateDir:   stateDir,
+		socket:     socket,
+		secret:     secret,
+		handler:    handler,
+		logger:     logger,
+		sem:        make(chan struct{}, maxConcurrentClient),
+		verifyPeer: verifier,
 	}, nil
 }
 
@@ -129,6 +151,9 @@ func (s *Server) Serve(ctx context.Context) error {
 
 func (s *Server) Close() error {
 	err := s.listener.Close()
+	if secretErr := removeSessionSecret(s.stateDir); secretErr != nil && err == nil {
+		err = secretErr
+	}
 	removeErr := os.Remove(s.socket)
 	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) && err == nil {
 		err = removeErr
@@ -139,6 +164,18 @@ func (s *Server) Close() error {
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(requestTimeout))
+
+	identity, err := s.verifyPeer(conn)
+	if err != nil {
+		s.logger.Warn("local_api_connection_rejected", "reason", "peer_identity_error")
+		s.writeError(conn, "", "unauthorized", "authentication failed")
+		return
+	}
+	if identity.Verified && identity.UID != os.Geteuid() {
+		s.logger.Warn("local_api_connection_rejected", "reason", "peer_uid_mismatch")
+		s.writeError(conn, "", "unauthorized", "authentication failed")
+		return
+	}
 
 	limited := io.LimitReader(conn, maxRequestBytes+1)
 	reader := bufio.NewReader(limited)
@@ -155,6 +192,11 @@ func (s *Server) handleConn(conn net.Conn) {
 	var request api.Request
 	if err := json.Unmarshal(payload, &request); err != nil {
 		s.writeError(conn, "", "invalid_request", "request is not valid JSON")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(request.Auth), []byte(s.secret)) != 1 {
+		s.logger.Warn("local_api_connection_rejected", "reason", "invalid_session_secret")
+		s.writeError(conn, request.ID, "unauthorized", "authentication failed")
 		return
 	}
 	if request.Version != api.Version {
