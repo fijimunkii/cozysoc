@@ -1,6 +1,6 @@
 # Architecture validation gates
 
-Architecture documentation is not proof that the proposed platform and integration paths work. This file maps the remaining P0 evidence needed to close issue #3.
+Architecture documentation is not proof that the proposed platform and integration paths work. This file maps the remaining **Foundation** evidence needed to close issue #3 and finalize the implementation contract for v0.1.
 
 ## Issue #4 — threat model
 
@@ -84,7 +84,7 @@ Do not bundle or manage an engine when its license, update provenance, privilege
 
 A Proposed architecture ADR becomes Accepted only when:
 
-1. its named P0 blockers have recorded evidence;
+1. its named Foundation blockers have recorded evidence;
 2. failure cases have been tested, not just the happy path;
 3. the support matrix is updated with exact tested platform/hardware versions;
 4. resource measurements are recorded rather than assumed;
@@ -97,3 +97,5 @@ Issue #3 remains open after this architecture-baseline PR. Close it only after #
 
 - accept the Proposed shell/platform/packaging decisions; or
 - revise them and merge the superseding architecture changes.
+
+Closing #3 marks the Foundation architecture contract as ready for v0.1 implementation; it is not itself a software release.
