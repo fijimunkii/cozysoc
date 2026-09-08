@@ -16,7 +16,7 @@ Each successful controller start generates a fresh 256-bit random session secret
 
 Clients load the secret from the private state directory and include it in each local request. Missing or incorrect values receive only a generic `unauthorized` error. Request payloads and secrets are never written to controller logs.
 
-This secret is an **ephemeral local session credential**, not a persistent integration/user credential. Persistent credentials remain subject to the OS-backed secret-store work still required by #8.
+This secret is an **ephemeral local session credential**, not a persistent integration/user credential. Persistent integration credentials use the separate controller-owned store described in [`secret-storage.md`](secret-storage.md); they are never placed in `controller.auth`.
 
 ## Kernel peer identity
 
@@ -39,8 +39,8 @@ This establishes same-OS-user peer identity on both reference operating systems.
 This is not the completed #8 security model. In particular:
 
 - another process running as the same OS user may be able to read the ephemeral token if it already has equivalent filesystem authority;
-- macOS code-signing/application identity validation is not yet implemented;
-- persistent secrets are not yet stored in Keychain/Secret Service or a defined headless backend;
+- macOS code-signing/application identity validation for the desktop client is not yet implemented;
+- the persistent secret-store abstraction exists, but signed macOS runtime evidence and the headless machine-bound backend are still required;
 - the Tauri renderer/native-command policy is not yet implemented; and
 - no privileged helper exists yet, so helper caller/scope validation remains future work before any privileged operation ships.
 
