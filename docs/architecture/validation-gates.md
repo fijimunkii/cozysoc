@@ -4,27 +4,34 @@ Architecture documentation is not proof that the proposed platform and integrati
 
 ## Issue #4 — threat model
 
-The threat model must evaluate at least these boundaries from the system model:
+**Baseline result:** [`docs/security/threat-model.md`](../security/threat-model.md) and [`docs/security/security-requirements.md`](../security/security-requirements.md).
 
-- React renderer → desktop shell;
-- desktop shell → local controller IPC;
-- controller → privileged helper;
-- controller → local data store;
-- controller → external/managed integration;
-- remote sensor → controller;
-- future browser origin → headless controller;
-- update/package artifacts → installed binaries; and
-- user-approved network scope → active discovery or write actions.
+The threat model evaluates the architecture boundaries from the system model and adds explicit requirements for:
 
-### Stop/reconsider conditions
+- renderer → shell privilege minimization;
+- shell/local client → controller authentication and browser-to-local defenses;
+- controller → privileged helper caller/argument validation;
+- controller → local data store ownership and bounded storage;
+- controller → external/managed integration endpoint identity, SSRF, redirects, TLS, and credential scoping;
+- remote sensor → controller authentication, scope, replay, and data-plane-only authority;
+- future browser origin → headless controller authentication, TLS, origin, and CSRF controls;
+- update/package/feed artifacts → installed code/rules provenance and anti-downgrade behavior;
+- user-approved network scope → active discovery/assessment confinement; and
+- findings → network actions as a deliberately separated authority boundary.
 
-Revisit the architecture if #4 shows that:
+### Architecture consequences from #4
 
-- the selected shell cannot keep generic process/system authority out of renderer reach;
-- local control cannot be authenticated/permissioned without opening a broader attack surface;
-- the controller requires routine root/admin execution instead of narrow helper operations;
-- a managed-engine design requires an unrestricted container/socket boundary; or
-- remote-sensor compromise can become controller/router authority through the proposed contract.
+The baseline threat model **supports the existing architecture** rather than forcing a redesign, provided implementation preserves its narrow boundaries. In particular:
+
+- the renderer cannot receive generic system/process authority;
+- local control cannot become an ambient unauthenticated HTTP endpoint;
+- the ordinary controller cannot require routine root/admin execution;
+- privileged helpers must independently validate typed allowlisted operations;
+- managed engines and enrolled sensors remain untrusted data producers rather than control-plane peers;
+- integration credentials must be bound to an explicitly approved endpoint authority; and
+- detection/finding state cannot itself authorize network mutation.
+
+A future implementation that cannot satisfy these requirements triggers an architecture/security review rather than silently weakening the model.
 
 ## Issue #5 — real feasibility experiments
 
@@ -57,6 +64,10 @@ Prove with owned lab traffic:
 
 On real supported Linux hardware, record exact adapter USB ID, chipset/revision, firmware, kernel/driver, bands/channels, permissions, monitor-mode behavior, unplug/replug, and cleanup.
 
+### Security evidence required by #4
+
+The #5 experiments must additionally demonstrate that the selected desktop/service/sensor paths can meet the applicable security requirements without broad privilege shortcuts, especially SEC-002–SEC-010, SEC-022, SEC-027–SEC-029, SEC-034, and SEC-035.
+
 ### Stop/reconsider conditions
 
 Revisit a Proposed ADR if the reference platform cannot meet independent service lifetime, security boundary, or resource targets without substantially increasing privilege/complexity.
@@ -76,9 +87,13 @@ For each selected candidate, establish:
 - update/security maintenance path; and
 - license/redistribution obligations for binaries, drivers, feeds, rules, and bundled assets.
 
+### Security evidence required by #4
+
+For each candidate, #6 must also document how the integration satisfies or constrains applicable requirements for hostile input, endpoint identity/SSRF, TLS, external ownership, secret handling, artifact provenance, resource bounds, and untrusted-engine isolation (notably SEC-007–SEC-008, SEC-011–SEC-014, SEC-019, SEC-022, SEC-028–SEC-029).
+
 ### Stop/reconsider conditions
 
-Do not bundle or manage an engine when its license, update provenance, privilege model, footprint, or failure behavior cannot meet the relevant architecture/product constraints. Prefer connect-to-existing or defer the capability.
+Do not bundle or manage an engine when its license, update provenance, privilege model, footprint, endpoint behavior, or failure behavior cannot meet the relevant architecture/security constraints. Prefer connect-to-existing or defer the capability.
 
 ## Proposed ADR promotion checklist
 
@@ -88,14 +103,14 @@ A Proposed architecture ADR becomes Accepted only when:
 2. failure cases have been tested, not just the happy path;
 3. the support matrix is updated with exact tested platform/hardware versions;
 4. resource measurements are recorded rather than assumed;
-5. threat-model requirements are reflected in the decision; and
+5. applicable threat-model requirements have concrete implementation/test evidence; and
 6. no unresolved high-impact issue is hidden behind a support claim.
 
 ## Closure rule for issue #3
 
-Issue #3 remains open after this architecture-baseline PR. Close it only after #4–#6 have produced enough evidence to either:
+Issue #3 remains open after the architecture and threat-model baselines. Close it only after #5–#6 have produced enough evidence to either:
 
 - accept the Proposed shell/platform/packaging decisions; or
 - revise them and merge the superseding architecture changes.
 
-Closing #3 marks the Foundation architecture contract as ready for v0.1 implementation; it is not itself a software release.
+Closing #3 marks the Foundation architecture/security contract as ready for v0.1 implementation; it is not itself a software release.
