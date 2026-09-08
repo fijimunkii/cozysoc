@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run repository checks
+        run: bash scripts/check-repo.sh
+
+      - name: Validate pull request title and commit subjects
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/check-conventional.sh "$PR_TITLE"
+
+          mapfile -t subjects < <(git log --format=%s "${BASE_SHA}..${HEAD_SHA}")
+          if (( ${#subjects[@]} == 0 )); then
+            echo 'no pull request commits found to validate' >&2
+            exit 1
+          fi
+
+          bash scripts/check-conventional.sh "${subjects[@]}"
