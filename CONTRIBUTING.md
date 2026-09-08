@@ -62,13 +62,13 @@ Avoid vague subjects such as `updates`, `fix stuff`, or `WIP`.
 Run the repository checks before opening or updating a pull request:
 
 ```bash
-./scripts/check-repo.sh
+bash scripts/check-repo.sh
 ```
 
 To validate a conventional subject locally:
 
 ```bash
-./scripts/check-conventional.sh "feat(discovery): add neighbor observations"
+bash scripts/check-conventional.sh "feat(discovery): add neighbor observations"
 ```
 
 As the product stack is introduced, this section will gain the exact formatting, lint, test, and build commands required by the accepted architecture.
