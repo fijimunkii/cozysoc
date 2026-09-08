@@ -5,6 +5,14 @@ label='com.cozysoc.feasibility'
 domain="gui/$UID"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 
+xml_escape() {
+  local value=$1
+  value=${value//&/&amp;}
+  value=${value//</&lt;}
+  value=${value//>/&gt;}
+  printf '%s' "$value"
+}
+
 usage() {
   cat >&2 <<'USAGE'
 usage:
@@ -27,7 +35,10 @@ case "$1" in
     heartbeat=$3
     [[ $binary == /* && -x $binary ]] || { echo 'probe binary must be an absolute executable path' >&2; exit 1; }
     [[ $heartbeat == /* ]] || { echo 'heartbeat path must be absolute' >&2; exit 1; }
+    [[ $binary != *$'\n'* && $heartbeat != *$'\n'* ]] || { echo 'paths must not contain newlines' >&2; exit 1; }
     mkdir -p "$(dirname "$heartbeat")" "$HOME/Library/LaunchAgents"
+    binary_xml=$(xml_escape "$binary")
+    heartbeat_xml=$(xml_escape "$heartbeat")
     cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -36,9 +47,9 @@ case "$1" in
   <key>Label</key><string>$label</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$binary</string>
+    <string>$binary_xml</string>
     <string>service</string>
-    <string>--heartbeat</string><string>$heartbeat</string>
+    <string>--heartbeat</string><string>$heartbeat_xml</string>
     <string>--interval</string><string>1s</string>
   </array>
   <key>RunAtLoad</key><true/>
