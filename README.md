@@ -4,7 +4,7 @@
 
 Cozy SOC is a friendly, local-first home network security hub. The goal is to make useful network visibility and security capabilities approachable without requiring someone to become a security analyst or network administrator first.
 
-> **Status:** planning and repository bootstrap. Cozy SOC does not have a released or functional build yet. Capabilities described below are roadmap targets, not current protection claims.
+> **Status:** P0 architecture and feasibility. Cozy SOC does not have a released or functional build yet. Capabilities described below are roadmap targets, not current protection claims.
 
 ## Product direction
 
@@ -42,24 +42,36 @@ The interface should never turn "zero alerts" into an unqualified "fully protect
 - **Existing installations are first-class.** Connecting to an existing service must not silently turn it into Cozy SOC-managed infrastructure.
 - **Security, monitoring coverage, and network quality are separate concepts.**
 
-## Working architecture direction
+## Architecture
 
-The current roadmap is evaluating:
+The current architecture baseline is documented in [`docs/architecture/`](docs/architecture/README.md).
 
-- a **Go** controller/background service;
+Accepted direction:
+
+- a **Go** controller/background service, independent of the desktop window;
 - a shared **TypeScript + React** interface;
-- **Tauri** as a possible desktop shell;
-- bounded local storage;
-- narrowly scoped native helpers where elevated privileges are genuinely required; and
-- **Linux** as the reference platform for advanced packet and wireless sensors.
+- a controller-owned **SQLite** store with no direct frontend/engine database access;
+- a modular-monolith core with narrow platform and integration adapters; and
+- narrowly scoped privileged helpers only where elevation is genuinely required.
 
-These are working directions, not finalized architecture decisions. The P0 feasibility work will validate service lifetime, packet visibility, USB Wi-Fi support, packaging constraints, resource use, and integration licenses before the stack is locked.
+Still provisional pending P0 validation:
+
+- **Tauri v2** as the first thin desktop shell;
+- **macOS 13+ Apple Silicon** as the first desktop reference candidate; and
+- **Ubuntu Server 26.04 LTS** on tested amd64/arm64 hardware as the initial headless hub/advanced-sensor candidate.
+
+These are not current support claims. Issue #5 must prove real service lifetime, packet visibility, USB Wi-Fi behavior, packaging, permissions, sleep/restart behavior, and resource budgets; issue #6 validates engine compatibility and redistribution terms.
 
 ## Roadmap
 
 The canonical roadmap is [GitHub issue #1](https://github.com/fijimunkii/cozysoc/issues/1).
 
-The first implementation task is [issue #2](https://github.com/fijimunkii/cozysoc/issues/2), which establishes repository conventions, documentation, and CI before product code is introduced.
+Repository bootstrap is complete. Current P0 work is intentionally concentrated in:
+
+- [#3 — architecture and product boundaries](https://github.com/fijimunkii/cozysoc/issues/3);
+- [#4 — threat model](https://github.com/fijimunkii/cozysoc/issues/4);
+- [#5 — real service/capture/USB feasibility experiments](https://github.com/fijimunkii/cozysoc/issues/5); and
+- [#6 — integration, license, packaging, and minimum-engine evaluation](https://github.com/fijimunkii/cozysoc/issues/6).
 
 ## Security and privacy
 
