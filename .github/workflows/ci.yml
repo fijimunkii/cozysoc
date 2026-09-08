@@ -29,11 +29,17 @@ jobs:
       - name: Run repository checks
         run: bash scripts/check-repo.sh
 
-      - name: Set up Go for feasibility checks
+      - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27.1'
           cache: false
+
+      - name: Run controller checks
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          go test ./...
 
       - name: Run Foundation feasibility checks
         working-directory: experiments/foundation/feasibility
