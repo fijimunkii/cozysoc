@@ -3,13 +3,16 @@ package api
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 )
 
 const Version = 1
 
 const (
-	MethodStatus = "status"
-	MethodHealth = "health"
+	MethodStatus           = "status"
+	MethodHealth           = "health"
+	MethodCapabilitiesList = "capabilities.list"
 )
 
 type Request struct {
@@ -46,4 +49,9 @@ type Health struct {
 	LastTickAt time.Time  `json:"last_tick_at"`
 	GapCount   uint64     `json:"gap_count"`
 	LastGapAt  *time.Time `json:"last_gap_at,omitempty"`
+}
+
+type CapabilityList struct {
+	CatalogSchemaVersion int                   `json:"catalog_schema_version"`
+	Capabilities         []capability.Instance `json:"capabilities"`
 }
