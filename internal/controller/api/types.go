@@ -136,6 +136,39 @@ type DeviceWatchCoverageBlindSpot struct {
 	NextStep string `json:"next_step"`
 }
 
+type DeviceWatchSensorHealth struct {
+	State            string     `json:"state"`
+	Running          bool       `json:"running"`
+	LastAttemptAt    *time.Time `json:"last_attempt_at,omitempty"`
+	LastSuccessfulAt *time.Time `json:"last_successful_at,omitempty"`
+	LastErrorClass   string     `json:"last_error_class,omitempty"`
+	NextStep         string     `json:"next_step,omitempty"`
+}
+
+type DeviceWatchPipelineHealth struct {
+	State    string `json:"state"`
+	Reason   string `json:"reason,omitempty"`
+	Capacity int    `json:"capacity"`
+	Depth    int    `json:"depth"`
+	Dropped  uint64 `json:"dropped_total"`
+	Failed   uint64 `json:"failed_total"`
+	NextStep string `json:"next_step,omitempty"`
+}
+
+type DeviceWatchDatabaseHealth struct {
+	State         string `json:"state"`
+	Reason        string `json:"reason,omitempty"`
+	DatabaseBytes int64  `json:"database_bytes"`
+	MaxBytes      int64  `json:"max_bytes"`
+	NextStep      string `json:"next_step,omitempty"`
+}
+
+type DeviceWatchOperationalHealth struct {
+	Sensor   DeviceWatchSensorHealth   `json:"sensor"`
+	Pipeline DeviceWatchPipelineHealth `json:"pipeline"`
+	Database DeviceWatchDatabaseHealth `json:"database"`
+}
+
 type DeviceWatchCoverage struct {
 	Configured       bool                           `json:"configured"`
 	ScopeID          string                         `json:"scope_id,omitempty"`
@@ -148,6 +181,7 @@ type DeviceWatchCoverage struct {
 	FreshUntil       *time.Time                     `json:"fresh_until,omitempty"`
 	NeighborsInScope *int                           `json:"neighbors_in_scope,omitempty"`
 	Sources          []DeviceWatchCoverageSource    `json:"sources"`
+	Operational      *DeviceWatchOperationalHealth  `json:"operational,omitempty"`
 	BlindSpots       []DeviceWatchCoverageBlindSpot `json:"blind_spots"`
 	NextStep         string                         `json:"next_step"`
 }
