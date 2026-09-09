@@ -4,10 +4,11 @@ package storage
 
 import (
 	"fmt"
-	"math"
 
 	"golang.org/x/sys/unix"
 )
+
+const maxFilesystemBytes = uint64(1<<63 - 1)
 
 func readFilesystemCapacity(path string) (FilesystemCapacity, error) {
 	var stat unix.Statfs_t
@@ -30,7 +31,7 @@ func readFilesystemCapacity(path string) (FilesystemCapacity, error) {
 }
 
 func filesystemBytes(blocks, blockSize uint64) (int64, error) {
-	if blockSize == 0 || blocks > math.MaxInt64/blockSize {
+	if blockSize == 0 || blocks > maxFilesystemBytes/blockSize {
 		return 0, fmt.Errorf("filesystem capacity exceeds supported range")
 	}
 	return int64(blocks * blockSize), nil
