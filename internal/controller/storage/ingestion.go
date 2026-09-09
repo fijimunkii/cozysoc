@@ -291,7 +291,7 @@ func (i *Ingestor) submit(ctx context.Context, item ingestionItem, nonBlocking b
 func (i *Ingestor) markAccepted(receipt *receiptState) {
 	acceptedAt := i.now().UTC()
 	receipt.acceptedAt = acceptedAt
-	i.latency.accept(acceptedAt)
+	i.latency.accept(receipt, acceptedAt)
 	i.noteAccepted()
 	close(receipt.accepted)
 }
@@ -326,7 +326,7 @@ func (i *Ingestor) run() {
 			startedAt := i.now().UTC()
 			result, err := i.process(item)
 			completedAt := i.now().UTC()
-			i.latency.complete(item.receipt.acceptedAt, startedAt, completedAt, err == nil)
+			i.latency.complete(item.receipt, item.receipt.acceptedAt, startedAt, completedAt, err == nil)
 			if err != nil {
 				i.noteFailure(item.kind, err)
 			} else {
@@ -406,8 +406,8 @@ func (i *Ingestor) noteRejected() {
 		return
 	}
 	i.stateMu.Lock()
+	defer i.stateMu.Unlock()
 	i.stats.Rejected++
-	i.stateMu.Unlock()
 }
 
 func (i *Ingestor) noteProcessed(result IngestionResult) {
