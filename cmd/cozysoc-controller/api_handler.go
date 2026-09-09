@@ -91,11 +91,12 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 	if !h.deviceWatchConfigured || h.deviceStore == nil || h.deviceWatchScopeID == "" {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
-	if !deviceIDPattern.MatchString(params.DeviceID) || storage.ValidateDeviceLabel(params.Label) != nil {
+	if params.Label == nil || !deviceIDPattern.MatchString(params.DeviceID) || storage.ValidateDeviceLabel(*params.Label) != nil {
 		return api.DeviceLabelResult{}, localapi.ErrInvalidMutation
 	}
+	label := *params.Label
 
-	changed, err := h.deviceStore.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, params.Label)
+	changed, err := h.deviceStore.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, label)
 	if errors.Is(err, storage.ErrDeviceNotInScope) {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
@@ -104,7 +105,7 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 	}
 	return api.DeviceLabelResult{
 		DeviceID:  params.DeviceID,
-		UserLabel: params.Label,
+		UserLabel: label,
 		Changed:   changed,
 	}, nil
 }
