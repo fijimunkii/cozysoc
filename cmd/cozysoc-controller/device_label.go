@@ -26,7 +26,8 @@ func runDeviceLabelCommand(ctx context.Context, args []string, stdout, stderr *o
 	if err != nil {
 		return err
 	}
-	params := api.DeviceLabelParams{DeviceID: fs.Arg(0), Label: fs.Arg(1)}
+	label := fs.Arg(1)
+	params := api.DeviceLabelParams{DeviceID: fs.Arg(0), Label: &label}
 	result, err := localapi.NewClient(dir).CallWithParams(ctx, api.MethodDeviceLabel, params)
 	if err != nil {
 		return err
