@@ -20,18 +20,32 @@ func projectDeviceWatchOperational(health devicewatch.OperationalHealth) *api.De
 		value := health.Sensor.LastSuccessfulAt.UTC()
 		sensor.LastSuccessfulAt = &value
 	}
+	pipeline := api.DeviceWatchPipelineHealth{
+		State:                string(health.Pipeline.State),
+		Reason:               health.Pipeline.Reason,
+		FailureClass:         health.Pipeline.FailureClass,
+		Capacity:             health.Pipeline.Capacity,
+		Depth:                health.Pipeline.Depth,
+		QueuePressure:        health.Pipeline.QueuePressure,
+		Dropped:              health.Pipeline.Dropped,
+		Failed:               health.Pipeline.Failed,
+		LatencyState:         string(health.Pipeline.LatencyState),
+		LatencyThresholdMS:   health.Pipeline.LatencyThreshold.Milliseconds(),
+		Pending:              health.Pipeline.Pending,
+		OldestPendingMS:      health.Pipeline.OldestPendingAge.Milliseconds(),
+		LastDurableLatencyMS: health.Pipeline.LastDurableLatency.Milliseconds(),
+		LastQueueWaitMS:      health.Pipeline.LastQueueWait.Milliseconds(),
+		LastProcessingMS:     health.Pipeline.LastProcessingDuration.Milliseconds(),
+		SlowStreak:           health.Pipeline.SlowStreak,
+		NextStep:             health.Pipeline.NextStep,
+	}
+	if !health.Pipeline.LastCompletedAt.IsZero() {
+		value := health.Pipeline.LastCompletedAt.UTC()
+		pipeline.LastCompletedAt = &value
+	}
 	return &api.DeviceWatchOperationalHealth{
-		Sensor: sensor,
-		Pipeline: api.DeviceWatchPipelineHealth{
-			State:        string(health.Pipeline.State),
-			Reason:       health.Pipeline.Reason,
-			FailureClass: health.Pipeline.FailureClass,
-			Capacity:     health.Pipeline.Capacity,
-			Depth:        health.Pipeline.Depth,
-			Dropped:      health.Pipeline.Dropped,
-			Failed:       health.Pipeline.Failed,
-			NextStep:     health.Pipeline.NextStep,
-		},
+		Sensor:   sensor,
+		Pipeline: pipeline,
 		Database: api.DeviceWatchDatabaseHealth{
 			State:                     string(health.Database.State),
 			Reason:                    health.Database.Reason,
