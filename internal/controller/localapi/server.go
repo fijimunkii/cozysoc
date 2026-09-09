@@ -32,6 +32,10 @@ type Handler interface {
 	Capabilities() api.CapabilityList
 }
 
+type DeviceHandler interface {
+	Devices(context.Context) (api.DeviceList, error)
+}
+
 type Server struct {
 	listener   net.Listener
 	stateDir   string
@@ -213,6 +217,21 @@ func (s *Server) handleConn(conn net.Conn) {
 		result = s.handler.Health()
 	case api.MethodCapabilitiesList:
 		result = s.handler.Capabilities()
+	case api.MethodDevicesList:
+		deviceHandler, ok := s.handler.(DeviceHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		deviceList, deviceErr := deviceHandler.Devices(requestCtx)
+		cancel()
+		if deviceErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDevicesList)
+			s.writeError(conn, request.ID, "internal_error", "unable to load devices")
+			return
+		}
+		result = deviceList
 	default:
 		s.writeError(conn, request.ID, "method_not_found", "method is not available")
 		return

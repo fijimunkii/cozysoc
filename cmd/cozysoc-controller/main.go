@@ -49,6 +49,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodHealth, args[1:], stdout, stderr)
 	case "capabilities":
 		return runReadCommand(ctx, api.MethodCapabilitiesList, args[1:], stdout, stderr)
+	case "devices":
+		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(stdout, usageText())
 		return nil
@@ -69,6 +71,7 @@ Usage:
   cozysoc-controller status [--state-dir PATH]
   cozysoc-controller health [--state-dir PATH]
   cozysoc-controller capabilities [--state-dir PATH]
+  cozysoc-controller devices [--state-dir PATH]
 
 The v0.1 management API is read-only, uses a permissioned local Unix socket, requires a per-controller session secret, and verifies OS peer identity on the current macOS and Linux reference paths.
 `
@@ -145,7 +148,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		}
 	}
 
-	server, err := localapi.NewServer(dir, controller, logger)
+	apiHandler, err := newControllerAPIHandler(controller, store, scopeID, deviceWatchEnabled)
+	if err != nil {
+		return err
+	}
+	server, err := localapi.NewServer(dir, apiHandler, logger)
 	if err != nil {
 		return err
 	}
