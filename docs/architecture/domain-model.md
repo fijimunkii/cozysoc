@@ -104,6 +104,29 @@ Examples:
 
 Coverage is time-scoped and evidence-based. Old data cannot make a currently disconnected sensor green.
 
+## CoverageReport / ObservationPointCoverage
+
+A derived, user-facing read model that combines configured capability intent, current `CoverageSample` evidence, and current sensor/ingestion/storage health. It is not a second stored evidence stream.
+
+A capability coverage report may contain one or more explicit observation points. Each point keeps separate:
+
+- configured scope dimensions;
+- scope dimensions currently verified by evidence;
+- configured dimensions that remain expected but unverified;
+- expected/observed source state;
+- directions actually observed;
+- evidence window and observation cadence;
+- current operational state; and
+- known scope/direction/content gaps with one actionable next step.
+
+Initial scope dimensions include network, interface, VLAN, device, address family, wireless band, and wireless channel. Traffic-oriented points can represent ingress, egress, east-west, client-to-service, and service-to-client directions without assuming every direction is present.
+
+Cadence is explicit because observation behavior matters. Continuous packet visibility, periodic polling, event-driven logs, and a wireless radio hopping with finite dwell are different coverage claims even when all are currently healthy.
+
+The read model has no global percentage denominator. Unknown clients, segments, traffic paths, or unsampled wireless time remain unknown/gaps rather than being silently counted as covered.
+
+Device Watch is the first production producer of this shared contract. DNS resolver, gateway packet, wireless hopping, and permission-required fixtures prove representability only; they are not product-support claims until real producers and validation exist.
+
 ## Finding
 
 A detector's assessment derived from one or more observations.
