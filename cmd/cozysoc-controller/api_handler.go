@@ -32,6 +32,10 @@ type deviceWatchAPIControl interface {
 	Disable(context.Context) (api.DeviceWatchControlResult, error)
 }
 
+type deviceWatchOperationalControl interface {
+	OperationalHealth(context.Context, time.Time) (devicewatch.OperationalHealth, error)
+}
+
 type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
 type controllerAPIHandler struct {
@@ -127,17 +131,27 @@ func (h *controllerAPIHandler) DeviceWatchCoverage(ctx context.Context) (api.Dev
 	if err != nil {
 		return api.DeviceWatchCoverage{}, err
 	}
+	operationalControl, ok := h.deviceWatch.(deviceWatchOperationalControl)
+	if !ok {
+		return api.DeviceWatchCoverage{}, fmt.Errorf("Device Watch operational health is unavailable")
+	}
+	operational, err := operationalControl.OperationalHealth(ctx, asOf)
+	if err != nil {
+		return api.DeviceWatchCoverage{}, err
+	}
+	state, reason, nextStep := devicewatch.EffectiveCoverage(report, operational)
 	result := api.DeviceWatchCoverage{
 		Configured:    true,
 		ScopeID:       scopeID,
 		AsOf:          asOf,
-		State:         string(report.State),
-		Reason:        report.Reason,
+		State:         string(state),
+		Reason:        reason,
 		SensorID:      report.SensorID,
 		InterfaceName: report.InterfaceName,
 		Sources:       make([]api.DeviceWatchCoverageSource, 0, len(report.Sources)),
+		Operational:   projectDeviceWatchOperational(operational),
 		BlindSpots:    make([]api.DeviceWatchCoverageBlindSpot, 0, len(report.BlindSpots)),
-		NextStep:      report.NextStep,
+		NextStep:      nextStep,
 	}
 	if report.HasEvidence {
 		evidenceAt := report.EvidenceAt

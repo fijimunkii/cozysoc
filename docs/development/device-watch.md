@@ -50,28 +50,42 @@ A failed enable is compensated: Cozy SOC attempts to stop any runtime side effec
 
 Disable is intentionally easier than enable. It never requires the network to still be present or healthy. Desired state is written as `disabled` before runtime stop, so a failed stop or abrupt controller restart cannot cause Device Watch to come back merely because the previous runtime was still alive. Failed disable also triggers an emergency stop attempt.
 
-`enabled` still does **not** mean verified coverage. Device Watch is builtin, so process state remains `not-applicable`; runtime activity is reported separately by the control result. Verification advances only from current evidence as described below.
+`enabled` still does **not** mean verified coverage. Device Watch is builtin, so process state remains `not-applicable`; runtime activity is reported separately by the control result. Verification advances only from current evidence and current operational health as described below.
 
-## Evidence-based verification
+## Evidence and operational verification
 
-Device Watch re-evaluates its declared verification signals while durable desired state is `enabled`. Reads such as `capabilities.list` remain side-effect-free; the controller performs verification reconciliation independently.
+Device Watch re-evaluates five declared verification signals while durable desired state is `enabled`. Reads such as `capabilities.list` and `device-watch.coverage` remain side-effect-free; the controller performs verification reconciliation independently.
 
-The `network-scope-enrolled` signal is fresh only while the stored scope still resolves to the currently enrolled interface binding. The `observation-freshness` signal comes from the latest retained Device Watch `CoverageSample` for that scope.
+The signals are:
+
+1. `network-scope-enrolled` — the stored scope still resolves to the enrolled interface binding;
+2. `observation-freshness` — the newest retained Device Watch `CoverageSample` is current, internally valid, and reports both expected ARP/NDP sources available;
+3. `sensor-operational` — the configured runtime is running and completing collections within the freshness window;
+4. `ingestion-health` — the bounded controller ingestion path is not currently under queue-pressure/backpressure or write failure; and
+5. `storage-health` — actively used SQLite pages are below the controller-database quota pressure threshold.
+
+All five must be fresh before the lifecycle state becomes `verified`. A current evidence sample therefore cannot keep Device Watch green after its producer disconnects or its write path becomes unhealthy.
 
 Coverage freshness is based on `CoverageSample.EndedAt`, not insertion order. Replaying an old sample later therefore cannot make historical evidence look current. With the one-minute collection cadence, the initial bounded freshness window is three minutes: current evidence tolerates ordinary scheduling jitter, while multiple missed collections become `stale`.
 
 Current Device Watch evidence maps as follows:
 
 - no retained sample: `missing`, leaving verification `unverified`;
-- fresh evidence with both expected ARP and NDP sources available: `fresh`, allowing Device Watch verification to become `verified` for its **limited passive neighbor-cache capability**;
-- fresh evidence with either expected source unavailable: `failed`, making verification `degraded` while the still-working source remains visible in coverage detail;
-- fresh evidence with neither source available: `failed`, making verification `degraded`;
+- fresh evidence with both expected ARP and NDP sources available: evidence freshness passes for the **limited passive neighbor-cache capability**;
+- fresh evidence with either expected source unavailable: evidence freshness fails, making verification `degraded` while the still-working source remains visible in coverage detail;
+- fresh evidence with neither source available: failed/degraded;
 - evidence older than the freshness window: `stale`; and
-- unsupported, contradictory, or implausibly future evidence: `failed` rather than guessed healthy.
+- unsupported, contradictory, or implausibly future evidence: failed rather than guessed healthy.
+
+Sensor health is evaluated separately from evidence. A runtime can be `starting`, `current`, `degraded`, `stale`, `disconnected`, or `unavailable`. A failed collection records only a coarse bounded error class; it is operational evidence, not a security finding.
+
+The ingestion path also reports current queue depth/capacity, active pressure/backpressure/write-failure state, and cumulative drop/failure totals. Historical totals remain available for diagnosis but do not permanently degrade the recovered pipeline.
+
+Storage capacity reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective SQLite `max_page_count` capacity. The 90% warning threshold applies to **used** quota, so reusable pages recovered through retention remain usable headroom. This is database-quota health, not host-filesystem free-space detection.
 
 A successful current sample may contain zero neighbors. That is still current heartbeat/validation evidence that the passive collection ran; a quiet network is not automatically treated as sensor failure.
 
-`verified` here is deliberately scoped. It means the declared Device Watch evidence is current and both expected neighbor-table sources are available. It does **not** mean every LAN client is visible, other devices' internet traffic is observed, every VLAN is covered, or the household is globally "protected." The coverage sample continues to record `whole_network_traffic_visible=false` and the known passive-cache limitations.
+`verified` here is deliberately scoped. It means the declared Device Watch evidence and its current operational path satisfy the manifest. It does **not** mean every LAN client is visible, other devices' internet traffic is observed, every VLAN is covered, or the household is globally "protected." The coverage sample continues to record `whole_network_traffic_visible=false` and the known passive-cache limitations.
 
 ## macOS passive source
 
@@ -101,7 +115,7 @@ The loop:
 
 Startup reconciliation uses the same lifecycle driver as live enablement. A persisted enabled intent is never implemented through a separate manual runtime-start path.
 
-The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar), while current coverage evidence is independently re-evaluated into verification state. A current source gap degrades Device Watch; a gap that stops producing samples eventually makes evidence stale.
+The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar), while current coverage and operational evidence are independently re-evaluated into verification state. A current source gap or collection failure degrades Device Watch; a running sensor that stops succeeding becomes stale; a stopped configured runtime is reported disconnected.
 
 A controller restart safely reuses the same deterministic Device Watch sensor. Replayed observations and reconciliation are idempotent.
 
@@ -120,7 +134,7 @@ No hostname lookup, manufacturer lookup, packet payload, or service scan is perf
 
 Neighbor observations use a deterministic one-minute source bucket. Repeated snapshots of the same `(scope, sensor, interface, method, IP, MAC)` within that bucket replay as the same source event and are deduplicated by the #10 storage contract. A later bucket creates fresh presence evidence for first/last-seen history.
 
-Every collection also emits a `device-watch` coverage sample. Even a fully successful ARP+NDP snapshot is marked `partial`; its evidence explicitly sets `whole_network_traffic_visible=false` and carries the passive-cache limitations above. The `partial` sample status describes Device Watch's intrinsically limited observation point; source availability inside the evidence determines whether current verification is merely limited or additionally degraded.
+Every collection also emits a `device-watch` coverage sample. Even a fully successful ARP+NDP snapshot is marked `partial`; its evidence explicitly sets `whole_network_traffic_visible=false` and carries the passive-cache limitations above. The `partial` sample status describes Device Watch's intrinsically limited observation point; source availability inside the evidence determines whether current evidence is merely limited or additionally degraded.
 
 ## Temporal identity reconciliation
 
@@ -170,9 +184,10 @@ The mutation does not grant network, generic capability-lifecycle, process, file
 
 This work still does not close #11. Remaining work includes:
 
-- richer #12 coverage/sensor-health states beyond Device Watch source freshness/detail;
-- desktop UI exposure for network selection, enable/disable, device presence, labeling, and coverage detail;
+- desktop UI exposure for network selection, enable/disable, device presence, labeling, and coverage/operational detail;
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
-- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, and permission/source failures.
+- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, and write-pressure scenarios.
+
+Broader #12 work still includes explicit host-filesystem free-space diagnosis, measured ingestion latency, and equivalent operational coverage semantics for future sensors/capabilities.

@@ -38,7 +38,18 @@ The Device Watch control E2E builds on that real enrollment. Linux intentionally
 
 The coverage-read process E2E deliberately checks only the fresh-controller `unconfigured` state on Linux. It proves the real CLI/authenticated Unix-socket/controller projection is wired without pretending Linux produced macOS ARP/NDP evidence.
 
-Device Watch coverage verification is tested deterministically at the storage/evaluator/lifecycle boundary. Fixtures prove that evidence time wins over insertion order, logical expiry is respected, current evidence with both ARP/NDP sources available can verify the limited capability, a current gap in either source degrades it, both sources unavailable degrades it, old evidence becomes stale, unsupported/future/contradictory evidence fails closed, and a quiet sample with zero neighbors can still be a healthy current heartbeat. These tests prove the state semantics; they do not certify real macOS ARP/NDP behavior.
+Device Watch coverage verification is tested deterministically at the storage/evaluator/lifecycle boundary. Fixtures prove that evidence time wins over insertion order, logical expiry is respected, current evidence with both ARP/NDP sources available can verify the limited capability, a current gap in either source degrades it, both sources unavailable degrades it, old evidence becomes stale, unsupported/future/contradictory evidence fails closed, and a quiet sample with zero neighbors can still be a healthy current heartbeat.
+
+Operational-health fixtures additionally prove that:
+
+- a configured runtime can be distinguished as starting, current, degraded, stale, disconnected, or unavailable;
+- an otherwise-fresh evidence sample does not keep coverage green after the runtime disconnects;
+- active ingestion queue pressure/backpressure and storage-write failure degrade the pipeline;
+- historical dropped/failed counters remain visible without permanently degrading a recovered pipeline;
+- SQLite quota pressure is classified from used pages rather than raw allocated file size, with reusable free-list pages preserved as headroom; and
+- Device Watch lifecycle verification requires the operational sensor/ingestion/storage signals in addition to scope and evidence freshness.
+
+These deterministic tests prove state semantics and fail-closed transitions; they do not certify real macOS sleep/resume behavior, actual disk exhaustion, or hardware-specific ARP/NDP availability.
 
 ## What this does not prove
 
@@ -46,10 +57,12 @@ A Linux process E2E suite does not certify macOS service lifetime, macOS permiss
 
 Network-enrollment/control/coverage-read E2E proves authorization and control/read-plane behavior on the Linux runner; it does not prove that Linux provides useful Device Watch presence evidence. The v0.1 passive observation source remains macOS-first until real platform evidence says otherwise.
 
+Database-quota tests do not prove host-filesystem free-space detection. A real full-disk condition should surface as a write failure when writes fail, but exact low-disk classification and recovery still need dedicated fixture/hardware evidence.
+
 Those claims require the named real-hardware evidence tracked by the Foundation feasibility work and issue #29. Hardware-unavailable remains `untested`; CI fixture success must not promote it to tested support.
 
 ## Growth model
 
-Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include richer #12 sensor/disconnection/ingestion health, bounded failures such as low disk, identity correction flows, and installation/service lifecycle once those product flows exist.
+Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include explicit filesystem free-space/`SQLITE_FULL` recovery, measured ingestion latency, identity correction flows, and installation/service lifecycle once those product flows exist.
 
 Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, packet labs, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.

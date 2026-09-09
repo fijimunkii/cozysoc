@@ -18,6 +18,7 @@ type RuntimeControl interface {
 	Stop(context.Context) (bool, error)
 	Running() bool
 	State() RuntimeState
+	IngestionHealth() storage.IngestionHealth
 }
 
 type LifecycleDriver struct {
@@ -153,16 +154,21 @@ func (d *LifecycleDriver) Verify(ctx context.Context, request capability.DriverR
 		Status:  capability.SignalMissing,
 		Message: "no current Device Watch coverage evidence is available",
 	}
+	now := time.Now().UTC()
+	if d.now != nil {
+		now = d.now().UTC()
+	}
+	operational, operationalErr := d.OperationalHealth(ctx, now)
+	if operationalErr != nil {
+		return capability.VerificationReport{}, operationalErr
+	}
+
 	if scopeID, err := scopeIDFromConfiguration(request.Configuration); err == nil {
 		if scope, getErr := d.store.GetNetworkScope(ctx, scopeID); getErr == nil {
 			if binding, parseErr := ParseScopeBinding(scope); parseErr == nil {
 				if _, currentErr := ValidateCurrentScope(ctx, d.inspector, binding); currentErr == nil {
 					scopeStatus = capability.SignalFresh
 				}
-			}
-			now := time.Now().UTC()
-			if d.now != nil {
-				now = d.now().UTC()
 			}
 			coverageSignal, coverageErr := coverageVerificationSignal(ctx, d.store, scopeID, now)
 			if coverageErr != nil {
@@ -176,6 +182,9 @@ func (d *LifecycleDriver) Verify(ctx context.Context, request capability.DriverR
 	return capability.VerificationReport{Signals: []capability.VerificationSignal{
 		{ID: "network-scope-enrolled", Status: scopeStatus},
 		observationSignal,
+		sensorVerificationSignal(operational.Sensor),
+		pipelineVerificationSignal(operational.Pipeline),
+		databaseVerificationSignal(operational.Database),
 	}}, nil
 }
 
