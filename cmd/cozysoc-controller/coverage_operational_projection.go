@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 )
@@ -37,16 +35,10 @@ func projectDeviceWatchOperational(health devicewatch.OperationalHealth) *api.De
 			State:         string(health.Database.State),
 			Reason:        health.Database.Reason,
 			DatabaseBytes: health.Database.DatabaseBytes,
+			UsedBytes:     health.Database.UsedBytes,
+			ReusableBytes: health.Database.ReusableBytes,
 			MaxBytes:      health.Database.MaxBytes,
 			NextStep:      health.Database.NextStep,
 		},
 	}
-}
-
-func copyTime(value time.Time) *time.Time {
-	if value.IsZero() {
-		return nil
-	}
-	copyValue := value.UTC()
-	return &copyValue
 }
