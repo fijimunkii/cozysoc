@@ -26,12 +26,16 @@ done
 empty_tree=$(git hash-object -t tree /dev/null)
 git diff --check "$empty_tree" HEAD
 
+missing_newline=0
 while IFS= read -r path; do
   if [[ -s "$path" && -n $(tail -c 1 "$path") ]]; then
     echo "text file is missing a final newline: $path" >&2
-    exit 1
+    missing_newline=1
   fi
 done < <(git ls-files '*.md' '*.yml' '*.yaml' '*.json' '*.sh' '*.go' 'go.mod' 'go.sum' '.editorconfig' '.gitignore' 'LICENSE')
+if (( missing_newline != 0 )); then
+  exit 1
+fi
 
 while IFS= read -r script; do
   bash -n "$script"
