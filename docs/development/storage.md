@@ -1,6 +1,6 @@
 # Normalized local storage v1
 
-Issue #10 introduces the controller-owned persistence and ingestion contract for normalized Cozy SOC evidence.
+Issue #10 established the controller-owned persistence and ingestion contract for normalized Cozy SOC evidence. #10 is complete; later coverage and operational-health work builds on that contract without reopening it.
 
 ## Boundaries
 
@@ -53,10 +53,15 @@ Current ingestion health is derived from the active episode and queue state, not
 - `current` when no current problem is detected;
 - `pressure` once queue depth reaches 75% of its known bounded capacity;
 - `backpressure` while the current saturation episode is dropping/rejecting evidence;
-- `write-failed` while the current write-failure episode is active; and
+- `write-failed` while a generic current storage-write failure is active;
+- `storage-full` when the current write failure carries SQLite's typed `SQLITE_FULL` result code; and
 - `closing` / `closed` during shutdown or disconnection.
 
-Cumulative dropped/failed totals remain visible for diagnostics, but a recovered pipeline does not stay degraded forever just because those historical totals are nonzero. Queue-pressure percentage is an operational utilization threshold against a known finite buffer, not a security or protection score.
+The SQLite-full classifier uses the driver's typed error code rather than matching human-readable database error text. The active failure stores only a bounded class such as `sqlite-full`; raw database errors are not copied into storage events or the coverage API.
+
+A `storage-full` ingestion episode remains degraded until a later storage operation succeeds. Current filesystem or quota capacity may recover first, but Cozy SOC does not claim the write path recovered until a successful write proves it. Cumulative dropped/failed totals remain visible for diagnostics after recovery without permanently poisoning current health.
+
+Queue-pressure percentage is an operational utilization threshold against a known finite buffer, not a security or protection score.
 
 Shutdown stops new submissions and drains all already-accepted records. A shutdown context may time out, but the ingestor does not silently discard the remaining accepted queue when that happens.
 
@@ -84,7 +89,7 @@ A device↔claim link is a separate temporal assertion with:
 
 This makes DHCP reuse and merge/split corrections representable without rewriting the original claim. User labels live on the `Device`, not inside inferred hostname/service claims.
 
-## Retention and quota
+## Retention, database quota, and host-volume capacity
 
 The store records an explicit expiry timestamp on evidence-bearing rows and has four internal retention classes. The initial durations are implementation defaults, not a permanent product promise:
 
@@ -95,9 +100,20 @@ The store records an explicit expiry timestamp on evidence-bearing rows and has 
 
 #30 will expose and refine user-facing retention controls. The current store hard-limits the main database with SQLite `max_page_count`; the default is the architecture target of 1 GiB. Transient filesystem overhead and sustained-growth behavior still require #29 measurement.
 
-Operational quota health uses SQLite page accounting rather than raw file size alone. The controller reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective `max_page_count` capacity. Pressure begins when used pages reach 90% of that configured database quota; reusable free-list pages count as headroom, so retention pruning can recover capacity even if the database file has not physically shrunk.
+Operational database-quota health uses SQLite page accounting rather than raw file size alone. The controller reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective `max_page_count` capacity. Pressure begins when used pages reach 90% of that configured database quota; reusable free-list pages count as headroom, so retention pruning can recover capacity even if the database file has not physically shrunk.
 
-This quota health is not host-filesystem monitoring. It cannot prove that the volume has free space or diagnose a full disk. A filesystem-full condition will still surface as an ingestion write failure when a write actually fails, but exact low-disk diagnosis remains future work.
+Host-volume capacity is a separate signal. On Darwin and Linux the controller reads filesystem statistics for the volume containing the state directory and reports total and **available-to-this-process** bytes. Filesystem states are:
+
+- `current` when available bytes are above the bounded warning threshold;
+- `pressure` when available bytes are at or below 128 MiB but still nonzero;
+- `full` only when the operating system reports zero available bytes; and
+- `unavailable` when capacity cannot be established.
+
+The 128 MiB value is a controller operational-headroom warning, not a claim that the OS will fail the next write at that point. It is also not a protection score. `full` is not inferred from database size: it requires current filesystem evidence reporting zero available bytes.
+
+Database quota and host-volume capacity can therefore disagree legitimately. A database can be at its SQLite quota while the host volume has ample space, or the host volume can be nearly/full while the database remains far below its own quota. When SQLite returns typed `SQLITE_FULL`, the current quota/filesystem evidence is used to explain the likely limiting capacity. If neither current capacity signal is limiting, the ingestion state remains `sqlite-full` until a successful write proves recovery rather than inventing a cause.
+
+On unsupported platforms filesystem capacity is reported as unsupported/unavailable and does not by itself degrade storage verification. On a platform where capacity introspection is expected but cannot currently be read, the filesystem state is `unavailable` and coverage degrades as `filesystem-unknown` rather than guessing current or full.
 
 Retention deletion is bounded per call. When rows expire, the controller writes a `retention-expired` storage event with per-table counts rather than allowing old evidence to disappear with no operational trace.
 
@@ -107,12 +123,11 @@ Normalized JSON envelopes are capped at 64 KiB. The v1 schema has no full-packet
 
 Secret bytes do not belong in this database. Credential-bearing capability fields remain opaque references to the secret-store boundary.
 
-## What remains in #10
+## Follow-on work after completed #10
 
-This slice still does not close #10. Remaining work includes:
+The normalized-storage milestone is complete. Follow-on issues still own product and lab work that builds on it, including:
 
-- merge/split correction operations with audit records;
-- overlap/double-count representation for multiple sensors;
-- richer migration fixtures;
-- explicit filesystem free-space/low-disk diagnosis and `SQLITE_FULL` recovery; and
-- broader controller/API wiring for future sensors and capabilities.
+- auditable merge/split correction UX and broader multi-sensor overlap behavior where later capabilities need it;
+- measured ingestion latency and overload recovery under named workloads;
+- real low-disk/full-volume recovery evidence on named filesystems/hardware; and
+- broader controller/API projections for future sensors and capabilities.
