@@ -22,9 +22,35 @@ v0.1 permits one active Device Watch scope. Re-enrolling the exact same binding 
 
 A real enrollment and its durable `network-scope-enroll` audit event commit in one SQLite transaction. If the audit cannot commit, the scope is rolled back too.
 
-**Enrollment alone does not enable Device Watch.** It creates only the durable authorization object. The runtime remains dormant until capability intent is separately configured as `enabled` with that `network_scope_id`.
+**Enrollment alone does not enable Device Watch.** It creates only the durable authorization object.
 
 Before every collection, the current interface must still be up, retain the enrolled name/index, and share at least one enrolled prefix. A mismatch blocks collection with a scope-revalidation error rather than silently following the machine onto a new network. Neighbors are filtered again against the enrolled prefixes before persistence; newly encountered prefixes are not silently added to scope.
+
+## Explicit enable / disable
+
+The authenticated lifecycle controls are capability-specific:
+
+```bash
+cozysoc-controller device-watch-enable --state-dir PATH
+cozysoc-controller device-watch-disable --state-dir PATH
+```
+
+`device-watch.enable` does not accept a caller-supplied scope. It selects the single already-enrolled Device Watch scope and builds the typed capability configuration internally.
+
+Before enabled intent is persisted, the real Device Watch lifecycle driver performs side-effect-free preflight. Enable preflight checks:
+
+- the passive runtime is supported on the current platform;
+- a `network_scope_id` is present;
+- the scope still exists and contains a valid Device Watch binding; and
+- the enrolled interface identity/prefixes still match the current machine.
+
+If preflight is blocked, the request fails before writing enabled intent or a requested transition audit. On success, the controller records the request, atomically persists desired state, updates the in-memory capability model, and invokes the same lifecycle engine used for startup reconciliation.
+
+A failed enable is compensated: Cozy SOC attempts to stop any runtime side effect and restores the previous durable configuration. A repeated enable for the same already-running scope is idempotent.
+
+Disable is intentionally easier than enable. It never requires the network to still be present or healthy. Desired state is written as `disabled` before runtime stop, so a failed stop or abrupt controller restart cannot cause Device Watch to come back merely because the previous runtime was still alive. Failed disable also triggers an emergency stop attempt.
+
+`enabled` still does **not** mean verified coverage. Device Watch is builtin, so process state remains `not-applicable`; runtime activity is reported separately by the control result. Verification remains `unverified` until #12 can establish all required fresh evidence, including `observation-freshness`.
 
 ## macOS passive source
 
@@ -43,7 +69,7 @@ One source may be unavailable while the other remains usable; coverage evidence 
 
 ## Controller runtime
 
-When Device Watch is explicitly enabled for a valid stored scope, the controller creates or reuses one deterministic built-in sensor identity for that scope/interface and starts a one-minute passive collection loop.
+When Device Watch is explicitly enabled for a valid stored scope, the lifecycle driver creates or reuses one deterministic built-in sensor identity for that scope/interface and starts a one-minute passive collection loop.
 
 The loop:
 
@@ -52,7 +78,9 @@ The loop:
 3. writes observations and coverage through the bounded #10 ingestion queue; and
 4. reconciles each persisted neighbor observation into temporal identity evidence.
 
-Startup or collection failure does not terminate the controller. The runtime records only a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar) and leaves capability verification unchanged. Starting the producer is **not** equivalent to satisfying Device Watch coverage verification; #12 remains responsible for turning fresh coverage evidence into capability verification state.
+Startup reconciliation uses the same lifecycle driver as live enablement. A persisted enabled intent is never implemented through a separate manual runtime-start path.
+
+The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records only a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar) and leaves capability verification unchanged.
 
 A controller restart safely reuses the same deterministic Device Watch sensor. Replayed observations and reconciliation are idempotent.
 
@@ -111,20 +139,19 @@ cozysoc-controller device-label --state-dir PATH DEVICE_ID "Living Room TV"
 
 An empty label clears the user label. Labels are user metadata only; they do not alter the underlying temporal identity claims or increase inference confidence.
 
-Authorization remains tied to the configured Device Watch scope. Storage independently requires retained identity evidence for that device in the same scope before it permits the update. A guessed device ID from another scope therefore cannot be labeled through this method.
+Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update. A guessed device ID from another scope therefore cannot be labeled through this method.
 
 Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event.
 
-The mutation does not grant network, capability-lifecycle, process, filesystem, or arbitrary database write authority.
+The mutation does not grant network, generic capability-lifecycle, process, filesystem, or arbitrary database write authority.
 
 ## What remains in #11
 
 This work still does not close #11. Remaining work includes:
 
-- an authenticated capability-configuration mutation to explicitly enable/disable Device Watch against the enrolled scope;
-- lifecycle-driver registration and #12 coverage-verification wiring;
-- desktop UI exposure for network selection, device presence, and labeling;
+- #12 coverage/sensor-health wiring so actual fresh evidence can advance verification state;
+- desktop UI exposure for network selection, enable/disable, device presence, and labeling;
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
-- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, labeling, and permission/source failures.
+- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, and permission/source failures.

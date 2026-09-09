@@ -167,14 +167,14 @@ func (e *LifecycleEngine) Run(ctx context.Context, id string, action LifecycleAc
 		return result, fmt.Errorf("capability lifecycle engine is unavailable")
 	}
 
+	operationLock := e.operationLock(id)
+	operationLock.Lock()
+	defer operationLock.Unlock()
+
 	instance, configuration, err := e.operationSnapshot(id)
 	if err != nil {
 		return result, err
 	}
-
-	operationLock := e.operationLock(id)
-	operationLock.Lock()
-	defer operationLock.Unlock()
 
 	result.State = e.currentState(id, instance.State)
 	if !hasLifecycleAction(instance.Manifest, action) {
@@ -310,11 +310,11 @@ func (e *LifecycleEngine) operationSnapshot(id string) (Instance, Configuration,
 	if !ok {
 		return Instance{}, Configuration{}, fmt.Errorf("unknown capability %q", id)
 	}
-	configuration, ok := e.instances.configured[id]
+	configuration, ok := e.instances.Configuration(id)
 	if !ok {
 		configuration = defaultConfiguration(instance.Manifest)
 	}
-	return instance, cloneConfiguration(configuration), nil
+	return instance, configuration, nil
 }
 
 func (e *LifecycleEngine) currentState(id string, fallback InstanceState) InstanceState {
@@ -343,11 +343,16 @@ func (e *LifecycleEngine) setState(id string, manifest Manifest, state InstanceS
 func (e *LifecycleEngine) operationLock(id string) *sync.Mutex {
 	e.lockMu.Lock()
 	defer e.lockMu.Unlock()
-	lock, ok := e.locks[id]
-	if !ok {
-		lock = &sync.Mutex{}
-		e.locks[id] = lock
+	if lock, ok := e.locks[id]; ok {
+		return lock
 	}
+	if e.instances != nil && e.instances.registry != nil {
+		if _, ok := e.instances.registry.Get(id); !ok {
+			return &sync.Mutex{}
+		}
+	}
+	lock := &sync.Mutex{}
+	e.locks[id] = lock
 	return lock
 }
 

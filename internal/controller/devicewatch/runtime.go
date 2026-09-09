@@ -26,6 +26,7 @@ var (
 )
 
 type RuntimeState struct {
+	Running          bool      `json:"running"`
 	ScopeID          string    `json:"scope_id,omitempty"`
 	SensorID         string    `json:"sensor_id,omitempty"`
 	StartedAt        time.Time `json:"started_at,omitempty"`
@@ -46,6 +47,8 @@ type Runtime struct {
 
 	mu      sync.RWMutex
 	started bool
+	cancel  context.CancelFunc
+	done    chan struct{}
 	state   RuntimeState
 }
 
@@ -105,12 +108,12 @@ func (r *Runtime) Start(ctx context.Context, scopeID string) error {
 	if r == nil {
 		return fmt.Errorf("device watch runtime is unavailable")
 	}
-	r.mu.Lock()
-	if r.started {
-		r.mu.Unlock()
+	r.mu.RLock()
+	alreadyStarted := r.started
+	r.mu.RUnlock()
+	if alreadyStarted {
 		return ErrRuntimeAlreadyStarted
 	}
-	r.mu.Unlock()
 
 	scope, err := r.store.GetNetworkScope(ctx, scopeID)
 	if err != nil {
@@ -161,17 +164,69 @@ func (r *Runtime) Start(ctx context.Context, scopeID string) error {
 		return err
 	}
 
+	runCtx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	r.mu.Lock()
 	if r.started {
 		r.mu.Unlock()
+		cancel()
 		return ErrRuntimeAlreadyStarted
 	}
 	r.started = true
-	r.state = RuntimeState{ScopeID: scopeID, SensorID: sensorID, StartedAt: startedAt}
+	r.cancel = cancel
+	r.done = done
+	r.state = RuntimeState{Running: true, ScopeID: scopeID, SensorID: sensorID, StartedAt: startedAt}
 	r.mu.Unlock()
 
-	go r.run(ctx, collector, scopeID, sensorID, binding)
+	go func() {
+		r.run(runCtx, collector, scopeID, sensorID, binding)
+		r.mu.Lock()
+		if r.done == done {
+			r.started = false
+			r.cancel = nil
+			r.done = nil
+			r.state.Running = false
+		}
+		r.mu.Unlock()
+		close(done)
+	}()
 	return nil
+}
+
+func (r *Runtime) Stop(ctx context.Context) (bool, error) {
+	if r == nil {
+		return false, nil
+	}
+	r.mu.RLock()
+	if !r.started {
+		r.mu.RUnlock()
+		return false, nil
+	}
+	cancel := r.cancel
+	done := r.done
+	r.mu.RUnlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done == nil {
+		return true, nil
+	}
+	select {
+	case <-done:
+		return true, nil
+	case <-ctx.Done():
+		return true, ctx.Err()
+	}
+}
+
+func (r *Runtime) Running() bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.started
 }
 
 func (r *Runtime) State() RuntimeState {

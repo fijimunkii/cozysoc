@@ -9,11 +9,12 @@ The current controller provides:
 - a versioned configuration file in a private state directory;
 - an independent long-running process with graceful signal shutdown;
 - versioned local read methods including `status`, `health`, `capabilities.list`, `devices.list`, and `networks.list`;
-- explicitly allowlisted, controller-authorized mutations (`device.label` and `network.enroll`) rather than a generic write surface;
+- explicitly allowlisted, controller-authorized mutations (`device.label`, `network.enroll`, `device-watch.enable`, and `device-watch.disable`) rather than a generic write surface;
 - a permissioned Unix-domain socket rather than a TCP/localhost listener;
 - single-instance protection through the local socket;
 - bounded request size, deadline, and concurrent-client count;
 - strict top-level request decoding and typed per-method parameters;
+- atomic live capability-intent persistence through `config.json`;
 - JSON structured logs that do not log request payloads;
 - a health ticker that records long scheduling/sleep gaps; and
 - a CLI client using the same typed API.
@@ -45,9 +46,21 @@ go run ./cmd/cozysoc-controller network-enroll --state-dir /tmp/cozysoc-dev INTE
 
 Enrollment captures the interface name, interface index, and current usable IPv4/IPv6 prefixes at execution time. Loopback, down, and point-to-point/tunnel interfaces fail closed. v0.1 permits one active Device Watch network scope: re-enrolling the exact same binding is an idempotent no-op, while trying to enroll a different network returns a conflict instead of silently replacing authorization.
 
-**Enrollment does not enable Device Watch.** It creates the durable authorized `NetworkScope` only. Observation still requires a separate explicit capability configuration/enable operation that references that scope.
+**Enrollment does not enable Device Watch.** To request passive observation after enrollment:
 
-Once Device Watch is configured and a device exists in its enrolled scope, its user label can be changed through the narrow mutation surface:
+```bash
+go run ./cmd/cozysoc-controller device-watch-enable --state-dir /tmp/cozysoc-dev
+```
+
+To stop it:
+
+```bash
+go run ./cmd/cozysoc-controller device-watch-disable --state-dir /tmp/cozysoc-dev
+```
+
+Enable preflights the current platform and enrolled scope before writing enabled intent. Disable does not require the network to remain available. A successful enable remains `unverified` until #12 establishes fresh coverage evidence.
+
+Once Device Watch is enabled and a device exists in its scope, its user label can be changed through the narrow mutation surface:
 
 ```bash
 go run ./cmd/cozysoc-controller device-label --state-dir /tmp/cozysoc-dev DEVICE_ID "Living Room TV"
@@ -70,16 +83,26 @@ The local API is not a generic controller RPC or database API. Write operations 
 - commits the new authorization scope and durable `network-scope-enroll` audit event in one SQLite transaction; and
 - does not start discovery, change routes, change DNS, or send network packets.
 
+Device Watch lifecycle control:
+
+- exposes only two capability-specific, parameterless operations; there is no generic lifecycle RPC;
+- derives its `network_scope_id` from the single enrolled authorization scope rather than caller input;
+- preflights a proposed enabled configuration before durable intent changes;
+- records a durable requested transition before writing enabled/disabled intent;
+- uses the same compiled-in lifecycle driver for live operations and startup reconciliation;
+- compensates failed enable by stopping runtime side effects and restoring previous durable intent; and
+- persists disabled intent before stop, so a failed disable or restart cannot silently resurrect monitoring.
+
 `device.label`:
 
 - is authenticated through the same per-controller session secret and OS peer-identity checks as reads;
 - accepts strict typed parameters only;
-- is pinned to the configured Device Watch `NetworkScope`;
+- is pinned to the current durable Device Watch scope;
 - independently revalidates the target's retained scope evidence in storage;
 - validates the user label before persistence; and
 - commits the device change and durable audit event in one SQLite transaction.
 
-The controller does not expose HTTP/TCP, a generic command runner, direct database access, service-manager commands, capture commands, router credentials, or Docker control. These narrow mutations do not grant generic process, filesystem, network, capability-lifecycle, or SQL authority.
+The controller does not expose HTTP/TCP, a generic command runner, direct database access, service-manager commands, capture commands, router credentials, Docker control, or a general capability executor.
 
 ## API framing
 
@@ -97,12 +120,18 @@ Typed enrollment example:
 {"version":1,"id":"example","method":"network.enroll","auth":"...","params":{"interface_name":"en0"}}
 ```
 
+Parameterless Device Watch enable example:
+
+```json
+{"version":1,"id":"example","method":"device-watch.enable","auth":"..."}
+```
+
 Typed label example:
 
 ```json
 {"version":1,"id":"example","method":"device.label","auth":"...","params":{"device_id":"device.example","label":"Living Room TV"}}
 ```
 
-Unknown top-level fields, unexpected parameters on read methods, unknown mutation parameters, unknown methods, and API-version mismatches fail with typed errors. Requests are capped at 64 KiB and connections have a five-second deadline.
+Unknown top-level fields, unexpected parameters on parameterless/read methods, unknown mutation parameters, unknown methods, and API-version mismatches fail with typed errors. Requests are capped at 64 KiB and connections have a five-second deadline.
 
 This framing is intentionally small and replaceable; the controller-side authorization and domain contracts matter more than the transport serialization choice.

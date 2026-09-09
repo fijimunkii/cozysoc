@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
@@ -53,6 +54,32 @@ func (f *fakeDeviceStore) EnrollDeviceWatchScope(_ context.Context, metadata jso
 	return f.enrollScope, f.enrollChanged, f.enrollErr
 }
 
+type fakeDeviceWatchAPIControl struct {
+	scopeID       string
+	configured    bool
+	currentErr    error
+	enableResult  api.DeviceWatchControlResult
+	enableErr     error
+	disableResult api.DeviceWatchControlResult
+	disableErr    error
+	enableCalls   int
+	disableCalls  int
+}
+
+func (f *fakeDeviceWatchAPIControl) Current() (string, bool, error) {
+	return f.scopeID, f.configured, f.currentErr
+}
+
+func (f *fakeDeviceWatchAPIControl) Enable(context.Context) (api.DeviceWatchControlResult, error) {
+	f.enableCalls++
+	return f.enableResult, f.enableErr
+}
+
+func (f *fakeDeviceWatchAPIControl) Disable(context.Context) (api.DeviceWatchControlResult, error) {
+	f.disableCalls++
+	return f.disableResult, f.disableErr
+}
+
 type handlerInspector struct {
 	states map[string]devicewatch.InterfaceState
 }
@@ -82,7 +109,8 @@ func TestControllerAPIHandlerListsConfiguredDevicePresence(t *testing.T) {
 		},
 		NextID: "device.three",
 	}}
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, "scope.home", true)
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +133,7 @@ func TestControllerAPIHandlerListsConfiguredDevicePresence(t *testing.T) {
 
 func TestControllerAPIHandlerReturnsDisabledDeviceWatchState(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), nil, "", false)
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), &fakeDeviceStore{}, &fakeDeviceWatchAPIControl{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,9 +148,28 @@ func TestControllerAPIHandlerReturnsDisabledDeviceWatchState(t *testing.T) {
 	}
 }
 
+func TestControllerAPIHandlerUsesLiveDeviceWatchState(t *testing.T) {
+	store := &fakeDeviceStore{}
+	control := &fakeDeviceWatchAPIControl{}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, err := handler.Devices(context.Background()); err != nil || list.Configured {
+		t.Fatalf("initial devices configured=%v err=%v", list.Configured, err)
+	}
+	control.scopeID = "scope.home"
+	control.configured = true
+	store.page = storage.DeviceEvidencePage{}
+	if list, err := handler.Devices(context.Background()); err != nil || !list.Configured || list.ScopeID != "scope.home" {
+		t.Fatalf("live devices state=%+v err=%v", list, err)
+	}
+}
+
 func TestControllerAPIHandlerLabelsOnlyConfiguredScope(t *testing.T) {
 	store := &fakeDeviceStore{setChanged: true}
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, "scope.home", true)
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +187,8 @@ func TestControllerAPIHandlerLabelsOnlyConfiguredScope(t *testing.T) {
 
 func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing.T) {
 	store := &fakeDeviceStore{}
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, "scope.home", true)
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,12 +207,29 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 		t.Fatalf("out-of-scope error = %v", err)
 	}
 
-	disabled, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), nil, "", false)
+	control.configured = false
+	control.scopeID = ""
+	if _, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("TV")}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+		t.Fatalf("disabled mutation error = %v", err)
+	}
+}
+
+func TestControllerAPIHandlerDelegatesDeviceWatchControl(t *testing.T) {
+	control := &fakeDeviceWatchAPIControl{
+		enableResult:  api.DeviceWatchControlResult{ScopeID: "scope.home", Changed: true, Active: true, State: capability.InstanceState{Desired: capability.DesiredEnabled}},
+		disableResult: api.DeviceWatchControlResult{ScopeID: "scope.home", Changed: true, Active: false, State: capability.InstanceState{Desired: capability.DesiredDisabled}},
+	}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), &fakeDeviceStore{}, control)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := disabled.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("TV")}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
-		t.Fatalf("disabled mutation error = %v", err)
+	enabled, err := handler.EnableDeviceWatch(context.Background())
+	if err != nil || !enabled.Active || enabled.State.Desired != capability.DesiredEnabled || control.enableCalls != 1 {
+		t.Fatalf("enable result=%+v calls=%d err=%v", enabled, control.enableCalls, err)
+	}
+	disabled, err := handler.DisableDeviceWatch(context.Background())
+	if err != nil || disabled.Active || disabled.State.Desired != capability.DesiredDisabled || control.disableCalls != 1 {
+		t.Fatalf("disable result=%+v calls=%d err=%v", disabled, control.disableCalls, err)
 	}
 }
 
@@ -176,7 +241,7 @@ func TestControllerAPIHandlerListsNetworkCandidatesAndEnrollment(t *testing.T) {
 	}
 	now := time.Unix(1_800_000_000, 0).UTC()
 	store := &fakeDeviceStore{activeScopes: []domain.NetworkScope{{ID: "scope.home", Kind: "lan", EnrolledAt: now, Metadata: metadata}}}
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, "", false)
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, &fakeDeviceWatchAPIControl{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +271,7 @@ func TestControllerAPIHandlerEnrollsCurrentInterfaceAndFailsClosed(t *testing.T)
 		enrollScope:   domain.NetworkScope{ID: "scope.generated", Kind: "lan", EnrolledAt: now},
 		enrollChanged: true,
 	}
-	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, "", false)
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, &fakeDeviceWatchAPIControl{})
 	if err != nil {
 		t.Fatal(err)
 	}

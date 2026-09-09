@@ -61,6 +61,11 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 	if err := runtime.Start(ctx, "scope.home"); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopCancel()
+		_, _ = runtime.Stop(stopCtx)
+	})
 
 	deadline := time.Now().Add(5 * time.Second)
 	for {

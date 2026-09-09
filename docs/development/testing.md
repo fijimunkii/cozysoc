@@ -25,23 +25,26 @@ The process E2E suite exercises real executable/process boundaries rather than c
 - graceful interrupt shutdown and socket/session cleanup;
 - clean restart with session-secret rotation;
 - forced process termination and stale socket/session recovery;
-- the authenticated `device-label` mutation, including restart persistence, idempotent repeat behavior, explicit clear, rejected invalid/unknown targets, and durable audit transitions; and
-- explicit network enrollment, including local candidate discovery, real authenticated enrollment, idempotent re-enrollment, unsafe-interface rejection, conflicting-network refusal, restart persistence, and durable audit evidence.
+- the authenticated `device-label` mutation, including restart persistence, idempotent repeat behavior, explicit clear, rejected invalid/unknown targets, and durable audit transitions;
+- explicit network enrollment, including local candidate discovery, real authenticated enrollment, idempotent re-enrollment, unsafe-interface rejection, conflicting-network refusal, restart persistence, and durable audit evidence; and
+- Device Watch control on the Linux reference runner, including safe rejection of unsupported enablement without persisting enabled intent and safe idempotent disable.
 
 The device-label E2E uses a deterministic SQLite fixture only to seed one scope/device while the controller is stopped. The state-changing requests themselves travel through the built CLI, session secret, Unix socket, controller authorization, scoped storage transaction, and durable audit path. Direct database inspection occurs only after shutdown to verify audit evidence.
 
 The network-enrollment E2E does not need a packet/network fixture. It reads the Linux CI runner's local interface/address metadata, selects an eligible interface, and exercises `network.enroll` through the real controller process. Candidate listing and enrollment capture do **not** ping, resolve, scan, or otherwise send discovery traffic. Direct SQLite inspection again occurs only after shutdown to verify the audit event.
 
+The Device Watch control E2E builds on that real enrollment. Linux intentionally does not implement the v0.1 passive runtime, so `device-watch-enable` must fail with `precondition_failed` before enabled intent or a capability-intent audit transition is written. CI then proves `device-watch-disable` is a safe no-op and restart keeps Device Watch disabled. Successful live start/stop semantics are covered by deterministic lifecycle-driver/controller tests and Darwin cross-compilation; they are not misrepresented as Linux runtime evidence.
+
 ## What this does not prove
 
 A Linux process E2E suite does not certify macOS service lifetime, macOS permissions, real ARP/NDP observation behavior, sleep/resume, switched-network visibility, mirror/TAP capture, or USB Wi-Fi behavior. Darwin cross-compilation proves only that the current macOS code path builds.
 
-Network-enrollment E2E proves the authorization/control-plane flow on the Linux runner; it does not prove that the enrolled interface would provide useful Device Watch presence evidence on that platform. The v0.1 passive observation source remains macOS-first until real platform evidence says otherwise.
+Network-enrollment/control E2E proves the authorization/control-plane behavior on the Linux runner; it does not prove that Linux provides useful Device Watch presence evidence. The v0.1 passive observation source remains macOS-first until real platform evidence says otherwise.
 
 Those claims require the named real-hardware evidence tracked by the Foundation feasibility work and issue #29. Hardware-unavailable remains `untested`; CI fixture success must not promote it to tested support.
 
 ## Growth model
 
-Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include Device Watch configuration through the public mutation surface, truthful coverage verification, bounded failures such as low disk, and installation/service lifecycle once those product flows exist.
+Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include #12-backed truthful coverage verification, bounded failures such as low disk, identity correction flows, and installation/service lifecycle once those product flows exist.
 
 Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, packet labs, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.

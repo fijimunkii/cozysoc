@@ -54,6 +54,11 @@ type NetworkEnrollHandler interface {
 	EnrollNetwork(context.Context, api.NetworkEnrollParams) (api.NetworkEnrollResult, error)
 }
 
+type DeviceWatchControlHandler interface {
+	EnableDeviceWatch(context.Context) (api.DeviceWatchControlResult, error)
+	DisableDeviceWatch(context.Context) (api.DeviceWatchControlResult, error)
+}
+
 type Server struct {
 	listener   net.Listener
 	stateDir   string
@@ -336,6 +341,39 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = enrollResult
+	case api.MethodDeviceWatchEnable, api.MethodDeviceWatchDisable:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		controlHandler, ok := s.handler.(DeviceWatchControlHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		var controlResult api.DeviceWatchControlResult
+		var controlErr error
+		if request.Method == api.MethodDeviceWatchEnable {
+			controlResult, controlErr = controlHandler.EnableDeviceWatch(requestCtx)
+		} else {
+			controlResult, controlErr = controlHandler.DisableDeviceWatch(requestCtx)
+		}
+		cancel()
+		if controlErr != nil {
+			switch {
+			case errors.Is(controlErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid Device Watch control request")
+			case errors.Is(controlErr, ErrMutationPrecondition):
+				s.writeError(conn, request.ID, "precondition_failed", "Device Watch prerequisites are not satisfied")
+			case errors.Is(controlErr, ErrMutationConflict):
+				s.writeError(conn, request.ID, "conflict", "Device Watch state conflicts with current configuration")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", request.Method)
+				s.writeError(conn, request.ID, "internal_error", "unable to update Device Watch state")
+			}
+			return
+		}
+		result = controlResult
 	default:
 		s.writeError(conn, request.ID, "method_not_found", "method is not available")
 		return
