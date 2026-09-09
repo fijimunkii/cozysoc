@@ -1,0 +1,73 @@
+export const demoCoverageRaw: unknown = {
+  capability_id: "device-watch",
+  configured: true,
+  state: "active-limited",
+  reason: "fresh-limited",
+  observation_points: [
+    {
+      id: "device-watch.local-neighbor-cache",
+      kind: "host-neighbor-cache",
+      sensor_id: "sensor.dw.demo",
+      state: "active-limited",
+      reason: "fresh-limited",
+      scope: {
+        configured: [
+          { kind: "network", value: "scope.home" },
+          { kind: "interface", value: "en0" },
+          { kind: "address-family", value: "ipv4" },
+          { kind: "address-family", value: "ipv6" },
+        ],
+        verified: [
+          { kind: "network", value: "scope.home" },
+          { kind: "interface", value: "en0" },
+          { kind: "address-family", value: "ipv4" },
+          { kind: "address-family", value: "ipv6" },
+        ],
+        expected_unverified: [],
+      },
+      sources: [
+        { id: "arp-cache", kind: "neighbor-cache", state: "current", expected: true, observed: true },
+        { id: "ndp-cache", kind: "neighbor-cache", state: "current", expected: true, observed: true },
+      ],
+      directions: [],
+      window: {
+        has_evidence: true,
+        started_at: "2026-09-09T23:20:00Z",
+        ended_at: "2026-09-09T23:20:00Z",
+        fresh_until: "2026-09-09T23:23:00Z",
+      },
+      cadence: { mode: "periodic", interval_ms: 60000 },
+      gaps: [
+        {
+          id: "host-neighbor-cache-only",
+          kind: "observation-point-limited",
+          summary: "Only peers recently resolved by this Mac can appear",
+          detail: "A passive neighbor cache is useful local evidence, not a complete inventory of every device on the LAN.",
+          next_step: "Treat an unseen device as unknown rather than absent or safe.",
+          dimensions: [],
+          directions: [],
+        },
+        {
+          id: "isolated-segments-not-observed",
+          kind: "scope-not-observed",
+          summary: "Isolated segments may be absent",
+          detail: "Client isolation and other VLANs or subnets can hide devices from this observation point.",
+          next_step: "Use an observation point inside an isolated segment when broader device visibility is required.",
+          dimensions: [],
+          directions: [],
+        },
+        {
+          id: "no-traffic-monitoring",
+          kind: "direction-not-observed",
+          summary: "Device Watch does not observe other devices' traffic",
+          detail: "Neighbor evidence does not establish uploads, local flows, packet contents, or application behavior.",
+          next_step: "Use a validated traffic observation point when packet or flow visibility is needed.",
+          dimensions: [],
+          directions: ["ingress", "egress", "east-west"],
+        },
+      ],
+      next_step: "Use Traffic Watch rather than Device Watch when packet or flow visibility is required.",
+    },
+  ],
+  next_step: "Use Traffic Watch rather than Device Watch when packet or flow visibility is required.",
+};
