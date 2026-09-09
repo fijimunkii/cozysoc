@@ -28,7 +28,7 @@ The detail read model uses the same current evidence and operational checks that
 
 - `unverified` — required current evidence or first-collection validation is not available yet;
 - `active-limited` — current passive neighbor-cache evidence exists, both expected ARP/NDP sources are available, and the sensor/ingestion/storage path is currently healthy, while Device Watch still has its declared observation-point limitations;
-- `degraded` — a source, sensor collection, ingestion path, database quota, or host-volume capacity check is currently unhealthy, or retained coverage evidence is invalid/untrustworthy;
+- `degraded` — a source, sensor collection, measured ingestion-lag/write path, database quota, or host-volume capacity check is currently unhealthy, or retained coverage evidence is invalid/untrustworthy;
 - `stale` — the latest successful collection/evidence is older than the bounded freshness window; and
 - `disconnected` — the configured Device Watch runtime or ingestion path is no longer running.
 
@@ -70,26 +70,43 @@ The configured Device Watch runtime is evaluated independently from the evidence
 
 The response includes the last attempt, last success, and a coarse bounded error class. Those fields describe collection health, not attack evidence.
 
-## Ingestion health and write recovery
+## Ingestion health, measured lag, and write recovery
 
-The controller exposes current ingestion state separately from historical counters:
+The bounded ingestion queue now separates utilization from measured health.
 
-- `current` — no current pipeline problem is detected;
-- queue pressure — depth is at least 75% of the known bounded queue capacity;
-- backpressure — the current saturation episode has rejected/dropped evidence;
+Queue depth at or above 75% of capacity sets `queue_pressure=true`, but **does not by itself degrade coverage**. It is useful capacity telemetry: a queue may be busy while every accepted record is still reaching durable storage promptly. Actual current ingestion states are:
+
+- `current` — no current measured lag, backpressure, or write failure is established;
+- `lagging` — accepted evidence has exceeded the bounded durable-latency rule below;
+- `backpressure` — the current saturation episode has rejected/dropped evidence;
 - `write-failed` — a generic current storage write has failed;
 - `storage-full` — SQLite returned typed `SQLITE_FULL` for the current write-failure episode; and
-- closing/closed — the ingestion path is shutting down or disconnected.
+- `closing` / `closed` — the ingestion path is shutting down or disconnected.
 
-The classifier uses SQLite's result code rather than matching a human-readable error string. The API exposes only a bounded failure class such as `sqlite-full`; raw driver/database error text is not promoted into user-facing coverage state.
+For every successfully accepted queue record, the producer and worker synchronize on the actual channel-acceptance boundary. The controller then measures:
+
+- queue wait: accepted → processing start;
+- processing duration: processing start → storage operation completion; and
+- durable latency: accepted → successful durable completion.
+
+The initial lag threshold is **5 seconds**. This is a conservative implementation warning anchored to half of the existing 10-second per-storage-operation timeout; it is not a measured hardware SLO and #29 remains responsible for named-workload performance evidence.
+
+Ingestion becomes `lagging` when either:
+
+- the oldest accepted pending record has waited at least 5 seconds without completing; or
+- three consecutive recent successful durable completions each took at least 5 seconds.
+
+Completed-latency evidence is considered current for one minute. If the pipeline becomes quiet with no pending work, old slow samples age to `idle` rather than keeping coverage degraded forever. One later fast successful completion resets the slow streak. Failed writes do not count as successful durable-latency samples; their explicit failure state takes precedence instead.
+
+The API reports `latency_state`, the threshold, pending count/oldest age, last durable latency, last queue wait, last processing duration, last completion time, and current slow streak in milliseconds where applicable. These values are operational measurements, not security findings or protection percentages.
+
+The SQLite-full classifier uses SQLite's result code rather than matching a human-readable error string. The API exposes only a bounded failure class such as `sqlite-full`; raw driver/database error text is not promoted into user-facing coverage state.
 
 A `storage-full` episode remains degraded after capacity has been freed until a later storage operation succeeds. This preserves the distinction between **capacity appears recovered** and **the write path has actually demonstrated recovery**. Cumulative dropped and failed totals remain visible after recovery without permanently poisoning current health.
 
-The 75% queue threshold is an operational warning against a known finite queue, not a security/protection percentage.
-
 ## Database quota versus host-volume capacity
 
-The existing `storage-health` signal now keeps two capacity domains separate.
+The existing `storage-health` signal keeps two capacity domains separate.
 
 ### Controller database quota
 
@@ -160,12 +177,12 @@ Device Watch declares five independent verification signals:
 4. `ingestion-health`; and
 5. `storage-health`.
 
-All must be fresh for the capability to be `verified`. This prevents a fresh historical sample from keeping the capability green after its sensor disconnects or its write/capacity path becomes unhealthy.
+All must be fresh for the capability to be `verified`. This prevents a fresh historical sample from keeping the capability green after its sensor disconnects, accepted evidence begins lagging, or its write/capacity path becomes unhealthy.
 
-The lifecycle state and `device-watch.coverage` share the same operational evaluators. The UI therefore cannot say that a sensor is disconnected, stale, backpressured, at database quota, or out of host-volume capacity while `capabilities.list` independently calls the same capability verified.
+The lifecycle state and `device-watch.coverage` share the same operational evaluators. The UI therefore cannot say that a sensor is disconnected, stale, measurably lagging, backpressured, at database quota, or out of host-volume capacity while `capabilities.list` independently calls the same capability verified. High queue utilization alone remains visible as a warning without failing `ingestion-health` when measured durable latency is still current.
 
 A fresh sample may still contain zero neighbors. The sample itself is heartbeat/validation evidence that collection ran, so a quiet network is not automatically a source failure.
 
 ## Still outside this slice
 
-This does not complete #12. Remaining coverage work includes measured ingestion latency rather than queue-pressure inference, explicit permission-state evidence where a source can prove it, other capability observation points, directionality, DNS/router-specific coverage, traffic-sensor gaps, wireless channel/dwell limits, frontend presentation, and real low-disk/full-volume recovery evidence under #29.
+This does not complete #12. Remaining coverage work includes explicit permission-state evidence where a source can prove it, other capability observation points, directionality, DNS/router-specific coverage, traffic-sensor gaps, wireless channel/dwell limits, frontend presentation, named-workload calibration of latency/resource thresholds, and real low-disk/full-volume recovery evidence under #29.
