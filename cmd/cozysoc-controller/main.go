@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/config"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
@@ -40,9 +42,11 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	case "serve":
 		return runServe(ctx, args[1:], stdout, stderr)
 	case "status":
-		return runReadCommand(ctx, "status", args[1:], stdout, stderr)
+		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
-		return runReadCommand(ctx, "health", args[1:], stdout, stderr)
+		return runReadCommand(ctx, api.MethodHealth, args[1:], stdout, stderr)
+	case "capabilities":
+		return runReadCommand(ctx, api.MethodCapabilitiesList, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(stdout, usageText())
 		return nil
@@ -62,9 +66,9 @@ Usage:
   cozysoc-controller serve [--state-dir PATH]
   cozysoc-controller status [--state-dir PATH]
   cozysoc-controller health [--state-dir PATH]
+  cozysoc-controller capabilities [--state-dir PATH]
 
-The v0.1 API is read-only, uses a permissioned local Unix socket, and requires a per-controller session secret.
-Linux additionally verifies kernel-reported peer credentials. Stronger macOS client identity and privileged helper boundaries remain owned by issue #8.
+The v0.1 management API is read-only, uses a permissioned local Unix socket, requires a per-controller session secret, and verifies OS peer identity on the current macOS and Linux reference paths.
 `
 }
 
@@ -84,13 +88,21 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return err
 	}
 
+	registry, err := capability.Builtins()
+	if err != nil {
+		return fmt.Errorf("load capability catalog: %w", err)
+	}
 	cfg, err := config.LoadOrCreate(dir)
 	if err != nil {
 		return err
 	}
+	instances, err := capability.NewInstances(registry, cfg.Capabilities)
+	if err != nil {
+		return fmt.Errorf("load capability instances: %w", err)
+	}
 
 	logger := newLogger(stderr, cfg.LogLevel)
-	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval)
+	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, instances)
 	controller.Start(ctx)
 
 	server, err := localapi.NewServer(dir, controller, logger)
@@ -101,8 +113,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 
 	logger.Info("controller_started",
 		"version", controller.Version(),
-		"api_version", 1,
+		"api_version", api.Version,
 		"config_schema_version", cfg.SchemaVersion,
+		"capability_catalog_schema_version", capability.SchemaVersion,
 		"socket", server.SocketPath(),
 	)
 	_, _ = fmt.Fprintf(stdout, "cozysoc controller ready: %s\n", server.SocketPath())
