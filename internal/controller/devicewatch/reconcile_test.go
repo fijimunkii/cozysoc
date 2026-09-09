@@ -136,10 +136,10 @@ func newIdentityFixtureStore(t *testing.T) (*storage.Store, string, string) {
 func neighborObservationFixture(t *testing.T, scopeID, sensorID, id, address, mac string, at time.Time) domain.Observation {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{
-		"schema_version": 1,
-		"address": address,
+		"schema_version":   1,
+		"address":          address,
 		"hardware_address": mac,
-		"interface": "en0",
+		"interface":        "en0",
 		"family": func() string {
 			if len(address) > 0 && address[0] == '1' && len(address) > 3 && address[:3] == "192" {
 				return "ipv4"
@@ -147,7 +147,7 @@ func neighborObservationFixture(t *testing.T, scopeID, sensorID, id, address, ma
 			return "ipv6"
 		}(),
 		"method": "arp-cache",
-		"state": "reachable",
+		"state":  "reachable",
 	})
 	if err != nil {
 		t.Fatal(err)
