@@ -216,7 +216,7 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 
 func TestControllerAPIHandlerDelegatesDeviceWatchControl(t *testing.T) {
 	control := &fakeDeviceWatchAPIControl{
-		enableResult: api.DeviceWatchControlResult{ScopeID: "scope.home", Changed: true, Active: true, State: capability.InstanceState{Desired: capability.DesiredEnabled}},
+		enableResult:  api.DeviceWatchControlResult{ScopeID: "scope.home", Changed: true, Active: true, State: capability.InstanceState{Desired: capability.DesiredEnabled}},
 		disableResult: api.DeviceWatchControlResult{ScopeID: "scope.home", Changed: true, Active: false, State: capability.InstanceState{Desired: capability.DesiredDisabled}},
 	}
 	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), &fakeDeviceStore{}, control)
