@@ -167,14 +167,14 @@ func (e *LifecycleEngine) Run(ctx context.Context, id string, action LifecycleAc
 		return result, fmt.Errorf("capability lifecycle engine is unavailable")
 	}
 
+	operationLock := e.operationLock(id)
+	operationLock.Lock()
+	defer operationLock.Unlock()
+
 	instance, configuration, err := e.operationSnapshot(id)
 	if err != nil {
 		return result, err
 	}
-
-	operationLock := e.operationLock(id)
-	operationLock.Lock()
-	defer operationLock.Unlock()
 
 	result.State = e.currentState(id, instance.State)
 	if !hasLifecycleAction(instance.Manifest, action) {
@@ -310,11 +310,11 @@ func (e *LifecycleEngine) operationSnapshot(id string) (Instance, Configuration,
 	if !ok {
 		return Instance{}, Configuration{}, fmt.Errorf("unknown capability %q", id)
 	}
-	configuration, ok := e.instances.configured[id]
+	configuration, ok := e.instances.Configuration(id)
 	if !ok {
 		configuration = defaultConfiguration(instance.Manifest)
 	}
-	return instance, cloneConfiguration(configuration), nil
+	return instance, configuration, nil
 }
 
 func (e *LifecycleEngine) currentState(id string, fallback InstanceState) InstanceState {
