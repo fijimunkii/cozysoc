@@ -37,9 +37,15 @@ jobs:
 
       - name: Run controller checks
         run: |
-          test -z "$(gofmt -l cmd internal)"
+          test -z "$(gofmt -l cmd internal tests)"
           go vet ./...
           go test ./...
+
+      - name: Run controller process E2E smoke
+        run: |
+          go build -o "${RUNNER_TEMP}/cozysoc-controller-e2e" ./cmd/cozysoc-controller
+          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-controller-e2e" \
+            go test -v -count=1 ./tests/e2e
 
       - name: Verify macOS controller build
         env:
