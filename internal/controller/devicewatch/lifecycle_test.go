@@ -18,6 +18,8 @@ type fakeRuntimeControl struct {
 	scopeID    string
 	startCalls int
 	stopCalls  int
+	state      RuntimeState
+	ingestion  storage.IngestionHealth
 }
 
 func (f *fakeRuntimeControl) Start(_ context.Context, scopeID string) error {
@@ -38,7 +40,19 @@ func (f *fakeRuntimeControl) Stop(context.Context) (bool, error) {
 
 func (f *fakeRuntimeControl) Running() bool { return f.running }
 func (f *fakeRuntimeControl) State() RuntimeState {
-	return RuntimeState{Running: f.running, ScopeID: f.scopeID}
+	state := f.state
+	state.Running = f.running
+	if state.ScopeID == "" {
+		state.ScopeID = f.scopeID
+	}
+	return state
+}
+
+func (f *fakeRuntimeControl) IngestionHealth() storage.IngestionHealth {
+	if f.ingestion.State == "" {
+		return storage.IngestionHealth{State: storage.IngestionHealthCurrent, Capacity: 4}
+	}
+	return f.ingestion
 }
 
 func TestLifecycleDriverPreflightAndRuntimeTransitions(t *testing.T) {
@@ -116,7 +130,7 @@ func TestLifecycleDriverNeverRequiresNetworkPresenceToDisable(t *testing.T) {
 	}
 }
 
-func TestLifecycleVerifyKeepsObservationFreshnessMissingWithoutCoverage(t *testing.T) {
+func TestLifecycleVerifyKeepsObservationMissingAndReportsDisconnectedSensor(t *testing.T) {
 	store, inspector := lifecycleScopeFixture(t)
 	driver, err := newLifecycleDriver(store, &fakeRuntimeControl{}, inspector, "darwin")
 	if err != nil {
@@ -128,12 +142,18 @@ func TestLifecycleVerifyKeepsObservationFreshnessMissingWithoutCoverage(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Signals) != 2 || report.Signals[0].Status != capability.SignalFresh || report.Signals[1].Status != capability.SignalMissing {
-		t.Fatalf("unexpected verification report: %+v", report)
+	if len(report.Signals) != 5 {
+		t.Fatalf("verification signal count = %d: %+v", len(report.Signals), report)
+	}
+	if report.Signals[0].Status != capability.SignalFresh || report.Signals[1].Status != capability.SignalMissing {
+		t.Fatalf("scope/observation signals = %+v", report.Signals[:2])
+	}
+	if report.Signals[2].Status != capability.SignalFailed || report.Signals[3].Status != capability.SignalFresh || report.Signals[4].Status != capability.SignalFresh {
+		t.Fatalf("operational signals = %+v", report.Signals[2:])
 	}
 }
 
-func TestLifecycleVerifyConsumesFreshCoverageSample(t *testing.T) {
+func TestLifecycleVerifyConsumesFreshCoverageAndOperationalHealth(t *testing.T) {
 	store, inspector := lifecycleScopeFixture(t)
 	now := time.Now().UTC().Truncate(time.Second)
 	if err := store.CreateSensor(context.Background(), domain.Sensor{
@@ -170,7 +190,16 @@ func TestLifecycleVerifyConsumesFreshCoverageSample(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	driver, err := newLifecycleDriver(store, &fakeRuntimeControl{}, inspector, "darwin")
+	runtime := &fakeRuntimeControl{
+		running: true,
+		scopeID: "scope.home",
+		state: RuntimeState{
+			LastAttemptAt:    now.Add(-time.Minute),
+			LastSuccessfulAt: now.Add(-time.Minute),
+		},
+		ingestion: storage.IngestionHealth{State: storage.IngestionHealthCurrent, Capacity: 4},
+	}
+	driver, err := newLifecycleDriver(store, runtime, inspector, "darwin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,8 +210,35 @@ func TestLifecycleVerifyConsumesFreshCoverageSample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Signals) != 2 || report.Signals[0].Status != capability.SignalFresh || report.Signals[1].Status != capability.SignalFresh {
-		t.Fatalf("unexpected verification report: %+v", report)
+	if len(report.Signals) != 5 {
+		t.Fatalf("verification signal count = %d: %+v", len(report.Signals), report)
+	}
+	for _, signal := range report.Signals {
+		if signal.Status != capability.SignalFresh {
+			t.Fatalf("signal %s = %+v", signal.ID, signal)
+		}
+	}
+}
+
+func TestLifecycleVerifyDegradesOnCurrentPipelineFailure(t *testing.T) {
+	store, inspector := lifecycleScopeFixture(t)
+	now := time.Now().UTC()
+	runtime := &fakeRuntimeControl{
+		running: true,
+		state: RuntimeState{LastAttemptAt: now, LastSuccessfulAt: now},
+		ingestion: storage.IngestionHealth{State: storage.IngestionHealthWriteFailed, Capacity: 4, Failed: 1},
+	}
+	driver, err := newLifecycleDriver(store, runtime, inspector, "darwin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver.now = func() time.Time { return now }
+	report, err := driver.Verify(context.Background(), capability.DriverRequest{Configuration: lifecycleConfiguration(t, capability.DesiredEnabled)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Signals) != 5 || report.Signals[3].ID != "ingestion-health" || report.Signals[3].Status != capability.SignalFailed {
+		t.Fatalf("pipeline failure verification = %+v", report)
 	}
 }
 
