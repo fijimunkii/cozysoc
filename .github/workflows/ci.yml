@@ -37,11 +37,7 @@ jobs:
 
       - name: Run controller checks
         run: |
-          gofmt -w cmd internal
-          if ! git diff --quiet -- cmd internal; then
-            git diff -- cmd internal
-            exit 1
-          fi
+          test -z "$(gofmt -l cmd internal)"
           go vet ./...
           go test ./...
 
