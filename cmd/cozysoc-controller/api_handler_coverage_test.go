@@ -88,7 +88,7 @@ func TestControllerAPIHandlerProjectsCuratedCoverageDetails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Configured || result.ScopeID != "scope.home" || result.State != "active-limited" || result.Reason != "fresh-limited" {
+	if !result.Configured || result.ScopeID != "scope.home" || result.State != "degraded" || result.Reason != "source-partial" {
 		t.Fatalf("coverage result = %+v", result)
 	}
 	if result.SensorID != "sensor.dw.test" || result.InterfaceName != "en0" || result.EvidenceAt == nil || result.FreshUntil == nil || result.NeighborsInScope == nil || *result.NeighborsInScope != 1 {
