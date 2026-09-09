@@ -2,6 +2,7 @@ package devicewatch
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ func (f fakeCoverageReader) LatestCoverageSample(context.Context, string, string
 
 func TestCoverageVerificationSignalStates(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
+	malformed := coverageFixture(now.Add(-time.Minute), "partial")
+	malformed.Evidence = json.RawMessage(`{"schema_version":1,"whole_network_traffic_visible":true}`)
 	tests := []struct {
 		name   string
 		reader fakeCoverageReader
@@ -32,6 +35,7 @@ func TestCoverageVerificationSignalStates(t *testing.T) {
 		{name: "stale historical replay", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Hour), "partial")}, want: capability.SignalStale},
 		{name: "future clock skew", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(2*time.Minute), "partial")}, want: capability.SignalFailed},
 		{name: "unknown status fails closed", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Minute), "mystery")}, want: capability.SignalFailed},
+		{name: "malformed evidence fails closed", reader: fakeCoverageReader{ok: true, sample: malformed}, want: capability.SignalFailed},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -49,7 +53,6 @@ func TestCoverageVerificationSignalStates(t *testing.T) {
 func TestFreshCoverageDoesNotRequireObservedNeighbors(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	sample := coverageFixture(now.Add(-time.Minute), "partial")
-	sample.Evidence = []byte(`{"schema_version":1,"neighbors_in_scope":0,"whole_network_traffic_visible":false}`)
 	signal, err := coverageVerificationSignal(context.Background(), fakeCoverageReader{sample: sample, ok: true}, "scope.home", now)
 	if err != nil {
 		t.Fatal(err)
@@ -60,9 +63,32 @@ func TestFreshCoverageDoesNotRequireObservedNeighbors(t *testing.T) {
 }
 
 func coverageFixture(endedAt time.Time, status string) domain.CoverageSample {
+	arpAvailable := true
+	ndpAvailable := true
+	if status == "unavailable" {
+		arpAvailable = false
+		ndpAvailable = false
+	}
+	evidence, _ := json.Marshal(map[string]any{
+		"schema_version":                1,
+		"interface":                     "en0",
+		"sources": []map[string]any{
+			{"method": MethodARPCache, "available": arpAvailable},
+			{"method": MethodNDPCache, "available": ndpAvailable},
+		},
+		"neighbors_in_scope":            0,
+		"observations_inserted":         0,
+		"observations_deduplicated":     0,
+		"whole_network_traffic_visible": false,
+		"limitations": []string{
+			"passive neighbor caches include only peers the host has recently resolved on the local link",
+			"client isolation, other VLANs, and devices behind other observation points may be absent",
+			"a successful neighbor snapshot does not provide whole-network traffic visibility",
+		},
+	})
 	return domain.CoverageSample{
 		ID: "coverage.test", ScopeID: "scope.home", SensorID: "sensor.dw.test", CapabilityID: CapabilityID,
 		Status: status, StartedAt: endedAt, EndedAt: endedAt, SchemaVersion: 1,
-		Evidence: []byte(`{"schema_version":1}`), Retention: domain.RetentionShort,
+		Evidence: evidence, Retention: domain.RetentionShort,
 	}
 }
