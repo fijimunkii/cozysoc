@@ -24,7 +24,11 @@ const (
 	requestTimeout      = 5 * time.Second
 )
 
-var ErrAlreadyRunning = errors.New("controller is already running")
+var (
+	ErrAlreadyRunning          = errors.New("controller is already running")
+	ErrInvalidMutation         = errors.New("invalid mutation request")
+	ErrMutationTargetNotFound  = errors.New("mutation target is not available")
+)
 
 type Handler interface {
 	Status() api.Status
@@ -34,6 +38,10 @@ type Handler interface {
 
 type DeviceHandler interface {
 	Devices(context.Context) (api.DeviceList, error)
+}
+
+type DeviceLabelHandler interface {
+	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
 
 type Server struct {
@@ -195,7 +203,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	}
 
 	var request api.Request
-	if err := json.Unmarshal(payload, &request); err != nil {
+	if err := decodeStrictJSON(payload, &request); err != nil {
 		s.writeError(conn, "", "invalid_request", "request is not valid JSON")
 		return
 	}
@@ -212,12 +220,24 @@ func (s *Server) handleConn(conn net.Conn) {
 	var result any
 	switch request.Method {
 	case api.MethodStatus:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
 		result = s.handler.Status()
 	case api.MethodHealth:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
 		result = s.handler.Health()
 	case api.MethodCapabilitiesList:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
 		result = s.handler.Capabilities()
 	case api.MethodDevicesList:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
 		deviceHandler, ok := s.handler.(DeviceHandler)
 		if !ok {
 			s.writeError(conn, request.ID, "method_not_found", "method is not available")
@@ -232,6 +252,33 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = deviceList
+	case api.MethodDeviceLabel:
+		labelHandler, ok := s.handler.(DeviceLabelHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		var params api.DeviceLabelParams
+		if err := decodeRequiredParams(request.Params, &params); err != nil {
+			s.writeError(conn, request.ID, "invalid_request", "invalid device label parameters")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		labelResult, labelErr := labelHandler.LabelDevice(requestCtx, params)
+		cancel()
+		if labelErr != nil {
+			switch {
+			case errors.Is(labelErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid device label parameters")
+			case errors.Is(labelErr, ErrMutationTargetNotFound):
+				s.writeError(conn, request.ID, "not_found", "device is not available")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceLabel)
+				s.writeError(conn, request.ID, "internal_error", "unable to update device label")
+			}
+			return
+		}
+		result = labelResult
 	default:
 		s.writeError(conn, request.ID, "method_not_found", "method is not available")
 		return
@@ -247,6 +294,14 @@ func (s *Server) handleConn(conn net.Conn) {
 		ID:      request.ID,
 		Result:  encoded,
 	})
+}
+
+func (s *Server) rejectUnexpectedParams(conn net.Conn, request api.Request) bool {
+	if !hasRequestParams(request.Params) {
+		return false
+	}
+	s.writeError(conn, request.ID, "invalid_request", "method does not accept parameters")
+	return true
 }
 
 func (s *Server) writeError(w io.Writer, id, code, message string) {
