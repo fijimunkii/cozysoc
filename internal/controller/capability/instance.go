@@ -178,14 +178,18 @@ func validateConfiguredValue(field ConfigField, raw json.RawMessage) error {
 	case ConfigInteger:
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()
-		var value json.Number
-		if err := decoder.Decode(&value); err != nil {
+		var decoded any
+		if err := decoder.Decode(&decoded); err != nil {
 			return fmt.Errorf("expected integer: %w", err)
 		}
 		if err := ensureJSONEOF(decoder); err != nil {
 			return err
 		}
-		if _, err := value.Int64(); err != nil {
+		number, ok := decoded.(json.Number)
+		if !ok {
+			return fmt.Errorf("expected integer")
+		}
+		if _, err := number.Int64(); err != nil {
 			return fmt.Errorf("expected integer")
 		}
 	case ConfigEnum:
