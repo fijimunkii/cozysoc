@@ -132,6 +132,11 @@ func TestEnrollDeviceWatchScopeRejectsInvalidMetadata(t *testing.T) {
 		json.RawMessage(`{}`),
 		json.RawMessage(`{"device_watch":null}`),
 		json.RawMessage(`{"device_watch":"en0"}`),
+		json.RawMessage(`{"device_watch":{"interface_name":"","interface_index":7,"prefixes":["192.168.1.0/24"]}}`),
+		json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":0,"prefixes":["192.168.1.0/24"]}}`),
+		json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.1.42/24"]}}`),
+		json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.1.0/24","192.168.1.0/24"]}}`),
+		json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.1.0/24"],"command":"nope"}}`),
 	} {
 		if _, _, err := store.EnrollDeviceWatchScope(context.Background(), metadata); err == nil {
 			t.Fatalf("invalid metadata was accepted: %s", metadata)
