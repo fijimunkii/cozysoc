@@ -160,6 +160,30 @@ The fixtures cover:
 
 These fixtures do **not** mean DNS Protection, Traffic Watch, router visibility, or Wireless Watch are implemented or supported. Actual producers still require their roadmap implementation, integration validation, failure tests, and #29 hardware/workload evidence.
 
+## Concern-separation transition matrix
+
+The deterministic transition matrix uses the real existing domain boundaries instead of a synthetic global-status type:
+
+- `coverage.Report` answers **what this capability can currently observe and what remains a gap**;
+- `devicewatch.OperationalHealth` answers **whether the current sensor, ingestion path, and storage path are operational**;
+- a normalized `domain.Observation` with kind `network-quality` records **a quality measurement** such as gateway latency; and
+- `domain.Finding` records **a detector assessment** derived from security evidence.
+
+The matrix proves these are related but not interchangeable concepts:
+
+- adding a valid security finding does not by itself degrade otherwise-current observation coverage;
+- poor gateway latency remains a network-quality observation and does not synthesize a security finding or a visibility failure;
+- sensor disconnection degrades coverage operationally without inventing a security finding;
+- an ARP/NDP source gap degrades Device Watch visibility without changing the independent network-quality measurement;
+- a current heartbeat with zero neighbors remains valid limited coverage rather than a failure; and
+- ingestion lag, poor network quality, and a security finding can coexist in one fixture while remaining separately inspectable.
+
+Operational health is intentionally allowed to affect the **coverage state** because stale/disconnected/lagging producers cannot establish current visibility. That relationship still does not make operational failure a `Finding`, and it does not reclassify a quality measurement as security evidence.
+
+Security findings in the matrix reference their own normalized security observations. The test explicitly rejects a fixture that uses the network-quality observation as the finding's security evidence, preserving provenance across the concern boundary.
+
+This matrix uses deterministic in-memory fixtures only. It performs no live network probing and does not claim detector efficacy, gateway-quality thresholds, or hardware behavior.
+
 ## Validation and trust boundary
 
 The shared internal contract validates bounded counts and text, known state/dimension/direction/cadence vocabularies, unique point/source/gap identities, coherent evidence windows, and configured/verified/expected-unverified invariants.
@@ -170,7 +194,7 @@ The contract carries no commands, executable hooks, arbitrary filesystem queries
 
 ## What remains
 
-This shared vocabulary does not complete #12. Remaining work includes:
+This shared vocabulary and transition matrix do not complete #12. Remaining work includes:
 
 - real DNS/router/traffic/wireless producers and their source-specific validation;
 - source-specific permission evidence where a producer can prove it;
