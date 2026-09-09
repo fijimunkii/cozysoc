@@ -2,7 +2,7 @@
 
 Issue #12 turns retained evidence into user-facing coverage state without inventing a global protection score.
 
-The first concrete read model is Device Watch. It combines retained normalized `CoverageSample` evidence with current sensor, ingestion, and controller-database operational health. Security findings remain a separate model: an unhealthy sensor is not itself a security incident, and an absence of findings is never proof that the network is safe.
+The first concrete read model is Device Watch. It combines retained normalized `CoverageSample` evidence with current sensor, ingestion, controller-database, and host-volume operational health. Security findings remain a separate model: an unhealthy sensor is not itself a security incident, and an absence of findings is never proof that the network is safe.
 
 ## Device Watch coverage API
 
@@ -28,7 +28,7 @@ The detail read model uses the same current evidence and operational checks that
 
 - `unverified` — required current evidence or first-collection validation is not available yet;
 - `active-limited` — current passive neighbor-cache evidence exists, both expected ARP/NDP sources are available, and the sensor/ingestion/storage path is currently healthy, while Device Watch still has its declared observation-point limitations;
-- `degraded` — a source, sensor collection, ingestion path, or controller-database capacity check is currently unhealthy, or retained coverage evidence is invalid/untrustworthy;
+- `degraded` — a source, sensor collection, ingestion path, database quota, or host-volume capacity check is currently unhealthy, or retained coverage evidence is invalid/untrustworthy;
 - `stale` — the latest successful collection/evidence is older than the bounded freshness window; and
 - `disconnected` — the configured Device Watch runtime or ingestion path is no longer running.
 
@@ -55,7 +55,7 @@ A source state can be:
 
 `reported` and `available_at_last_sample` are separate. This keeps "we have no current evidence" distinct from "the last trusted collection explicitly said this source was unavailable."
 
-Cozy SOC does **not** currently relabel `unavailable` as `permission-required`: the passive source does not yet provide enough evidence to distinguish permission denial from a missing/failed system source.
+Cozy SOC does **not** currently relabel neighbor-source `unavailable` as `permission-required`: the passive source does not yet provide enough evidence to distinguish permission denial from a missing/failed system source.
 
 ## Sensor operational health
 
@@ -70,23 +70,30 @@ The configured Device Watch runtime is evaluated independently from the evidence
 
 The response includes the last attempt, last success, and a coarse bounded error class. Those fields describe collection health, not attack evidence.
 
-## Ingestion health
+## Ingestion health and write recovery
 
 The controller exposes current ingestion state separately from historical counters:
 
 - `current` — no current pipeline problem is detected;
 - queue pressure — depth is at least 75% of the known bounded queue capacity;
 - backpressure — the current saturation episode has rejected/dropped evidence;
-- write failure — the current ingestion episode contains a storage write failure;
+- `write-failed` — a generic current storage write has failed;
+- `storage-full` — SQLite returned typed `SQLITE_FULL` for the current write-failure episode; and
 - closing/closed — the ingestion path is shutting down or disconnected.
 
-Cumulative dropped and failed totals remain visible for diagnostics, but old totals do not permanently poison current health after the pipeline recovers. The 75% queue threshold is an operational warning against a known finite queue, not a security/protection percentage.
+The classifier uses SQLite's result code rather than matching a human-readable error string. The API exposes only a bounded failure class such as `sqlite-full`; raw driver/database error text is not promoted into user-facing coverage state.
 
-A write failure can be caused by a full filesystem, SQLite quota exhaustion, or another storage problem. Cozy SOC currently reports the proven fact (`write-failed`) rather than guessing a more specific cause.
+A `storage-full` episode remains degraded after capacity has been freed until a later storage operation succeeds. This preserves the distinction between **capacity appears recovered** and **the write path has actually demonstrated recovery**. Cumulative dropped and failed totals remain visible after recovery without permanently poisoning current health.
 
-## Controller-database capacity
+The 75% queue threshold is an operational warning against a known finite queue, not a security/protection percentage.
 
-The SQLite store has a configured `max_page_count` quota. Device Watch storage health reports:
+## Database quota versus host-volume capacity
+
+The existing `storage-health` signal now keeps two capacity domains separate.
+
+### Controller database quota
+
+The SQLite store has a configured `max_page_count` quota. The response reports:
 
 - allocated database bytes;
 - actively used page bytes;
@@ -95,7 +102,26 @@ The SQLite store has a configured `max_page_count` quota. Device Watch storage h
 
 Quota pressure begins when **used** pages reach 90% of that known database quota; reaching the effective quota is a degraded state. Reusable free-list pages count as available headroom, so retention pruning does not falsely leave the database "almost full" simply because the file has not shrunk on disk.
 
-This is **not filesystem free-space monitoring**. A healthy database-quota result does not prove that the host volume has enough free disk, and a database-quota warning does not mean the whole filesystem is full.
+### Host-volume capacity
+
+On Darwin and Linux the controller also reads filesystem capacity for the volume containing the Cozy SOC state directory. It reports whether that measurement is supported, total bytes, bytes available to the process, and the explicit warning threshold.
+
+Filesystem states are:
+
+- `current` — more than 128 MiB is currently available;
+- `pressure` — available bytes are nonzero but at or below 128 MiB;
+- `full` — the operating system reports zero bytes available to this process; and
+- `unavailable` — current capacity could not be established.
+
+The 128 MiB value is a bounded operational-headroom warning, not a prediction that the next write will fail. `full` is not guessed from database size or a historical failure; it requires current filesystem evidence reporting zero available bytes.
+
+Database quota and host-volume state are both returned so the UI can explain the distinction. Examples:
+
+- DB quota reached + host volume current → `storage-quota-reached`;
+- host volume full + DB quota current → `storage-filesystem-full`;
+- typed `SQLITE_FULL` + current capacity no longer limiting → `ingestion-sqlite-full` until a successful write proves recovery.
+
+If filesystem capacity introspection is unsupported, that fact is exposed without degrading the capability by itself. If the platform is expected to support it but the measurement currently fails, storage health becomes `filesystem-unknown` rather than guessing either current or full.
 
 ## Evidence validation
 
@@ -126,7 +152,7 @@ Each gap includes one concrete next step. These are guidance, not automated resp
 
 ## Relationship to capability verification
 
-Device Watch now declares five independent verification signals:
+Device Watch declares five independent verification signals:
 
 1. `network-scope-enrolled`;
 2. `observation-freshness`;
@@ -134,12 +160,12 @@ Device Watch now declares five independent verification signals:
 4. `ingestion-health`; and
 5. `storage-health`.
 
-All must be fresh for the capability to be `verified`. This prevents a fresh historical sample from keeping the capability green after its sensor disconnects or its write path becomes unhealthy.
+All must be fresh for the capability to be `verified`. This prevents a fresh historical sample from keeping the capability green after its sensor disconnects or its write/capacity path becomes unhealthy.
 
-The lifecycle state and `device-watch.coverage` share the same operational evaluators. The UI therefore cannot say that a sensor is disconnected, stale, backpressured, or at database quota while `capabilities.list` independently calls the same capability verified.
+The lifecycle state and `device-watch.coverage` share the same operational evaluators. The UI therefore cannot say that a sensor is disconnected, stale, backpressured, at database quota, or out of host-volume capacity while `capabilities.list` independently calls the same capability verified.
 
 A fresh sample may still contain zero neighbors. The sample itself is heartbeat/validation evidence that collection ran, so a quiet network is not automatically a source failure.
 
 ## Still outside this slice
 
-This does not complete #12. Remaining coverage work includes explicit filesystem free-space measurement/diagnosis, measured ingestion latency rather than queue-pressure inference, other capability observation points, directionality, DNS/router-specific coverage, traffic-sensor gaps, wireless channel/dwell limits, and frontend presentation.
+This does not complete #12. Remaining coverage work includes measured ingestion latency rather than queue-pressure inference, explicit permission-state evidence where a source can prove it, other capability observation points, directionality, DNS/router-specific coverage, traffic-sensor gaps, wireless channel/dwell limits, frontend presentation, and real low-disk/full-volume recovery evidence under #29.
