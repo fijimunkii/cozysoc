@@ -50,6 +50,16 @@ func TestEnabledConfigurationRequiresTypedRequiredValues(t *testing.T) {
 		t.Fatal("wrong config value type accepted")
 	}
 
+	nullValue := Configuration{
+		ID:        "device-watch",
+		Ownership: OwnershipBuiltin,
+		Desired:   DesiredDisabled,
+		Values:    map[string]json.RawMessage{"network_scope_id": json.RawMessage(`null`)},
+	}
+	if err := ValidateConfiguration(registry, nullValue); err == nil {
+		t.Fatal("null configured value was accepted")
+	}
+
 	valid := Configuration{
 		ID:        "device-watch",
 		Ownership: OwnershipBuiltin,
