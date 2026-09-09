@@ -53,6 +53,10 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "device-watch-enable":
+		return runReadCommand(ctx, api.MethodDeviceWatchEnable, args[1:], stdout, stderr)
+	case "device-watch-disable":
+		return runReadCommand(ctx, api.MethodDeviceWatchDisable, args[1:], stdout, stderr)
 	case "device-label":
 		return runDeviceLabelCommand(ctx, args[1:], stdout, stderr)
 	case "network-enroll":
@@ -79,6 +83,8 @@ Usage:
   cozysoc-controller capabilities [--state-dir PATH]
   cozysoc-controller devices [--state-dir PATH]
   cozysoc-controller networks [--state-dir PATH]
+  cozysoc-controller device-watch-enable [--state-dir PATH]
+  cozysoc-controller device-watch-disable [--state-dir PATH]
   cozysoc-controller device-label [--state-dir PATH] DEVICE_ID LABEL
   cozysoc-controller network-enroll [--state-dir PATH] INTERFACE
 
@@ -110,19 +116,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	if err != nil {
 		return err
 	}
+	configManager, err := config.NewManager(dir, registry, cfg)
+	if err != nil {
+		return fmt.Errorf("initialize controller configuration: %w", err)
+	}
 	instances, err := capability.NewInstances(registry, cfg.Capabilities)
 	if err != nil {
 		return fmt.Errorf("load capability instances: %w", err)
 	}
 
 	logger := newLogger(stderr, cfg.LogLevel)
-	lifecycle, err := capability.NewLifecycleEngine(instances, nil, logger)
-	if err != nil {
-		return fmt.Errorf("initialize capability lifecycle: %w", err)
-	}
-	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, lifecycle)
-	controller.Start(ctx)
-
 	store, err := storage.Open(dir, storage.DefaultLimits())
 	if err != nil {
 		return fmt.Errorf("open controller storage: %w", err)
@@ -132,6 +135,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 			logger.Warn("storage_close_failed")
 		}
 	}()
+
 	ingestor, err := storage.NewIngestor(store, 0, logger)
 	if err != nil {
 		return fmt.Errorf("initialize storage ingestion: %w", err)
@@ -144,20 +148,40 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		}
 	}()
 
-	scopeID, deviceWatchEnabled, err := devicewatch.EnabledScopeID(cfg.Capabilities)
+	deviceWatchDriver, err := devicewatch.NewLifecycleDriver(store, ingestor, logger)
+	if err != nil {
+		return fmt.Errorf("initialize Device Watch lifecycle: %w", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := deviceWatchDriver.Close(closeCtx); err != nil {
+			logger.Warn("device_watch_close_failed")
+		}
+	}()
+
+	lifecycle, err := capability.NewLifecycleEngine(instances, map[string]capability.LifecycleDriver{
+		devicewatch.CapabilityID: deviceWatchDriver,
+	}, logger)
+	if err != nil {
+		return fmt.Errorf("initialize capability lifecycle: %w", err)
+	}
+	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, lifecycle)
+	controller.Start(ctx)
+
+	deviceWatchControl, err := newDeviceWatchControl(configManager, lifecycle, deviceWatchDriver, store, logger)
 	if err != nil {
 		return err
 	}
-	if deviceWatchEnabled {
-		runtime, runtimeErr := devicewatch.NewRuntime(store, ingestor, logger)
-		if runtimeErr != nil {
-			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(runtimeErr))
-		} else if runtimeErr = runtime.Start(ctx, scopeID); runtimeErr != nil {
-			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(runtimeErr))
+	if _, enabled, currentErr := deviceWatchControl.Current(); currentErr != nil {
+		return currentErr
+	} else if enabled {
+		if _, reconcileErr := deviceWatchControl.Enable(ctx); reconcileErr != nil {
+			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(reconcileErr))
 		}
 	}
 
-	apiHandler, err := newControllerAPIHandler(controller, store, scopeID, deviceWatchEnabled)
+	apiHandler, err := newControllerAPIHandler(controller, store, deviceWatchControl)
 	if err != nil {
 		return err
 	}
@@ -185,6 +209,10 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 
 func deviceWatchStartupReason(err error) string {
 	switch {
+	case errors.Is(err, localapi.ErrMutationPrecondition):
+		return "precondition-failed"
+	case errors.Is(err, localapi.ErrMutationConflict):
+		return "configuration-conflict"
 	case errors.Is(err, devicewatch.ErrPlatformUnsupported):
 		return "platform-unsupported"
 	case errors.Is(err, storage.ErrNetworkScopeNotFound):
