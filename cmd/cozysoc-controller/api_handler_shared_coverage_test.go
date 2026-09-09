@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 )
@@ -71,16 +72,11 @@ func TestControllerAPIHandlerProjectsSharedDeviceWatchObservationPoint(t *testin
 	}
 }
 
-func hasAPICoverageDimension(dimensions []apiCoverageDimensionLike, kind, value string) bool {
+func hasAPICoverageDimension(dimensions []api.CoverageDimension, kind, value string) bool {
 	for _, dimension := range dimensions {
-		if dimension.coverageKind() == kind && dimension.coverageValue() == value {
+		if dimension.Kind == kind && dimension.Value == value {
 			return true
 		}
 	}
 	return false
-}
-
-type apiCoverageDimensionLike interface {
-	coverageKind() string
-	coverageValue() string
 }
