@@ -1,14 +1,17 @@
 package main
 
 import (
+	"time"
+
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	sharedcoverage "github.com/fijimunkii/cozysoc/internal/controller/coverage"
 )
 
-func projectCoverageReport(report sharedcoverage.Report) api.CoverageReport {
+func projectCoverageReport(report sharedcoverage.Report, asOf time.Time) api.CoverageReport {
 	result := api.CoverageReport{
 		CapabilityID:      report.CapabilityID,
 		Configured:        report.Configured,
+		AsOf:              asOf.UTC(),
 		State:             string(report.State),
 		Reason:            report.Reason,
 		ObservationPoints: make([]api.CoverageObservationPoint, 0, len(report.ObservationPoints)),
