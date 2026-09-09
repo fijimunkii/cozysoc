@@ -191,7 +191,9 @@ func TestPruneExpiredRecordsVisibleStorageEvent(t *testing.T) {
 	if inserted, err := store.InsertObservation(ctx, observation); err != nil || !inserted {
 		t.Fatalf("insert expiring observation = %v, %v", inserted, err)
 	}
-	counts, err := store.PruneExpired(ctx, base.Add(2*time.Hour), 100)
+	pruneAt := base.Add(2 * time.Hour)
+	store.now = func() time.Time { return pruneAt }
+	counts, err := store.PruneExpired(ctx, pruneAt, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,18 +298,18 @@ func seedScopeAndSensor(t *testing.T, store *Store, scopeID, sensorID string, no
 func observationFixture(id, scopeID, sensorID string, now time.Time) domain.Observation {
 	source := now.Add(-time.Minute)
 	return domain.Observation{
-		ID: id,
-		ScopeID: scopeID,
-		SensorID: sensorID,
-		Kind: "neighbor-seen",
-		SourceStream: "neighbor-cache",
-		SourceKey: id,
+		ID:            id,
+		ScopeID:       scopeID,
+		SensorID:      sensorID,
+		Kind:          "neighbor-seen",
+		SourceStream:  "neighbor-cache",
+		SourceKey:     id,
 		SourceEventID: id,
-		SourceTime: &source,
-		IngestedAt: now,
+		SourceTime:    &source,
+		IngestedAt:    now,
 		SchemaVersion: 1,
-		Attribution: "desktop-neighbor-cache",
-		Payload: json.RawMessage(`{"address":"192.168.1.20"}`),
-		Retention: domain.RetentionStandard,
+		Attribution:   "desktop-neighbor-cache",
+		Payload:       json.RawMessage(`{"address":"192.168.1.20"}`),
+		Retention:     domain.RetentionStandard,
 	}
 }
