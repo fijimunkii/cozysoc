@@ -156,13 +156,13 @@ type DeviceWatchPipelineHealth struct {
 }
 
 type DeviceWatchDatabaseHealth struct {
-	State          string `json:"state"`
-	Reason         string `json:"reason,omitempty"`
-	DatabaseBytes  int64  `json:"database_bytes"`
-	UsedBytes      int64  `json:"used_bytes"`
-	ReusableBytes  int64  `json:"reusable_bytes"`
-	MaxBytes       int64  `json:"max_bytes"`
-	NextStep       string `json:"next_step,omitempty"`
+	State         string `json:"state"`
+	Reason        string `json:"reason,omitempty"`
+	DatabaseBytes int64  `json:"database_bytes"`
+	UsedBytes     int64  `json:"used_bytes"`
+	ReusableBytes int64  `json:"reusable_bytes"`
+	MaxBytes      int64  `json:"max_bytes"`
+	NextStep      string `json:"next_step,omitempty"`
 }
 
 type DeviceWatchOperationalHealth struct {
