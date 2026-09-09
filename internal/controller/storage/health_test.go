@@ -57,7 +57,31 @@ func TestClassifyStorageHealthUsesKnownQuota(t *testing.T) {
 	}
 }
 
-func TestStorageHealthReportsEffectiveQuotaAndReusablePages(t *testing.T) {
+func TestClassifyFilesystemCapacityUsesAvailableBytes(t *testing.T) {
+	tests := []struct {
+		name      string
+		supported bool
+		total     int64
+		available int64
+		want      FilesystemCapacityState
+	}{
+		{name: "unsupported", supported: false, want: FilesystemCapacityUnavailable},
+		{name: "invalid metadata", supported: true, total: 100, available: 101, want: FilesystemCapacityUnavailable},
+		{name: "full", supported: true, total: 1 << 30, available: 0, want: FilesystemCapacityFull},
+		{name: "pressure", supported: true, total: 1 << 30, available: filesystemPressureThresholdBytes, want: FilesystemCapacityPressure},
+		{name: "current", supported: true, total: 1 << 30, available: filesystemPressureThresholdBytes + 1, want: FilesystemCapacityCurrent},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := classifyFilesystemCapacity(test.supported, test.total, test.available)
+			if got.State != test.want || got.PressureAtBytes != filesystemPressureThresholdBytes {
+				t.Fatalf("filesystem capacity = %+v, want state %s", got, test.want)
+			}
+		})
+	}
+}
+
+func TestStorageHealthReportsQuotaAndFilesystemCapacity(t *testing.T) {
 	store, err := Open(t.TempDir(), DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
@@ -68,13 +92,21 @@ func TestStorageHealthReportsEffectiveQuotaAndReusablePages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if health.State != HealthCurrent || health.MaxBytes <= 0 || health.DatabaseBytes <= 0 || health.UsedBytes <= 0 {
-		t.Fatalf("unexpected storage health: %+v", health)
+	if health.QuotaState != HealthCurrent || health.MaxBytes <= 0 || health.DatabaseBytes <= 0 || health.UsedBytes <= 0 {
+		t.Fatalf("unexpected storage quota health: %+v", health)
 	}
 	if health.ReusableBytes < 0 || health.DatabaseBytes != health.UsedBytes+health.ReusableBytes {
 		t.Fatalf("invalid allocated/used/reusable accounting: %+v", health)
 	}
 	if health.UsedBytes > health.MaxBytes {
 		t.Fatalf("fresh database already exceeds configured quota: %+v", health)
+	}
+	if health.FilesystemSupported {
+		if health.FilesystemTotalBytes <= 0 || health.FilesystemAvailableBytes < 0 || health.FilesystemAvailableBytes > health.FilesystemTotalBytes {
+			t.Fatalf("invalid filesystem accounting: %+v", health)
+		}
+		if health.FilesystemPressureAtBytes != filesystemPressureThresholdBytes {
+			t.Fatalf("filesystem pressure threshold = %d", health.FilesystemPressureAtBytes)
+		}
 	}
 }
