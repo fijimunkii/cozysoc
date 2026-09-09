@@ -51,6 +51,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodCapabilitiesList, args[1:], stdout, stderr)
 	case "devices":
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
+	case "device-label":
+		return runDeviceLabelCommand(ctx, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(stdout, usageText())
 		return nil
@@ -72,8 +74,9 @@ Usage:
   cozysoc-controller health [--state-dir PATH]
   cozysoc-controller capabilities [--state-dir PATH]
   cozysoc-controller devices [--state-dir PATH]
+  cozysoc-controller device-label [--state-dir PATH] DEVICE_ID LABEL
 
-The v0.1 management API is read-only, uses a permissioned local Unix socket, requires a per-controller session secret, and verifies OS peer identity on the current macOS and Linux reference paths.
+The v0.1 local management API uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.
 `
 }
 

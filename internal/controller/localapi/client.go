@@ -24,6 +24,18 @@ func NewClient(stateDir string) *Client {
 }
 
 func (c *Client) Call(ctx context.Context, method string) (json.RawMessage, error) {
+	return c.call(ctx, method, nil)
+}
+
+func (c *Client) CallWithParams(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("encode controller request params: %w", err)
+	}
+	return c.call(ctx, method, encoded)
+}
+
+func (c *Client) call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	secret, err := loadSessionSecret(c.stateDir)
 	if err != nil {
 		return nil, err
@@ -42,6 +54,7 @@ func (c *Client) Call(ctx context.Context, method string) (json.RawMessage, erro
 		ID:      "cli",
 		Method:  method,
 		Auth:    secret,
+		Params:  params,
 	}
 	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		return nil, fmt.Errorf("send controller request: %w", err)

@@ -14,13 +14,15 @@ const (
 	MethodHealth           = "health"
 	MethodCapabilitiesList = "capabilities.list"
 	MethodDevicesList      = "devices.list"
+	MethodDeviceLabel      = "device.label"
 )
 
 type Request struct {
-	Version int    `json:"version"`
-	ID      string `json:"id"`
-	Method  string `json:"method"`
-	Auth    string `json:"auth"`
+	Version int             `json:"version"`
+	ID      string          `json:"id"`
+	Method  string          `json:"method"`
+	Auth    string          `json:"auth"`
+	Params  json.RawMessage `json:"params,omitempty"`
 }
 
 type Response struct {
@@ -71,4 +73,15 @@ type DeviceList struct {
 	AsOf       time.Time        `json:"as_of"`
 	Devices    []DevicePresence `json:"devices"`
 	Truncated  bool             `json:"truncated"`
+}
+
+type DeviceLabelParams struct {
+	DeviceID string  `json:"device_id"`
+	Label    *string `json:"label"`
+}
+
+type DeviceLabelResult struct {
+	DeviceID  string `json:"device_id"`
+	UserLabel string `json:"user_label,omitempty"`
+	Changed   bool   `json:"changed"`
 }

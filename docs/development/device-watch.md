@@ -91,18 +91,34 @@ Device presence currently has two passive states:
 - `visible`: positive Device Watch evidence was observed within the last three minutes; and
 - `uncertain`: the latest positive evidence is older than that freshness window.
 
-The projection exposes the preserved first-seen and latest-seen timestamps. It deliberately has **no automatic `offline` state** yet.
+The projection exposes the preserved first-seen and latest-seen timestamps through the authenticated `devices.list` API and `devices` CLI command. It deliberately has **no automatic `offline` state** yet.
 
 A missing neighbor in the next cache snapshot is not a departure event. Sleep/resume, cache expiry, Wi-Fi roaming, temporary IPv6 addresses, client isolation, and a controller source gap all therefore age a device to `uncertain` instead of generating a false leave/rejoin sequence.
+
+## User labels
+
+`device.label` is the first bounded state-changing local API operation. The corresponding CLI surface is:
+
+```bash
+cozysoc-controller device-label --state-dir PATH DEVICE_ID "Living Room TV"
+```
+
+An empty label clears the user label. Labels are user metadata only; they do not alter the underlying temporal identity claims or increase inference confidence.
+
+Authorization remains tied to the persisted Device Watch scope. The controller supplies only the configured `network_scope_id`, and storage independently requires retained identity evidence for that device in the same scope before it permits the update. A guessed device ID from another scope therefore cannot be labeled through this method.
+
+Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event.
+
+The mutation does not grant network, capability-lifecycle, process, filesystem, or arbitrary database write authority.
 
 ## What remains in #11
 
 This work still does not close #11. Remaining work includes:
 
-- authenticated enrollment/configuration mutation and user-facing scope selection;
+- authenticated network enrollment/configuration mutation and user-facing scope selection;
 - lifecycle-driver registration and #12 coverage-verification wiring;
-- read-only device/presence API/UI exposure;
-- labeling and auditable merge/split correction flows;
+- desktop UI exposure for the existing device/presence and labeling contracts;
+- auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
-- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, and permission/source failures.
+- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, labeling, and permission/source failures.

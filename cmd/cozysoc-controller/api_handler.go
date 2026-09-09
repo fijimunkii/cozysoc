@@ -2,33 +2,43 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
+	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
+var deviceIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
+
+type controllerDeviceStore interface {
+	devicewatch.DeviceEvidenceReader
+	SetDeviceLabel(context.Context, string, string, string) (bool, error)
+}
+
 type controllerAPIHandler struct {
 	controller            *core.Controller
-	presenceReader        devicewatch.DeviceEvidenceReader
+	deviceStore           controllerDeviceStore
 	deviceWatchScopeID    string
 	deviceWatchConfigured bool
 	now                   func() time.Time
 }
 
-func newControllerAPIHandler(controller *core.Controller, reader devicewatch.DeviceEvidenceReader, scopeID string, configured bool) (*controllerAPIHandler, error) {
+func newControllerAPIHandler(controller *core.Controller, store controllerDeviceStore, scopeID string, configured bool) (*controllerAPIHandler, error) {
 	if controller == nil {
 		return nil, fmt.Errorf("controller API handler requires controller core")
 	}
-	if configured && (reader == nil || scopeID == "") {
-		return nil, fmt.Errorf("configured Device Watch API requires a scope and presence reader")
+	if configured && (store == nil || scopeID == "") {
+		return nil, fmt.Errorf("configured Device Watch API requires a scope and device store")
 	}
 	return &controllerAPIHandler{
 		controller:            controller,
-		presenceReader:        reader,
+		deviceStore:           store,
 		deviceWatchScopeID:    scopeID,
 		deviceWatchConfigured: configured,
 		now:                   time.Now,
@@ -58,7 +68,7 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 		return result, nil
 	}
 
-	presence, err := devicewatch.ListPresence(ctx, h.presenceReader, h.deviceWatchScopeID, asOf, "", storage.MaxQueryLimit)
+	presence, err := devicewatch.ListPresence(ctx, h.deviceStore, h.deviceWatchScopeID, asOf, "", storage.MaxQueryLimit)
 	if err != nil {
 		return api.DeviceList{}, err
 	}
@@ -75,4 +85,27 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 		})
 	}
 	return result, nil
+}
+
+func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.DeviceLabelParams) (api.DeviceLabelResult, error) {
+	if !h.deviceWatchConfigured || h.deviceStore == nil || h.deviceWatchScopeID == "" {
+		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if params.Label == nil || !deviceIDPattern.MatchString(params.DeviceID) || storage.ValidateDeviceLabel(*params.Label) != nil {
+		return api.DeviceLabelResult{}, localapi.ErrInvalidMutation
+	}
+	label := *params.Label
+
+	changed, err := h.deviceStore.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, label)
+	if errors.Is(err, storage.ErrDeviceNotInScope) {
+		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if err != nil {
+		return api.DeviceLabelResult{}, err
+	}
+	return api.DeviceLabelResult{
+		DeviceID:  params.DeviceID,
+		UserLabel: label,
+		Changed:   changed,
+	}, nil
 }
