@@ -9,6 +9,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
+	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
 func (*fakeDeviceStore) LatestCoverageSample(context.Context, string, string) (domain.CoverageSample, bool, error) {
@@ -85,6 +86,9 @@ func TestControllerAPIHandlerProjectsCuratedCoverageDetails(t *testing.T) {
 	if result.Operational == nil || result.Operational.Sensor.State != "current" || result.Operational.Pipeline.State != "current" || result.Operational.Database.State != "current" {
 		t.Fatalf("coverage operational health = %+v", result.Operational)
 	}
+	if result.Operational.Database.QuotaState != "current" || result.Operational.Database.FilesystemState != "current" || !result.Operational.Database.FilesystemSupported || result.Operational.Database.FilesystemAvailableBytes <= 0 {
+		t.Fatalf("coverage storage detail = %+v", result.Operational.Database)
+	}
 	if len(result.BlindSpots) != 3 || result.BlindSpots[2].ID != "no-traffic-monitoring" || result.BlindSpots[2].NextStep == "" {
 		t.Fatalf("coverage blind spots = %+v", result.BlindSpots)
 	}
@@ -118,6 +122,54 @@ func TestControllerAPIHandlerMakesSensorDisconnectionPrimary(t *testing.T) {
 	}
 	if result.Operational == nil || result.Operational.Sensor.Running || result.Operational.Sensor.State != "disconnected" {
 		t.Fatalf("disconnected sensor projection = %+v", result.Operational)
+	}
+}
+
+func TestControllerAPIHandlerDiagnosesFilesystemFullWriteFailure(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	storeFixture := coverageControllerStore(t, now, true, true)
+	operational := healthyOperational(now)
+	operational.Pipeline = devicewatch.PipelineHealth{
+		State:        devicewatch.OperationalDegraded,
+		Reason:       "sqlite-full",
+		FailureClass: storage.IngestionFailureSQLiteFull,
+		Capacity:     256,
+		Failed:       1,
+		NextStep:     "Wait for write recovery.",
+	}
+	operational.Database = devicewatch.DatabaseHealth{
+		State:                     devicewatch.OperationalDegraded,
+		Reason:                    "filesystem-full",
+		QuotaState:                storage.HealthCurrent,
+		FilesystemState:           storage.FilesystemCapacityFull,
+		FilesystemSupported:       true,
+		DatabaseBytes:             4096,
+		UsedBytes:                 4096,
+		MaxBytes:                  1 << 30,
+		FilesystemTotalBytes:      1 << 30,
+		FilesystemAvailableBytes:  0,
+		FilesystemPressureAtBytes: 128 << 20,
+		NextStep:                  "Free disk space.",
+	}
+	control := &fakeOperationalCoverageControl{
+		fakeDeviceWatchAPIControl: &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true},
+		operational:               operational,
+	}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), storeFixture, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.now = func() time.Time { return now }
+
+	result, err := handler.DeviceWatchCoverage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != "degraded" || result.Reason != "storage-filesystem-full" || result.NextStep != "Free disk space." {
+		t.Fatalf("filesystem full coverage result = %+v", result)
+	}
+	if result.Operational == nil || result.Operational.Pipeline.FailureClass != storage.IngestionFailureSQLiteFull || result.Operational.Database.FilesystemState != "full" || result.Operational.Database.QuotaState != "current" {
+		t.Fatalf("filesystem full operational projection = %+v", result.Operational)
 	}
 }
 
@@ -163,6 +215,17 @@ func healthyOperational(now time.Time) devicewatch.OperationalHealth {
 			LastSuccessfulAt: now.Add(-time.Minute),
 		},
 		Pipeline: devicewatch.PipelineHealth{State: devicewatch.OperationalCurrent, Capacity: 256},
-		Database: devicewatch.DatabaseHealth{State: devicewatch.OperationalCurrent, DatabaseBytes: 1024, MaxBytes: 1 << 30},
+		Database: devicewatch.DatabaseHealth{
+			State:                     devicewatch.OperationalCurrent,
+			QuotaState:                storage.HealthCurrent,
+			FilesystemState:           storage.FilesystemCapacityCurrent,
+			FilesystemSupported:       true,
+			DatabaseBytes:             1024,
+			UsedBytes:                 1024,
+			MaxBytes:                  1 << 30,
+			FilesystemTotalBytes:      100 << 30,
+			FilesystemAvailableBytes:  50 << 30,
+			FilesystemPressureAtBytes: 128 << 20,
+		},
 	}
 }
