@@ -105,32 +105,32 @@ type DeviceClaimLink struct {
 }
 
 type CoverageSample struct {
-	ID           string          `json:"id"`
-	ScopeID      string          `json:"scope_id"`
-	SensorID     string          `json:"sensor_id"`
-	CapabilityID string          `json:"capability_id"`
-	Status       string          `json:"status"`
-	StartedAt    time.Time       `json:"started_at"`
-	EndedAt      time.Time       `json:"ended_at"`
-	SchemaVersion int            `json:"schema_version"`
-	Evidence     json.RawMessage `json:"evidence"`
-	Retention    RetentionClass  `json:"retention"`
+	ID            string          `json:"id"`
+	ScopeID       string          `json:"scope_id"`
+	SensorID      string          `json:"sensor_id"`
+	CapabilityID  string          `json:"capability_id"`
+	Status        string          `json:"status"`
+	StartedAt     time.Time       `json:"started_at"`
+	EndedAt       time.Time       `json:"ended_at"`
+	SchemaVersion int             `json:"schema_version"`
+	Evidence      json.RawMessage `json:"evidence"`
+	Retention     RetentionClass  `json:"retention"`
 }
 
 type Finding struct {
-	ID                 string          `json:"id"`
-	ScopeID            string          `json:"scope_id"`
-	DetectorID         string          `json:"detector_id"`
-	DetectorVersion    string          `json:"detector_version"`
-	Category           string          `json:"category"`
-	Severity           string          `json:"severity"`
-	Confidence         *float64        `json:"confidence,omitempty"`
-	ObservedAt         time.Time       `json:"observed_at"`
-	CreatedAt          time.Time       `json:"created_at"`
-	SchemaVersion      int             `json:"schema_version"`
-	Payload            json.RawMessage `json:"payload"`
-	EvidenceObservationIDs []string   `json:"evidence_observation_ids"`
-	Retention          RetentionClass  `json:"retention"`
+	ID                     string          `json:"id"`
+	ScopeID                string          `json:"scope_id"`
+	DetectorID             string          `json:"detector_id"`
+	DetectorVersion        string          `json:"detector_version"`
+	Category               string          `json:"category"`
+	Severity               string          `json:"severity"`
+	Confidence             *float64        `json:"confidence,omitempty"`
+	ObservedAt             time.Time       `json:"observed_at"`
+	CreatedAt              time.Time       `json:"created_at"`
+	SchemaVersion          int             `json:"schema_version"`
+	Payload                json.RawMessage `json:"payload"`
+	EvidenceObservationIDs []string        `json:"evidence_observation_ids"`
+	Retention              RetentionClass  `json:"retention"`
 }
 
 type AuditEvent struct {
