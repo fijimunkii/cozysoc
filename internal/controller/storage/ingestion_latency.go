@@ -34,7 +34,7 @@ type ingestionLatencySnapshot struct {
 type ingestionLatencyTracker struct {
 	mu sync.Mutex
 
-	pending                []time.Time
+	pending                map[*receiptState]time.Time
 	lastDurableLatency     time.Duration
 	lastQueueWait          time.Duration
 	lastProcessingDuration time.Duration
@@ -43,28 +43,26 @@ type ingestionLatencyTracker struct {
 }
 
 func newIngestionLatencyTracker() *ingestionLatencyTracker {
-	return &ingestionLatencyTracker{}
+	return &ingestionLatencyTracker{pending: make(map[*receiptState]time.Time)}
 }
 
-func (t *ingestionLatencyTracker) accept(at time.Time) {
-	if t == nil {
+func (t *ingestionLatencyTracker) accept(receipt *receiptState, at time.Time) {
+	if t == nil || receipt == nil {
 		return
 	}
 	t.mu.Lock()
-	t.pending = append(t.pending, at)
+	t.pending[receipt] = at
 	t.mu.Unlock()
 }
 
-func (t *ingestionLatencyTracker) complete(acceptedAt, startedAt, completedAt time.Time, durable bool) {
+func (t *ingestionLatencyTracker) complete(receipt *receiptState, acceptedAt, startedAt, completedAt time.Time, durable bool) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if len(t.pending) > 0 {
-		t.pending = t.pending[1:]
-	}
+	delete(t.pending, receipt)
 	if !durable {
 		return
 	}
@@ -73,8 +71,11 @@ func (t *ingestionLatencyTracker) complete(acceptedAt, startedAt, completedAt ti
 	processing := nonNegativeDuration(completedAt.Sub(startedAt))
 	latency := nonNegativeDuration(completedAt.Sub(acceptedAt))
 
-	if !t.lastCompletedAt.IsZero() && completedAt.Sub(t.lastCompletedAt) > ingestionLatencyFreshnessWindow {
-		t.slowStreak = 0
+	if !t.lastCompletedAt.IsZero() {
+		gap := completedAt.Sub(t.lastCompletedAt)
+		if gap < 0 || gap > ingestionLatencyFreshnessWindow {
+			t.slowStreak = 0
+		}
 	}
 	if latency >= ingestionLatencyThreshold {
 		t.slowStreak++
@@ -106,8 +107,13 @@ func (t *ingestionLatencyTracker) snapshot(now time.Time) ingestionLatencySnapsh
 	snapshot.LastCompletedAt = t.lastCompletedAt
 	snapshot.SlowStreak = t.slowStreak
 
-	if len(t.pending) > 0 {
-		snapshot.OldestPendingAge = nonNegativeDuration(now.Sub(t.pending[0]))
+	for _, acceptedAt := range t.pending {
+		age := nonNegativeDuration(now.Sub(acceptedAt))
+		if age > snapshot.OldestPendingAge {
+			snapshot.OldestPendingAge = age
+		}
+	}
+	if snapshot.Pending > 0 {
 		if snapshot.OldestPendingAge >= ingestionLatencyThreshold {
 			snapshot.State = IngestionLatencyLagging
 			return snapshot
@@ -115,11 +121,14 @@ func (t *ingestionLatencyTracker) snapshot(now time.Time) ingestionLatencySnapsh
 		snapshot.State = IngestionLatencyCurrent
 	}
 
-	if !t.lastCompletedAt.IsZero() && nonNegativeDuration(now.Sub(t.lastCompletedAt)) <= ingestionLatencyFreshnessWindow {
-		if t.slowStreak >= ingestionSlowStreakThreshold {
-			snapshot.State = IngestionLatencyLagging
-		} else if snapshot.State == IngestionLatencyIdle {
-			snapshot.State = IngestionLatencyCurrent
+	if !t.lastCompletedAt.IsZero() {
+		age := now.Sub(t.lastCompletedAt)
+		if age >= 0 && age <= ingestionLatencyFreshnessWindow {
+			if t.slowStreak >= ingestionSlowStreakThreshold {
+				snapshot.State = IngestionLatencyLagging
+			} else if snapshot.State == IngestionLatencyIdle {
+				snapshot.State = IngestionLatencyCurrent
+			}
 		}
 	}
 	return snapshot
