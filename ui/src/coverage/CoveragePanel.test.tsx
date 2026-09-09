@@ -55,8 +55,7 @@ describe("CoveragePanel", () => {
   it("labels fixture mode so demo data cannot be mistaken for live monitoring", () => {
     render(<App />);
 
-    expect(screen.getByRole("status", { name: "Synthetic demo data" })).toHaveTextContent(
-      "This screen is not connected to live monitoring.",
-    );
+    const banner = screen.getByRole("status", { name: "Synthetic demo data" });
+    expect(banner.textContent).toContain("This screen is not connected to live monitoring.");
   });
 });

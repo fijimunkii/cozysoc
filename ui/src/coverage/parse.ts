@@ -138,8 +138,8 @@ function parseScope(input: unknown, path: string): CoverageScope {
   };
   const configured = dimensionKeys(scope.configured, `${path}.configured`);
   const verified = dimensionKeys(scope.verified, `${path}.verified`);
-  for (const dimension of scope.expected_unverified) {
-    const key = dimensionKey(dimension);
+  const expected = dimensionKeys(scope.expected_unverified, `${path}.expected_unverified`);
+  for (const key of expected) {
     if (!configured.has(key)) {
       fail(`${path}.expected_unverified contains a dimension outside configured scope`);
     }
@@ -168,6 +168,9 @@ function parseSource(input: unknown, path: string): CoverageSource {
     observed: booleanValue(value, "observed", path),
   };
   const nextStep = optionalText(value, "next_step", path, 512);
+  if (source.state !== "current" && nextStep === undefined) {
+    fail(`${path}.next_step is required for a non-current source`);
+  }
   if (nextStep !== undefined) {
     source.next_step = nextStep;
   }
@@ -217,18 +220,22 @@ function parseCadence(input: unknown, path: string): CoverageCadence {
 
 function parseGap(input: unknown, path: string): CoverageGap {
   const value = record(input, path);
+  const dimensions = array(value, "dimensions", path, 128).map((dimension, index) =>
+    parseDimension(dimension, `${path}.dimensions[${index}]`),
+  );
+  const gapDirections = array(value, "directions", path, 8).map((direction, index) =>
+    enumInput(direction, `${path}.directions[${index}]`, directions),
+  );
+  dimensionKeys(dimensions, `${path}.dimensions`);
+  uniqueStrings(gapDirections, `${path}.directions`);
   return {
     id: token(value, "id", path),
     kind: token(value, "kind", path),
     summary: text(value, "summary", path, 256),
     detail: text(value, "detail", path, 1024),
     next_step: text(value, "next_step", path, 512),
-    dimensions: array(value, "dimensions", path, 128).map((dimension, index) =>
-      parseDimension(dimension, `${path}.dimensions[${index}]`),
-    ),
-    directions: array(value, "directions", path, 8).map((direction, index) =>
-      enumInput(direction, `${path}.directions[${index}]`, directions),
-    ),
+    dimensions,
+    directions: gapDirections,
   };
 }
 

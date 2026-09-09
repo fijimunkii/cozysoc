@@ -33,6 +33,47 @@ describe("parseCoverageReport", () => {
     expect(() => parseCoverageReport(raw)).toThrow(/aggregate must match/);
   });
 
+  it("rejects duplicate expected-unverified dimensions", () => {
+    const raw = structuredClone(demoCoverageRaw) as {
+      observation_points: Array<{ scope: { expected_unverified: unknown[] } }>;
+    };
+    const point = raw.observation_points[0];
+    if (point === undefined) throw new Error("demo point missing");
+    point.scope.expected_unverified = [
+      { kind: "address-family", value: "ipv6" },
+      { kind: "address-family", value: "ipv6" },
+    ];
+
+    expect(() => parseCoverageReport(raw)).toThrow(/duplicate dimension/);
+  });
+
+  it("rejects duplicate dimensions or directions inside a gap", () => {
+    const raw = structuredClone(demoCoverageRaw) as {
+      observation_points: Array<{ gaps: Array<{ dimensions: unknown[]; directions: unknown[] }> }>;
+    };
+    const gap = raw.observation_points[0]?.gaps[0];
+    if (gap === undefined) throw new Error("demo gap missing");
+    gap.dimensions = [
+      { kind: "vlan", value: "10" },
+      { kind: "vlan", value: "10" },
+    ];
+    gap.directions = ["east-west", "east-west"];
+
+    expect(() => parseCoverageReport(raw)).toThrow(/duplicate/);
+  });
+
+  it("requires an actionable next step for a non-current source", () => {
+    const raw = structuredClone(demoCoverageRaw) as {
+      observation_points: Array<{ sources: Array<Record<string, unknown>> }>;
+    };
+    const source = raw.observation_points[0]?.sources[0];
+    if (source === undefined) throw new Error("demo source missing");
+    source.state = "unavailable";
+    delete source.next_step;
+
+    expect(() => parseCoverageReport(raw)).toThrow(/next_step is required/);
+  });
+
   it("accepts a truthful unconfigured report with no observation points", () => {
     const report = parseCoverageReport({
       capability_id: "device-watch",
