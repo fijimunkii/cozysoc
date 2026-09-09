@@ -3,6 +3,7 @@ package localapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -132,18 +133,7 @@ func TestRequestRejectsUnknownTopLevelFields(t *testing.T) {
 	}
 	defer conn.Close()
 
-	payload := `{"placeholder":true}`
-	payload = `{"version":1}`
-	payload = `{"id":"x"}`
-	payload = `{"method":"status"}`
-	payload = `{"auth":"x"}`
-	payload = `{"surprise":true}`
-	payload = `{"invalid":"discard"}`
-	payload = `{"unused":true}`
-	payload = `{"noop":true}`
-	payload = `{"final":true}`
-	payload = `{"version":1,"id":"x","method":"status","auth":"` + secret + `","surprise":true}`
-	payload = strings.ReplaceAll(payload, `\"`, `"`) + "\n"
+	payload := fmt.Sprintf("{\"version\":1,\"id\":\"x\",\"method\":\"status\",\"auth\":%q,\"surprise\":true}\n", secret)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		t.Fatal(err)
 	}
