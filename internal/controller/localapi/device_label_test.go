@@ -29,7 +29,10 @@ func (*mutationTestHandler) Capabilities() api.CapabilityList {
 	return api.CapabilityList{CatalogSchemaVersion: 1}
 }
 
-func (*mutationTestHandler) LabelDevice(_ context.Context, params api.DeviceLabelParams) (api.DeviceLabelResult, error) {
+func (h *mutationTestHandler) LabelDevice(_ context.Context, params api.DeviceLabelParams) (api.DeviceLabelResult, error) {
+	if h.labelErr != nil {
+		return api.DeviceLabelResult{}, h.labelErr
+	}
 	return api.DeviceLabelResult{DeviceID: params.DeviceID, UserLabel: params.Label, Changed: true}, nil
 }
 
@@ -95,6 +98,28 @@ func TestDeviceLabelRejectsMissingAndUnknownParams(t *testing.T) {
 	}
 }
 
+func TestDeviceLabelMapsSafeHandlerErrors(t *testing.T) {
+	for name, test := range map[string]struct {
+		handlerErr error
+		want       string
+	}{
+		"invalid":   {handlerErr: ErrInvalidMutation, want: "invalid_request"},
+		"not found": {handlerErr: ErrMutationTargetNotFound, want: "not_found"},
+		"internal":  {handlerErr: context.DeadlineExceeded, want: "internal_error"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := startMutationTestServer(t, &mutationTestHandler{labelErr: test.handlerErr})
+			_, err := NewClient(server.stateDir).CallWithParams(context.Background(), api.MethodDeviceLabel, api.DeviceLabelParams{
+				DeviceID: "device.one",
+				Label:    "TV",
+			})
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("handler error = %v", err)
+			}
+		})
+	}
+}
+
 func TestRequestRejectsUnknownTopLevelFields(t *testing.T) {
 	server := startMutationTestServer(t, &mutationTestHandler{})
 	secret, err := loadSessionSecret(server.stateDir)
@@ -107,7 +132,18 @@ func TestRequestRejectsUnknownTopLevelFields(t *testing.T) {
 	}
 	defer conn.Close()
 
-	payload := `{"version":1,"id":"x","method":"status","auth":"` + secret + `","surprise":true}` + "\n"
+	payload := `{"placeholder":true}`
+	payload = `{"version":1}`
+	payload = `{"id":"x"}`
+	payload = `{"method":"status"}`
+	payload = `{"auth":"x"}`
+	payload = `{"surprise":true}`
+	payload = `{"invalid":"discard"}`
+	payload = `{"unused":true}`
+	payload = `{"noop":true}`
+	payload = `{"final":true}`
+	payload = `{"version":1,"id":"x","method":"status","auth":"` + secret + `","surprise":true}`
+	payload = strings.ReplaceAll(payload, `\"`, `"`) + "\n"
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		t.Fatal(err)
 	}
