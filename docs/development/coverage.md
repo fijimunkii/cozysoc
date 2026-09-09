@@ -22,6 +22,26 @@ The method is parameterless. The caller cannot select another scope, sensor, sou
 
 If Device Watch is not enabled/configured, the response is `unconfigured` and points the user back to network enrollment and explicit enablement.
 
+The response keeps the existing Device-Watch-specific fields for compatibility and now also includes a nested capability-independent `coverage` report. The outer `as_of` remains the evaluation time for this endpoint; each shared observation point carries its own evidence window. The legacy aggregate `state`, `reason`, and `next_step` are copied from the validated shared report so the two views cannot drift.
+
+## Shared observation-point contract
+
+The reusable contract is defined in [`coverage-contract.md`](coverage-contract.md). It separates:
+
+- capability state from individual observation points;
+- configured scope from currently verified scope and expected-but-unverified scope;
+- network/interface/VLAN/device/address-family/wireless band/channel dimensions;
+- expected and observed sources;
+- directions actually observed from directions that remain gaps;
+- evidence windows from observation cadence; and
+- operational state from explicit known exclusions.
+
+It has no percentage field and no implicit denominator for unknown devices, networks, VLANs, or wireless channels.
+
+Device Watch is the only live producer today. Deterministic DNS, gateway-packet, wireless-hopping, and permission-required fixtures prove only that the contract can represent those #12 requirements. They are **not** product-support claims for DNS Protection, Traffic Watch, router visibility, or Wireless Watch.
+
+Device Watch itself declares no observed traffic directions. Its shared `no-traffic-monitoring` gap explicitly carries ingress, egress, and east-west as directions that ARP/NDP neighbor evidence does not establish.
+
 ## Aggregate coverage states
 
 The detail read model uses the same current evidence and operational checks that feed lifecycle verification:
@@ -37,6 +57,8 @@ The detail read model uses the same current evidence and operational checks that
 A current sample with one working source and one unavailable source is **degraded**, not verified merely because some evidence still arrives. The working source remains visible as `current` in the detail response so partial usefulness is preserved without hiding the gap.
 
 Operational causes take precedence over an otherwise-fresh evidence sample. For example, if the last sample is still inside its freshness window but the Device Watch runtime has stopped, the aggregate state is `disconnected`, while the old evidence remains visible underneath with its timestamp.
+
+The shared report also preserves the evidence/operation distinction underneath aggregate degradation. Current ARP/NDP evidence can keep its verified address-family dimensions even when a separate ingestion-lag or storage-health failure makes the observation point operationally degraded.
 
 ## Source health
 
@@ -55,7 +77,7 @@ A source state can be:
 
 `reported` and `available_at_last_sample` are separate. This keeps "we have no current evidence" distinct from "the last trusted collection explicitly said this source was unavailable."
 
-Cozy SOC does **not** currently relabel neighbor-source `unavailable` as `permission-required`: the passive source does not yet provide enough evidence to distinguish permission denial from a missing/failed system source.
+In the shared contract, legacy Device Watch `missing` maps to `expected-unverified`. The shared vocabulary can also represent `permission-required`, but Cozy SOC does **not** currently relabel neighbor-source `unavailable` that way: the passive source does not yet provide enough evidence to distinguish permission denial from a missing/failed system source.
 
 ## Sensor operational health
 
@@ -72,7 +94,7 @@ The response includes the last attempt, last success, and a coarse bounded error
 
 ## Ingestion health, measured lag, and write recovery
 
-The bounded ingestion queue now separates utilization from measured health.
+The bounded ingestion queue separates utilization from measured health.
 
 Queue depth at or above 75% of capacity sets `queue_pressure=true`, but **does not by itself degrade coverage**. It is useful capacity telemetry: a queue may be busy while every accepted record is still reaching durable storage promptly. Actual current ingestion states are:
 
@@ -142,7 +164,7 @@ If filesystem capacity introspection is unsupported, that fact is exposed withou
 
 ## Evidence validation
 
-The read model strictly validates the Device Watch coverage evidence schema before presenting it or using it to verify the capability.
+The Device Watch producer strictly validates its source-specific coverage evidence schema before presenting it, using it for lifecycle verification, or projecting it into the shared contract.
 
 It requires:
 
@@ -156,6 +178,8 @@ It requires:
 Malformed or contradictory evidence fails closed as degraded instead of being guessed healthy.
 
 Stored free-form limitation strings are not copied into the frontend contract. The controller emits curated blind spots and next steps so a corrupted or hostile stored string cannot become authoritative UI guidance.
+
+The shared contract performs an additional structural validation over observation-point identity/state, scope dimensions, source states, directions, evidence windows, cadence, and gaps. It does not replace source-specific validation: future producers must first prove the meaning of their own evidence and then map it into the common vocabulary.
 
 ## Curated Device Watch blind spots
 
@@ -179,10 +203,12 @@ Device Watch declares five independent verification signals:
 
 All must be fresh for the capability to be `verified`. This prevents a fresh historical sample from keeping the capability green after its sensor disconnects, accepted evidence begins lagging, or its write/capacity path becomes unhealthy.
 
-The lifecycle state and `device-watch.coverage` share the same operational evaluators. The UI therefore cannot say that a sensor is disconnected, stale, measurably lagging, backpressured, at database quota, or out of host-volume capacity while `capabilities.list` independently calls the same capability verified. High queue utilization alone remains visible as a warning without failing `ingestion-health` when measured durable latency is still current.
+The lifecycle state and `device-watch.coverage` share the same operational evaluators. The shared coverage report is then projected from that same result. The UI therefore cannot say that a sensor is disconnected, stale, measurably lagging, backpressured, at database quota, or out of host-volume capacity while `capabilities.list` independently calls the same capability verified. High queue utilization alone remains visible as a warning without failing `ingestion-health` when measured durable latency is still current.
 
 A fresh sample may still contain zero neighbors. The sample itself is heartbeat/validation evidence that collection ran, so a quiet network is not automatically a source failure.
 
 ## Still outside this slice
 
-This does not complete #12. Remaining coverage work includes explicit permission-state evidence where a source can prove it, other capability observation points, directionality, DNS/router-specific coverage, traffic-sensor gaps, wireless channel/dwell limits, frontend presentation, named-workload calibration of latency/resource thresholds, and real low-disk/full-volume recovery evidence under #29.
+This does not complete #12. The shared contract can now represent DNS-client scope, gateway/east-west direction gaps, wireless hopping/dwell/encryption limits, and explicit permission-required state in deterministic fixtures, but real product producers are still required before any of those become support claims.
+
+Remaining work includes real DNS/router/traffic/wireless adapters and source-specific validation, permission evidence where a producer can actually prove it, multi-observation-point aggregation once a real capability has more than one point, a generic frontend renderer, named-workload calibration of operational thresholds, and real low-disk/full-volume/hardware evidence under #29.
