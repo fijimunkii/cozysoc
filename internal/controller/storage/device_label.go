@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
@@ -96,12 +95,12 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"schema_version":  1,
-		"state":           "applied",
-		"scope_id":        scopeID,
-		"device_id":       deviceID,
-		"previous_label":  previous,
-		"user_label":      label,
+		"schema_version": 1,
+		"state":          "applied",
+		"scope_id":       scopeID,
+		"device_id":      deviceID,
+		"previous_label": previous,
+		"user_label":     label,
 	})
 	if err != nil {
 		return false, fmt.Errorf("encode device label audit payload: %w", err)
@@ -135,32 +134,3 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 	}
 	return true, nil
 }
-
-func (s *Store) DeviceLabel(ctx context.Context, deviceID string) (string, error) {
-	if err := validateQueryID("device id", deviceID); err != nil {
-		return "", err
-	}
-	var label sql.NullString
-	if err := s.conn.QueryRowContext(ctx, `SELECT user_label FROM devices WHERE id = ?`, deviceID).Scan(&label); err != nil {
-		return "", fmt.Errorf("read device label: %w", err)
-	}
-	if !label.Valid {
-		return "", nil
-	}
-	return label.String, nil
-}
-
-func (s *Store) DeviceLabelAuditCount(ctx context.Context, deviceID string) (int, error) {
-	if err := validateQueryID("device id", deviceID); err != nil {
-		return 0, err
-	}
-	var count int
-	pattern := `$.device_id`
-	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM audit_events
-		WHERE kind = 'device-label' AND json_extract(payload, ?) = ?`, pattern, deviceID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count device label audit events: %w", err)
-	}
-	return count, nil
-}
-
-var _ = time.Time{}
