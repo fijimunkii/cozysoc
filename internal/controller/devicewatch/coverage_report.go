@@ -67,14 +67,14 @@ type CoverageSampleReader interface {
 }
 
 type coverageEvidenceV1 struct {
-	SchemaVersion              int                    `json:"schema_version"`
-	Interface                  string                 `json:"interface"`
+	SchemaVersion              int                      `json:"schema_version"`
+	Interface                  string                   `json:"interface"`
 	Sources                    []coverageEvidenceSource `json:"sources"`
-	NeighborsInScope           int                    `json:"neighbors_in_scope"`
-	ObservationsInserted       int                    `json:"observations_inserted"`
-	ObservationsDeduplicated   int                    `json:"observations_deduplicated"`
-	WholeNetworkTrafficVisible bool                   `json:"whole_network_traffic_visible"`
-	Limitations                []string               `json:"limitations"`
+	NeighborsInScope           int                      `json:"neighbors_in_scope"`
+	ObservationsInserted       int                      `json:"observations_inserted"`
+	ObservationsDeduplicated   int                      `json:"observations_deduplicated"`
+	WholeNetworkTrafficVisible bool                     `json:"whole_network_traffic_visible"`
+	Limitations                []string                 `json:"limitations"`
 }
 
 type coverageEvidenceSource struct {
