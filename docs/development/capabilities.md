@@ -46,7 +46,7 @@ A valid schema `1` controller config is migrated atomically to schema `2`. Unkno
 
 Runtime process and verification states are **not** restored from config. Every controller start reconstructs them from current runtime/evidence, beginning unverified. Historical operational and verification state belongs in the bounded controller-owned persistence introduced by #10 rather than in durable configuration.
 
-The authenticated read-only local API exposes `capabilities.list`. It returns catalog metadata, whether an instance was explicitly configured, selected ownership, and desired/process/verification state. It deliberately does not return configured values or secret references.
+The authenticated local API exposes the read-only `capabilities.list` method. It returns catalog metadata, whether an instance was explicitly configured, selected ownership, and desired/process/verification state. It deliberately does not return configured values or secret references. The existence of separately reviewed mutations such as `device.label` does not grant capability configuration or lifecycle authority.
 
 ## Lifecycle execution contract
 
@@ -78,6 +78,6 @@ The manifest reserves `device-observation` and `coverage-sample` output contract
 The catalog, configured-instance model, and internal lifecycle execution contract are now established. Issue #9 remains open for:
 
 - real Device Watch prerequisite/evidence probes as #11 becomes available;
-- safe configuration mutation and managed-versus-external ownership transitions;
+- safe capability configuration mutation and managed-versus-external ownership transitions;
 - artifact provenance/update/uninstall behavior; and
 - demonstration against a real external service integration before generalizing managed service lifecycle behavior.
