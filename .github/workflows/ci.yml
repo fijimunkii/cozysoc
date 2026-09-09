@@ -37,8 +37,9 @@ jobs:
 
       - name: Run controller checks
         run: |
-          gofmt -d cmd/cozysoc-controller/api_handler_test.go
-          exit 1
+          test -z "$(gofmt -l cmd internal tests)"
+          go vet ./...
+          go test ./...
 
       - name: Run controller process E2E smoke
         run: |
