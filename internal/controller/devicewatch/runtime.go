@@ -129,9 +129,9 @@ func (r *Runtime) Start(ctx context.Context, scopeID string) error {
 
 	sensorID := "sensor.dw." + stableDigest("sensor-v1", scopeID, binding.InterfaceName, fmt.Sprintf("%d", binding.InterfaceIndex))
 	metadata, err := json.Marshal(map[string]any{
-		"schema_version": 1,
-		"capability_id": CapabilityID,
-		"interface":     binding.InterfaceName,
+		"schema_version":  1,
+		"capability_id":   CapabilityID,
+		"interface":       binding.InterfaceName,
 		"interface_index": binding.InterfaceIndex,
 	})
 	if err != nil {
