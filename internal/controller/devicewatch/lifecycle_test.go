@@ -224,8 +224,8 @@ func TestLifecycleVerifyDegradesOnCurrentPipelineFailure(t *testing.T) {
 	store, inspector := lifecycleScopeFixture(t)
 	now := time.Now().UTC()
 	runtime := &fakeRuntimeControl{
-		running: true,
-		state: RuntimeState{LastAttemptAt: now, LastSuccessfulAt: now},
+		running:   true,
+		state:     RuntimeState{LastAttemptAt: now, LastSuccessfulAt: now},
 		ingestion: storage.IngestionHealth{State: storage.IngestionHealthWriteFailed, Capacity: 4, Failed: 1},
 	}
 	driver, err := newLifecycleDriver(store, runtime, inspector, "darwin")
