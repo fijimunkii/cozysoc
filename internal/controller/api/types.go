@@ -15,6 +15,8 @@ const (
 	MethodCapabilitiesList = "capabilities.list"
 	MethodDevicesList      = "devices.list"
 	MethodDeviceLabel      = "device.label"
+	MethodNetworksList     = "networks.list"
+	MethodNetworkEnroll    = "network.enroll"
 )
 
 type Request struct {
@@ -84,4 +86,33 @@ type DeviceLabelResult struct {
 	DeviceID  string `json:"device_id"`
 	UserLabel string `json:"user_label,omitempty"`
 	Changed   bool   `json:"changed"`
+}
+
+type NetworkInterface struct {
+	InterfaceName  string   `json:"interface_name"`
+	InterfaceIndex int      `json:"interface_index"`
+	Prefixes       []string `json:"prefixes"`
+}
+
+type EnrolledNetwork struct {
+	ScopeID    string           `json:"scope_id"`
+	EnrolledAt time.Time        `json:"enrolled_at"`
+	Interface  NetworkInterface `json:"interface"`
+}
+
+type NetworkList struct {
+	Candidates          []NetworkInterface `json:"candidates"`
+	CandidatesTruncated bool               `json:"candidates_truncated"`
+	Enrolled            *EnrolledNetwork   `json:"enrolled,omitempty"`
+}
+
+type NetworkEnrollParams struct {
+	InterfaceName string `json:"interface_name"`
+}
+
+type NetworkEnrollResult struct {
+	ScopeID    string           `json:"scope_id"`
+	EnrolledAt time.Time        `json:"enrolled_at"`
+	Interface  NetworkInterface `json:"interface"`
+	Changed    bool             `json:"changed"`
 }

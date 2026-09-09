@@ -28,6 +28,8 @@ var (
 	ErrAlreadyRunning         = errors.New("controller is already running")
 	ErrInvalidMutation        = errors.New("invalid mutation request")
 	ErrMutationTargetNotFound = errors.New("mutation target is not available")
+	ErrMutationPrecondition   = errors.New("mutation precondition is not satisfied")
+	ErrMutationConflict       = errors.New("mutation conflicts with current state")
 )
 
 type Handler interface {
@@ -42,6 +44,14 @@ type DeviceHandler interface {
 
 type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
+}
+
+type NetworkHandler interface {
+	Networks(context.Context) (api.NetworkList, error)
+}
+
+type NetworkEnrollHandler interface {
+	EnrollNetwork(context.Context, api.NetworkEnrollParams) (api.NetworkEnrollResult, error)
 }
 
 type Server struct {
@@ -279,6 +289,53 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodNetworksList:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		networkHandler, ok := s.handler.(NetworkHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		networkList, networkErr := networkHandler.Networks(requestCtx)
+		cancel()
+		if networkErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodNetworksList)
+			s.writeError(conn, request.ID, "internal_error", "unable to load network enrollment state")
+			return
+		}
+		result = networkList
+	case api.MethodNetworkEnroll:
+		enrollHandler, ok := s.handler.(NetworkEnrollHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		var params api.NetworkEnrollParams
+		if err := decodeRequiredParams(request.Params, &params); err != nil || params.InterfaceName == "" {
+			s.writeError(conn, request.ID, "invalid_request", "invalid network enrollment parameters")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		enrollResult, enrollErr := enrollHandler.EnrollNetwork(requestCtx, params)
+		cancel()
+		if enrollErr != nil {
+			switch {
+			case errors.Is(enrollErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid network enrollment parameters")
+			case errors.Is(enrollErr, ErrMutationPrecondition):
+				s.writeError(conn, request.ID, "precondition_failed", "interface is not eligible for enrollment")
+			case errors.Is(enrollErr, ErrMutationConflict):
+				s.writeError(conn, request.ID, "conflict", "a different network is already enrolled")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", api.MethodNetworkEnroll)
+				s.writeError(conn, request.ID, "internal_error", "unable to enroll network")
+			}
+			return
+		}
+		result = enrollResult
 	default:
 		s.writeError(conn, request.ID, "method_not_found", "method is not available")
 		return

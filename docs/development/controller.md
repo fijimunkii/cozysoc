@@ -8,8 +8,8 @@ The current controller provides:
 
 - a versioned configuration file in a private state directory;
 - an independent long-running process with graceful signal shutdown;
-- a versioned local API with read methods such as `status`, `health`, `capabilities.list`, and `devices.list`;
-- an explicitly allowlisted, controller-authorized `device.label` mutation rather than a generic write surface;
+- versioned local read methods including `status`, `health`, `capabilities.list`, `devices.list`, and `networks.list`;
+- explicitly allowlisted, controller-authorized mutations (`device.label` and `network.enroll`) rather than a generic write surface;
 - a permissioned Unix-domain socket rather than a TCP/localhost listener;
 - single-instance protection through the local socket;
 - bounded request size, deadline, and concurrent-client count;
@@ -32,8 +32,20 @@ From another terminal:
 go run ./cmd/cozysoc-controller status --state-dir /tmp/cozysoc-dev
 go run ./cmd/cozysoc-controller health --state-dir /tmp/cozysoc-dev
 go run ./cmd/cozysoc-controller capabilities --state-dir /tmp/cozysoc-dev
-go run ./cmd/cozysoc-controller devices --state-dir /tmp/cozysoc-dev
+go run ./cmd/cozysoc-controller networks --state-dir /tmp/cozysoc-dev
 ```
+
+`networks` lists local interfaces that are eligible to become an explicit Device Watch authorization scope. Candidate enumeration reads only local interface/address metadata; it does not ping, resolve, scan, or otherwise probe the network.
+
+To authorize one of those interfaces:
+
+```bash
+go run ./cmd/cozysoc-controller network-enroll --state-dir /tmp/cozysoc-dev INTERFACE
+```
+
+Enrollment captures the interface name, interface index, and current usable IPv4/IPv6 prefixes at execution time. Loopback, down, and point-to-point/tunnel interfaces fail closed. v0.1 permits one active Device Watch network scope: re-enrolling the exact same binding is an idempotent no-op, while trying to enroll a different network returns a conflict instead of silently replacing authorization.
+
+**Enrollment does not enable Device Watch.** It creates the durable authorized `NetworkScope` only. Observation still requires a separate explicit capability configuration/enable operation that references that scope.
 
 Once Device Watch is configured and a device exists in its enrolled scope, its user label can be changed through the narrow mutation surface:
 
@@ -49,16 +61,25 @@ The controller creates the state directory mode `0700`, `config.json` and the SQ
 
 The local API is not a generic controller RPC or database API. Write operations must be individually defined, authenticated, authorized, bounded, and audited.
 
-The current `device.label` mutation:
+`network.enroll`:
+
+- accepts one validated local interface name rather than arbitrary prefixes or a caller-supplied scope;
+- re-reads the interface at execution time and derives the exact binding itself;
+- rejects loopback, point-to-point/tunnel, down, or otherwise unusable interfaces;
+- serializes concurrent enrollment attempts and refuses silent replacement of a different active scope;
+- commits the new authorization scope and durable `network-scope-enroll` audit event in one SQLite transaction; and
+- does not start discovery, change routes, change DNS, or send network packets.
+
+`device.label`:
 
 - is authenticated through the same per-controller session secret and OS peer-identity checks as reads;
 - accepts strict typed parameters only;
-- is pinned to the already configured Device Watch `NetworkScope`;
+- is pinned to the configured Device Watch `NetworkScope`;
 - independently revalidates the target's retained scope evidence in storage;
 - validates the user label before persistence; and
 - commits the device change and durable audit event in one SQLite transaction.
 
-The controller does not expose HTTP/TCP, a generic command runner, direct database access, service-manager commands, capture commands, router credentials, or Docker control. Adding one safe mutation does not grant generic process, filesystem, network, capability-lifecycle, or SQL authority.
+The controller does not expose HTTP/TCP, a generic command runner, direct database access, service-manager commands, capture commands, router credentials, or Docker control. These narrow mutations do not grant generic process, filesystem, network, capability-lifecycle, or SQL authority.
 
 ## API framing
 
@@ -67,10 +88,16 @@ Each local connection sends one newline-terminated JSON request and receives one
 Read example:
 
 ```json
-{"version":1,"id":"example","method":"status","auth":"..."}
+{"version":1,"id":"example","method":"networks.list","auth":"..."}
 ```
 
-Typed mutation example:
+Typed enrollment example:
+
+```json
+{"version":1,"id":"example","method":"network.enroll","auth":"...","params":{"interface_name":"en0"}}
+```
+
+Typed label example:
 
 ```json
 {"version":1,"id":"example","method":"device.label","auth":"...","params":{"device_id":"device.example","label":"Living Room TV"}}
