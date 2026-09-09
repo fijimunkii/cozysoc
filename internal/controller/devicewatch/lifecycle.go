@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	goruntime "runtime"
+	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
@@ -24,6 +25,7 @@ type LifecycleDriver struct {
 	runtime   RuntimeControl
 	inspector InterfaceInspector
 	platform  string
+	now       func() time.Time
 }
 
 func NewLifecycleDriver(store *storage.Store, ingestor *storage.Ingestor, logger *slog.Logger) (*LifecycleDriver, error) {
@@ -34,6 +36,7 @@ func NewLifecycleDriver(store *storage.Store, ingestor *storage.Ingestor, logger
 		store:     store,
 		inspector: NewSystemInterfaceInspector(),
 		platform:  goruntime.GOOS,
+		now:       time.Now,
 	}
 	if goruntime.GOOS == "darwin" {
 		runtime, err := NewRuntime(store, ingestor, logger)
@@ -49,7 +52,7 @@ func newLifecycleDriver(store *storage.Store, runtime RuntimeControl, inspector 
 	if store == nil || inspector == nil || platform == "" {
 		return nil, fmt.Errorf("device watch lifecycle test dependencies are required")
 	}
-	return &LifecycleDriver{store: store, runtime: runtime, inspector: inspector, platform: platform}, nil
+	return &LifecycleDriver{store: store, runtime: runtime, inspector: inspector, platform: platform, now: time.Now}, nil
 }
 
 func (d *LifecycleDriver) Preflight(ctx context.Context, request capability.DriverRequest) (capability.PreflightReport, error) {
@@ -145,6 +148,11 @@ func (d *LifecycleDriver) Execute(ctx context.Context, action capability.Lifecyc
 
 func (d *LifecycleDriver) Verify(ctx context.Context, request capability.DriverRequest) (capability.VerificationReport, error) {
 	scopeStatus := capability.SignalMissing
+	observationSignal := capability.VerificationSignal{
+		ID:      "observation-freshness",
+		Status:  capability.SignalMissing,
+		Message: "no current Device Watch coverage evidence is available",
+	}
 	if scopeID, err := scopeIDFromConfiguration(request.Configuration); err == nil {
 		if scope, getErr := d.store.GetNetworkScope(ctx, scopeID); getErr == nil {
 			if binding, parseErr := ParseScopeBinding(scope); parseErr == nil {
@@ -152,13 +160,22 @@ func (d *LifecycleDriver) Verify(ctx context.Context, request capability.DriverR
 					scopeStatus = capability.SignalFresh
 				}
 			}
+			now := time.Now().UTC()
+			if d.now != nil {
+				now = d.now().UTC()
+			}
+			coverageSignal, coverageErr := coverageVerificationSignal(ctx, d.store, scopeID, now)
+			if coverageErr != nil {
+				return capability.VerificationReport{}, coverageErr
+			}
+			observationSignal = coverageSignal
 		} else if !errors.Is(getErr, storage.ErrNetworkScopeNotFound) {
 			return capability.VerificationReport{}, getErr
 		}
 	}
 	return capability.VerificationReport{Signals: []capability.VerificationSignal{
 		{ID: "network-scope-enrolled", Status: scopeStatus},
-		{ID: "observation-freshness", Status: capability.SignalMissing, Message: "fresh observation evidence is evaluated by coverage verification"},
+		observationSignal,
 	}}, nil
 }
 
