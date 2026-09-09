@@ -35,6 +35,8 @@ The network-enrollment E2E does not need a packet/network fixture. It reads the 
 
 The Device Watch control E2E builds on that real enrollment. Linux intentionally does not implement the v0.1 passive runtime, so `device-watch-enable` must fail with `precondition_failed` before enabled intent or a capability-intent audit transition is written. CI then proves `device-watch-disable` is a safe no-op and restart keeps Device Watch disabled. Successful live start/stop semantics are covered by deterministic lifecycle-driver/controller tests and Darwin cross-compilation; they are not misrepresented as Linux runtime evidence.
 
+Device Watch coverage verification is tested deterministically at the storage/evaluator/lifecycle boundary. Fixtures prove that evidence time wins over insertion order, logical expiry is respected, fresh partial evidence is current, unavailable evidence degrades, old evidence becomes stale, unsupported/future evidence fails closed, and a quiet sample with zero neighbors can still be a healthy current heartbeat. These tests prove the state semantics; they do not certify real macOS ARP/NDP behavior.
+
 ## What this does not prove
 
 A Linux process E2E suite does not certify macOS service lifetime, macOS permissions, real ARP/NDP observation behavior, sleep/resume, switched-network visibility, mirror/TAP capture, or USB Wi-Fi behavior. Darwin cross-compilation proves only that the current macOS code path builds.
@@ -45,6 +47,6 @@ Those claims require the named real-hardware evidence tracked by the Foundation 
 
 ## Growth model
 
-Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include #12-backed truthful coverage verification, bounded failures such as low disk, identity correction flows, and installation/service lifecycle once those product flows exist.
+Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include richer #12 per-sensor/per-source coverage health, bounded failures such as low disk, identity correction flows, and installation/service lifecycle once those product flows exist.
 
 Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, packet labs, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.

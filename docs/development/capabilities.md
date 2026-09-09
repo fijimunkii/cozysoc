@@ -77,15 +77,16 @@ Enablement requires exactly one enrolled Device Watch network scope. A proposed 
 
 Disable is safety-biased. The desired state is durably changed to `disabled` before runtime stop executes, and disable preflight never depends on the enrolled network still being reachable/present. If runtime stop fails, the durable state stays disabled so a restart cannot resurrect monitoring the user asked to stop; an emergency stop is attempted as containment.
 
-Device Watch's driver can establish that the enrolled network scope is current, but `observation-freshness` remains missing until #12 evaluates actual fresh coverage evidence. Therefore successful enablement remains `unverified` rather than becoming a green coverage claim.
+Device Watch verification now consumes retained `coverage_samples` rather than inferring health from enablement or runtime activity. `network-scope-enrolled` must still be fresh, and `observation-freshness` is derived from the newest Device Watch sample by its evidence timestamp. Fresh `partial` evidence verifies the declared **limited passive neighbor-cache capability**; fresh `unavailable` evidence degrades it; old evidence becomes stale; and no evidence remains unverified. A quiet but current sample with zero neighbors can still be fresh because the heartbeat proves collection ran. Historical replay cannot refresh health because ordering and freshness use `CoverageSample.EndedAt` rather than insertion time.
 
-The manifest reserves `device-observation` and `coverage-sample` output contracts for the v0.1 data/coverage work in #10/#12. Those issues remain responsible for the normalized schemas and current-evidence semantics.
+The controller periodically reconciles those signals while durable Device Watch intent is enabled. `capabilities.list` remains a read-only projection of the resulting state. `verified` is therefore scoped to the capability's declared evidence and never means whole-network visibility or a global protection score.
+
+The manifest reserves `device-observation` and `coverage-sample` output contracts for the v0.1 data/coverage work in #10/#12. Those issues remain responsible for the normalized schemas and broader current-evidence/sensor-health semantics.
 
 ## What remains in #9
 
-The catalog, configured-instance model, live configuration reconciliation, internal lifecycle engine, and first real Device Watch driver are established. Issue #9 remains open for:
+The catalog, configured-instance model, live configuration reconciliation, internal lifecycle engine, first real Device Watch driver, and first #12-backed evidence verification are established. Issue #9 remains open for:
 
-- #12-backed verification using actual fresh coverage evidence;
 - safe managed-versus-external ownership transitions;
 - artifact provenance/update/uninstall behavior for capabilities that distribute artifacts; and
 - demonstration against a real external service integration before generalizing managed service lifecycle behavior.

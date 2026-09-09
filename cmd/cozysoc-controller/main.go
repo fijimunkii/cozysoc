@@ -180,6 +180,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(reconcileErr))
 		}
 	}
+	if err := startDeviceWatchVerification(ctx, lifecycle, logger); err != nil {
+		return fmt.Errorf("start Device Watch verification: %w", err)
+	}
 
 	apiHandler, err := newControllerAPIHandler(controller, store, deviceWatchControl)
 	if err != nil {
