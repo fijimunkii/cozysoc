@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -10,26 +11,33 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
+	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
 var deviceIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
 
-type controllerDeviceStore interface {
+type controllerStore interface {
 	devicewatch.DeviceEvidenceReader
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
+	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
+	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
 }
+
+type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
 type controllerAPIHandler struct {
 	controller            *core.Controller
-	deviceStore           controllerDeviceStore
+	store                 controllerStore
 	deviceWatchScopeID    string
 	deviceWatchConfigured bool
+	networkInspector      devicewatch.InterfaceInspector
+	listScopeCandidates   scopeCandidateLister
 	now                   func() time.Time
 }
 
-func newControllerAPIHandler(controller *core.Controller, store controllerDeviceStore, scopeID string, configured bool) (*controllerAPIHandler, error) {
+func newControllerAPIHandler(controller *core.Controller, store controllerStore, scopeID string, configured bool) (*controllerAPIHandler, error) {
 	if controller == nil {
 		return nil, fmt.Errorf("controller API handler requires controller core")
 	}
@@ -38,9 +46,11 @@ func newControllerAPIHandler(controller *core.Controller, store controllerDevice
 	}
 	return &controllerAPIHandler{
 		controller:            controller,
-		deviceStore:           store,
+		store:                 store,
 		deviceWatchScopeID:    scopeID,
 		deviceWatchConfigured: configured,
+		networkInspector:      devicewatch.NewSystemInterfaceInspector(),
+		listScopeCandidates:   devicewatch.ListScopeCandidates,
 		now:                   time.Now,
 	}, nil
 }
@@ -68,7 +78,7 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 		return result, nil
 	}
 
-	presence, err := devicewatch.ListPresence(ctx, h.deviceStore, h.deviceWatchScopeID, asOf, "", storage.MaxQueryLimit)
+	presence, err := devicewatch.ListPresence(ctx, h.store, h.deviceWatchScopeID, asOf, "", storage.MaxQueryLimit)
 	if err != nil {
 		return api.DeviceList{}, err
 	}
@@ -88,7 +98,7 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 }
 
 func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.DeviceLabelParams) (api.DeviceLabelResult, error) {
-	if !h.deviceWatchConfigured || h.deviceStore == nil || h.deviceWatchScopeID == "" {
+	if !h.deviceWatchConfigured || h.store == nil || h.deviceWatchScopeID == "" {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
 	if params.Label == nil || !deviceIDPattern.MatchString(params.DeviceID) || storage.ValidateDeviceLabel(*params.Label) != nil {
@@ -96,7 +106,7 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 	}
 	label := *params.Label
 
-	changed, err := h.deviceStore.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, label)
+	changed, err := h.store.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, label)
 	if errors.Is(err, storage.ErrDeviceNotInScope) {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
@@ -108,4 +118,82 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 		UserLabel: label,
 		Changed:   changed,
 	}, nil
+}
+
+func (h *controllerAPIHandler) Networks(ctx context.Context) (api.NetworkList, error) {
+	if h.store == nil || h.networkInspector == nil || h.listScopeCandidates == nil {
+		return api.NetworkList{}, fmt.Errorf("network enrollment service is unavailable")
+	}
+	bindings, truncated, err := h.listScopeCandidates(ctx, h.networkInspector)
+	if err != nil {
+		return api.NetworkList{}, err
+	}
+	result := api.NetworkList{
+		Candidates:          make([]api.NetworkInterface, 0, len(bindings)),
+		CandidatesTruncated: truncated,
+	}
+	for _, binding := range bindings {
+		result.Candidates = append(result.Candidates, networkInterface(binding))
+	}
+
+	scopes, err := h.store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil {
+		return api.NetworkList{}, err
+	}
+	if len(scopes) > 1 {
+		return api.NetworkList{}, fmt.Errorf("multiple active Device Watch scopes violate the v0.1 enrollment invariant")
+	}
+	if len(scopes) == 1 {
+		binding, err := devicewatch.ParseScopeBinding(scopes[0])
+		if err != nil {
+			return api.NetworkList{}, err
+		}
+		result.Enrolled = &api.EnrolledNetwork{
+			ScopeID:    scopes[0].ID,
+			EnrolledAt: scopes[0].EnrolledAt,
+			Interface:  networkInterface(binding),
+		}
+	}
+	return result, nil
+}
+
+func (h *controllerAPIHandler) EnrollNetwork(ctx context.Context, params api.NetworkEnrollParams) (api.NetworkEnrollResult, error) {
+	if h.store == nil || h.networkInspector == nil {
+		return api.NetworkEnrollResult{}, fmt.Errorf("network enrollment service is unavailable")
+	}
+	if devicewatch.ValidateEnrollmentInterfaceName(params.InterfaceName) != nil {
+		return api.NetworkEnrollResult{}, localapi.ErrInvalidMutation
+	}
+	binding, err := devicewatch.CaptureScopeBinding(ctx, h.networkInspector, params.InterfaceName)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return api.NetworkEnrollResult{}, err
+		}
+		return api.NetworkEnrollResult{}, localapi.ErrMutationPrecondition
+	}
+	metadata, err := devicewatch.EncodeScopeMetadata(binding)
+	if err != nil {
+		return api.NetworkEnrollResult{}, err
+	}
+	scope, changed, err := h.store.EnrollDeviceWatchScope(ctx, metadata)
+	if errors.Is(err, storage.ErrActiveDeviceWatchScopeExists) {
+		return api.NetworkEnrollResult{}, localapi.ErrMutationConflict
+	}
+	if err != nil {
+		return api.NetworkEnrollResult{}, err
+	}
+	return api.NetworkEnrollResult{
+		ScopeID:    scope.ID,
+		EnrolledAt: scope.EnrolledAt,
+		Interface:  networkInterface(binding),
+		Changed:    changed,
+	}, nil
+}
+
+func networkInterface(binding devicewatch.ScopeBinding) api.NetworkInterface {
+	return api.NetworkInterface{
+		InterfaceName:  binding.InterfaceName,
+		InterfaceIndex: binding.InterfaceIndex,
+		Prefixes:       append([]string(nil), binding.Prefixes...),
+	}
 }
