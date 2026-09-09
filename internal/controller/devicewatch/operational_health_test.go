@@ -11,7 +11,7 @@ func TestSensorHealthDistinguishesCurrentStaleFailureAndDisconnection(t *testing
 	now := time.Unix(1_800_000_000, 0).UTC()
 	tests := []struct {
 		name    string
-		runtime *fakeRuntimeControl
+		runtime operationalRuntime
 		want    OperationalState
 	}{
 		{name: "unavailable", runtime: nil, want: OperationalUnavailable},
