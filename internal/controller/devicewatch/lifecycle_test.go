@@ -116,7 +116,7 @@ func TestLifecycleDriverNeverRequiresNetworkPresenceToDisable(t *testing.T) {
 	}
 }
 
-func TestLifecycleVerifyKeepsObservationFreshnessMissing(t *testing.T) {
+func TestLifecycleVerifyKeepsObservationFreshnessMissingWithoutCoverage(t *testing.T) {
 	store, inspector := lifecycleScopeFixture(t)
 	driver, err := newLifecycleDriver(store, &fakeRuntimeControl{}, inspector, "darwin")
 	if err != nil {
@@ -129,6 +129,39 @@ func TestLifecycleVerifyKeepsObservationFreshnessMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(report.Signals) != 2 || report.Signals[0].Status != capability.SignalFresh || report.Signals[1].Status != capability.SignalMissing {
+		t.Fatalf("unexpected verification report: %+v", report)
+	}
+}
+
+func TestLifecycleVerifyConsumesFreshCoverageSample(t *testing.T) {
+	store, inspector := lifecycleScopeFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := store.CreateSensor(context.Background(), domain.Sensor{
+		ID: "sensor.dw.test", ScopeID: "scope.home", Kind: "desktop-neighbor-cache", Ownership: "builtin",
+		RegisteredAt: now.Add(-time.Minute), Metadata: json.RawMessage(`{"schema_version":1}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.InsertCoverageSample(context.Background(), domain.CoverageSample{
+		ID: "coverage.dw.test", ScopeID: "scope.home", SensorID: "sensor.dw.test", CapabilityID: CapabilityID,
+		Status: "partial", StartedAt: now.Add(-time.Minute), EndedAt: now.Add(-time.Minute), SchemaVersion: 1,
+		Evidence: json.RawMessage(`{"schema_version":1,"neighbors_in_scope":0,"whole_network_traffic_visible":false}`), Retention: domain.RetentionShort,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	driver, err := newLifecycleDriver(store, &fakeRuntimeControl{}, inspector, "darwin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver.now = func() time.Time { return now }
+	report, err := driver.Verify(context.Background(), capability.DriverRequest{
+		Configuration: lifecycleConfiguration(t, capability.DesiredEnabled),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Signals) != 2 || report.Signals[0].Status != capability.SignalFresh || report.Signals[1].Status != capability.SignalFresh {
 		t.Fatalf("unexpected verification report: %+v", report)
 	}
 }
