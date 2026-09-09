@@ -15,7 +15,7 @@ import (
 
 const (
 	macContinuityHorizon = 7 * 24 * time.Hour
-	claimValidity         = 10 * time.Minute
+	claimValidity        = 10 * time.Minute
 )
 
 type IdentityStore interface {
@@ -64,7 +64,7 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 		return ReconciliationResult{}, err
 	}
 
-	payload, address, hardware, err := decodeNeighborIdentity(observation.Payload)
+	_, address, hardware, err := decodeNeighborIdentity(observation.Payload)
 	if err != nil {
 		return ReconciliationResult{}, err
 	}
@@ -175,7 +175,6 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 			return result, fmt.Errorf("link device identity claim: %w", err)
 		}
 	}
-	_ = payload
 	return result, nil
 }
 
