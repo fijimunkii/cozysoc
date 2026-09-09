@@ -15,6 +15,10 @@ func (*fakeDeviceStore) LatestCoverageSample(context.Context, string, string) (d
 	return domain.CoverageSample{}, false, nil
 }
 
+func (*fakeDeviceWatchAPIControl) OperationalHealth(_ context.Context, at time.Time) (devicewatch.OperationalHealth, error) {
+	return healthyOperational(at), nil
+}
+
 type fakeCoverageControllerStore struct {
 	*fakeDeviceStore
 	sample domain.CoverageSample
@@ -24,6 +28,15 @@ type fakeCoverageControllerStore struct {
 
 func (f *fakeCoverageControllerStore) LatestCoverageSample(context.Context, string, string) (domain.CoverageSample, bool, error) {
 	return f.sample, f.ok, f.err
+}
+
+type fakeOperationalCoverageControl struct {
+	*fakeDeviceWatchAPIControl
+	operational devicewatch.OperationalHealth
+}
+
+func (f *fakeOperationalCoverageControl) OperationalHealth(context.Context, time.Time) (devicewatch.OperationalHealth, error) {
+	return f.operational, nil
 }
 
 func TestControllerAPIHandlerReturnsUnconfiguredCoverageState(t *testing.T) {
@@ -41,42 +54,14 @@ func TestControllerAPIHandlerReturnsUnconfiguredCoverageState(t *testing.T) {
 	if result.Configured || result.State != "unconfigured" || result.ScopeID != "" || !result.AsOf.Equal(now) {
 		t.Fatalf("unconfigured coverage = %+v", result)
 	}
-	if result.Sources == nil || result.BlindSpots == nil || len(result.Sources) != 0 || len(result.BlindSpots) != 0 {
+	if result.Sources == nil || result.BlindSpots == nil || len(result.Sources) != 0 || len(result.BlindSpots) != 0 || result.Operational != nil {
 		t.Fatalf("unconfigured coverage collections = %+v", result)
 	}
 }
 
 func TestControllerAPIHandlerProjectsCuratedCoverageDetails(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
-	evidence, err := json.Marshal(map[string]any{
-		"schema_version": 1,
-		"interface":      "en0",
-		"sources": []map[string]any{
-			{"method": devicewatch.MethodARPCache, "available": true},
-			{"method": devicewatch.MethodNDPCache, "available": false},
-		},
-		"neighbors_in_scope":            1,
-		"observations_inserted":         1,
-		"observations_deduplicated":     0,
-		"whole_network_traffic_visible": false,
-		"limitations": []string{
-			"passive neighbor caches include only peers the host has recently resolved on the local link",
-			"client isolation, other VLANs, and devices behind other observation points may be absent",
-			"a successful neighbor snapshot does not provide whole-network traffic visibility",
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	store := &fakeCoverageControllerStore{
-		fakeDeviceStore: &fakeDeviceStore{},
-		ok:              true,
-		sample: domain.CoverageSample{
-			ID: "coverage.test", ScopeID: "scope.home", SensorID: "sensor.dw.test", CapabilityID: devicewatch.CapabilityID,
-			Status: "partial", StartedAt: now.Add(-time.Minute), EndedAt: now.Add(-time.Minute), SchemaVersion: 1,
-			Evidence: evidence, Retention: domain.RetentionShort,
-		},
-	}
+	store := coverageControllerStore(t, now, true, false)
 	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
 	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
 	if err != nil {
@@ -97,7 +82,87 @@ func TestControllerAPIHandlerProjectsCuratedCoverageDetails(t *testing.T) {
 	if len(result.Sources) != 2 || result.Sources[0].State != "current" || result.Sources[1].State != "unavailable" || result.Sources[1].NextStep == "" {
 		t.Fatalf("coverage sources = %+v", result.Sources)
 	}
+	if result.Operational == nil || result.Operational.Sensor.State != "current" || result.Operational.Pipeline.State != "current" || result.Operational.Database.State != "current" {
+		t.Fatalf("coverage operational health = %+v", result.Operational)
+	}
 	if len(result.BlindSpots) != 3 || result.BlindSpots[2].ID != "no-traffic-monitoring" || result.BlindSpots[2].NextStep == "" {
 		t.Fatalf("coverage blind spots = %+v", result.BlindSpots)
+	}
+}
+
+func TestControllerAPIHandlerMakesSensorDisconnectionPrimary(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	store := coverageControllerStore(t, now, true, true)
+	operational := healthyOperational(now)
+	operational.Sensor = devicewatch.SensorHealth{
+		State:    devicewatch.OperationalDisconnected,
+		Running:  false,
+		NextStep: "Restart Device Watch.",
+	}
+	control := &fakeOperationalCoverageControl{
+		fakeDeviceWatchAPIControl: &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true},
+		operational:               operational,
+	}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.now = func() time.Time { return now }
+
+	result, err := handler.DeviceWatchCoverage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != "disconnected" || result.Reason != "sensor-disconnected" || result.NextStep != "Restart Device Watch." {
+		t.Fatalf("disconnected coverage result = %+v", result)
+	}
+	if result.Operational == nil || result.Operational.Sensor.Running || result.Operational.Sensor.State != "disconnected" {
+		t.Fatalf("disconnected sensor projection = %+v", result.Operational)
+	}
+}
+
+func coverageControllerStore(t *testing.T, now time.Time, arpAvailable, ndpAvailable bool) *fakeCoverageControllerStore {
+	t.Helper()
+	evidence, err := json.Marshal(map[string]any{
+		"schema_version": 1,
+		"interface":      "en0",
+		"sources": []map[string]any{
+			{"method": devicewatch.MethodARPCache, "available": arpAvailable},
+			{"method": devicewatch.MethodNDPCache, "available": ndpAvailable},
+		},
+		"neighbors_in_scope":            1,
+		"observations_inserted":         1,
+		"observations_deduplicated":     0,
+		"whole_network_traffic_visible": false,
+		"limitations": []string{
+			"passive neighbor caches include only peers the host has recently resolved on the local link",
+			"client isolation, other VLANs, and devices behind other observation points may be absent",
+			"a successful neighbor snapshot does not provide whole-network traffic visibility",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &fakeCoverageControllerStore{
+		fakeDeviceStore: &fakeDeviceStore{},
+		ok:              true,
+		sample: domain.CoverageSample{
+			ID: "coverage.test", ScopeID: "scope.home", SensorID: "sensor.dw.test", CapabilityID: devicewatch.CapabilityID,
+			Status: "partial", StartedAt: now.Add(-time.Minute), EndedAt: now.Add(-time.Minute), SchemaVersion: 1,
+			Evidence: evidence, Retention: domain.RetentionShort,
+		},
+	}
+}
+
+func healthyOperational(now time.Time) devicewatch.OperationalHealth {
+	return devicewatch.OperationalHealth{
+		Sensor: devicewatch.SensorHealth{
+			State:            devicewatch.OperationalCurrent,
+			Running:          true,
+			LastAttemptAt:    now.Add(-time.Minute),
+			LastSuccessfulAt: now.Add(-time.Minute),
+		},
+		Pipeline: devicewatch.PipelineHealth{State: devicewatch.OperationalCurrent, Capacity: 256},
+		Database: devicewatch.DatabaseHealth{State: devicewatch.OperationalCurrent, DatabaseBytes: 1024, MaxBytes: 1 << 30},
 	}
 }
