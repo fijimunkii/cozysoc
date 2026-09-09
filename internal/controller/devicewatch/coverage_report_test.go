@@ -34,8 +34,8 @@ func TestCurrentCoverageReportsCurrentAndUnavailableSourcesIndependently(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.State != CoverageActiveLimited || report.Reason != "fresh-limited" || !report.HasEvidence || report.NeighborsInScope != 2 {
-		t.Fatalf("partial coverage report = %+v", report)
+	if report.State != CoverageDegraded || report.Reason != "source-partial" || !report.HasEvidence || report.NeighborsInScope != 2 {
+		t.Fatalf("partial source-gap coverage report = %+v", report)
 	}
 	if report.InterfaceName != "en0" || report.SensorID != "sensor.dw.test" || report.EvidenceAt.IsZero() || report.FreshUntil.IsZero() {
 		t.Fatalf("coverage evidence metadata = %+v", report)
