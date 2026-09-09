@@ -42,6 +42,10 @@ type DeviceHandler interface {
 	Devices(context.Context) (api.DeviceList, error)
 }
 
+type DeviceWatchCoverageHandler interface {
+	DeviceWatchCoverage(context.Context) (api.DeviceWatchCoverage, error)
+}
+
 type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
@@ -267,6 +271,24 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = deviceList
+	case api.MethodDeviceWatchCoverage:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		coverageHandler, ok := s.handler.(DeviceWatchCoverageHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		coverage, coverageErr := coverageHandler.DeviceWatchCoverage(requestCtx)
+		cancel()
+		if coverageErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceWatchCoverage)
+			s.writeError(conn, request.ID, "internal_error", "unable to load Device Watch coverage")
+			return
+		}
+		result = coverage
 	case api.MethodDeviceLabel:
 		labelHandler, ok := s.handler.(DeviceLabelHandler)
 		if !ok {

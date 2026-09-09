@@ -53,6 +53,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "device-watch-coverage":
+		return runReadCommand(ctx, api.MethodDeviceWatchCoverage, args[1:], stdout, stderr)
 	case "device-watch-enable":
 		return runReadCommand(ctx, api.MethodDeviceWatchEnable, args[1:], stdout, stderr)
 	case "device-watch-disable":
@@ -83,6 +85,7 @@ Usage:
   cozysoc-controller capabilities [--state-dir PATH]
   cozysoc-controller devices [--state-dir PATH]
   cozysoc-controller networks [--state-dir PATH]
+  cozysoc-controller device-watch-coverage [--state-dir PATH]
   cozysoc-controller device-watch-enable [--state-dir PATH]
   cozysoc-controller device-watch-disable [--state-dir PATH]
   cozysoc-controller device-label [--state-dir PATH] DEVICE_ID LABEL

@@ -8,7 +8,7 @@ The current controller provides:
 
 - a versioned configuration file in a private state directory;
 - an independent long-running process with graceful signal shutdown;
-- versioned local read methods including `status`, `health`, `capabilities.list`, `devices.list`, and `networks.list`;
+- versioned local read methods including `status`, `health`, `capabilities.list`, `devices.list`, `networks.list`, and `device-watch.coverage`;
 - explicitly allowlisted, controller-authorized mutations (`device.label`, `network.enroll`, `device-watch.enable`, and `device-watch.disable`) rather than a generic write surface;
 - a permissioned Unix-domain socket rather than a TCP/localhost listener;
 - single-instance protection through the local socket;
@@ -52,13 +52,21 @@ Enrollment captures the interface name, interface index, and current usable IPv4
 go run ./cmd/cozysoc-controller device-watch-enable --state-dir /tmp/cozysoc-dev
 ```
 
+To inspect current Device Watch evidence, source health, and known blind spots:
+
+```bash
+go run ./cmd/cozysoc-controller device-watch-coverage --state-dir /tmp/cozysoc-dev
+```
+
 To stop it:
 
 ```bash
 go run ./cmd/cozysoc-controller device-watch-disable --state-dir /tmp/cozysoc-dev
 ```
 
-Enable preflights the current platform and enrolled scope before writing enabled intent. Disable does not require the network to remain available. A successful enable remains `unverified` until #12 establishes fresh coverage evidence.
+Enable preflights the current platform and enrolled scope before writing enabled intent. Disable does not require the network to remain available. Enablement by itself remains unverified; the controller independently advances verification only from current retained coverage evidence.
+
+`device-watch-coverage` is read-only and parameterless. It reports the current durable Device Watch scope only; callers cannot request another scope, sensor, arbitrary historical time, or raw stored evidence. The response separates aggregate state from ARP/NDP source state and includes curated blind spots/next steps. See `docs/development/coverage.md` for the contract.
 
 Once Device Watch is enabled and a device exists in its scope, its user label can be changed through the narrow mutation surface:
 
@@ -93,6 +101,15 @@ Device Watch lifecycle control:
 - compensates failed enable by stopping runtime side effects and restoring previous durable intent; and
 - persists disabled intent before stop, so a failed disable or restart cannot silently resurrect monitoring.
 
+Device Watch coverage detail:
+
+- is an authenticated read only;
+- accepts no parameters and cannot widen scope;
+- strictly validates retained coverage evidence before projecting it;
+- never returns raw evidence JSON or stored free-form limitation text;
+- reports ARP and NDP source state independently without inventing a permission diagnosis; and
+- preserves explicit blind spots including no whole-network traffic visibility.
+
 `device.label`:
 
 - is authenticated through the same per-controller session secret and OS peer-identity checks as reads;
@@ -112,6 +129,12 @@ Read example:
 
 ```json
 {"version":1,"id":"example","method":"networks.list","auth":"..."}
+```
+
+Coverage read example:
+
+```json
+{"version":1,"id":"example","method":"device-watch.coverage","auth":"..."}
 ```
 
 Typed enrollment example:
