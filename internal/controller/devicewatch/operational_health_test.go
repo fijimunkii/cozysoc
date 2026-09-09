@@ -31,25 +31,38 @@ func TestSensorHealthDistinguishesCurrentStaleFailureAndDisconnection(t *testing
 	}
 }
 
-func TestPipelineHealthSeparatesCurrentPressureAndFailure(t *testing.T) {
+func TestPipelineHealthSeparatesUtilizationLagAndFailure(t *testing.T) {
 	tests := []struct {
-		state        storage.IngestionHealthState
-		failureClass string
-		want         OperationalState
-		wantReason   string
+		name          string
+		health        storage.IngestionHealth
+		want          OperationalState
+		wantReason    string
+		wantQueueWarn bool
 	}{
-		{state: storage.IngestionHealthCurrent, want: OperationalCurrent},
-		{state: storage.IngestionHealthPressure, want: OperationalDegraded, wantReason: "queue-pressure"},
-		{state: storage.IngestionHealthBackpressure, want: OperationalDegraded, wantReason: "backpressure"},
-		{state: storage.IngestionHealthStorageFull, failureClass: storage.IngestionFailureSQLiteFull, want: OperationalDegraded, wantReason: "sqlite-full"},
-		{state: storage.IngestionHealthWriteFailed, failureClass: storage.IngestionFailureWriteFailed, want: OperationalDegraded, wantReason: "write-failed"},
-		{state: storage.IngestionHealthClosed, want: OperationalDisconnected, wantReason: "closed"},
+		{name: "current", health: storage.IngestionHealth{State: storage.IngestionHealthCurrent}, want: OperationalCurrent},
+		{name: "queue pressure only", health: storage.IngestionHealth{State: storage.IngestionHealthCurrent, QueuePressure: true}, want: OperationalCurrent, wantReason: "queue-pressure", wantQueueWarn: true},
+		{name: "measured lag", health: storage.IngestionHealth{State: storage.IngestionHealthLagging, LatencyState: storage.IngestionLatencyLagging}, want: OperationalDegraded, wantReason: "latency"},
+		{name: "backpressure", health: storage.IngestionHealth{State: storage.IngestionHealthBackpressure}, want: OperationalDegraded, wantReason: "backpressure"},
+		{name: "sqlite full", health: storage.IngestionHealth{State: storage.IngestionHealthStorageFull, FailureClass: storage.IngestionFailureSQLiteFull}, want: OperationalDegraded, wantReason: "sqlite-full"},
+		{name: "write failed", health: storage.IngestionHealth{State: storage.IngestionHealthWriteFailed, FailureClass: storage.IngestionFailureWriteFailed}, want: OperationalDegraded, wantReason: "write-failed"},
+		{name: "closed", health: storage.IngestionHealth{State: storage.IngestionHealthClosed}, want: OperationalDisconnected, wantReason: "closed"},
 	}
 	for _, test := range tests {
-		got := pipelineHealth(storage.IngestionHealth{State: test.state, FailureClass: test.failureClass, Capacity: 8, Depth: 2, Dropped: 3, Failed: 4})
-		if got.State != test.want || got.Reason != test.wantReason || got.FailureClass != test.failureClass || got.Dropped != 3 || got.Failed != 4 {
-			t.Fatalf("pipeline health for %s = %+v", test.state, got)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			test.health.Capacity = 8
+			test.health.Depth = 2
+			test.health.Dropped = 3
+			test.health.Failed = 4
+			test.health.LatencyThreshold = 5 * time.Second
+			test.health.LastDurableLatency = 250 * time.Millisecond
+			got := pipelineHealth(test.health)
+			if got.State != test.want || got.Reason != test.wantReason || got.FailureClass != test.health.FailureClass || got.Dropped != 3 || got.Failed != 4 {
+				t.Fatalf("pipeline health = %+v", got)
+			}
+			if got.QueuePressure != test.wantQueueWarn || got.LatencyThreshold != 5*time.Second || got.LastDurableLatency != 250*time.Millisecond {
+				t.Fatalf("pipeline diagnostics = %+v", got)
+			}
+		})
 	}
 }
 
@@ -94,10 +107,16 @@ func TestEffectiveCoverageMakesOperationalFailurePrimary(t *testing.T) {
 		t.Fatalf("healthy effective coverage = %s %s", state, reason)
 	}
 
-	health.Pipeline = PipelineHealth{State: OperationalDegraded, Reason: "backpressure", NextStep: "Restore throughput."}
+	health.Pipeline = PipelineHealth{State: OperationalCurrent, Reason: "queue-pressure", QueuePressure: true}
+	state, reason, _ = EffectiveCoverage(report, health)
+	if state != CoverageActiveLimited || reason != "fresh-limited" {
+		t.Fatalf("queue pressure alone degraded coverage = %s %s", state, reason)
+	}
+
+	health.Pipeline = PipelineHealth{State: OperationalDegraded, Reason: "latency", NextStep: "Restore throughput."}
 	state, reason, next := EffectiveCoverage(report, health)
-	if state != CoverageDegraded || reason != "ingestion-backpressure" || next != "Restore throughput." {
-		t.Fatalf("pipeline effective coverage = %s %s %q", state, reason, next)
+	if state != CoverageDegraded || reason != "ingestion-latency" || next != "Restore throughput." {
+		t.Fatalf("pipeline latency coverage = %s %s %q", state, reason, next)
 	}
 
 	health.Pipeline = PipelineHealth{State: OperationalDegraded, Reason: "sqlite-full", NextStep: "Wait for write recovery."}

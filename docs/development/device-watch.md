@@ -61,10 +61,10 @@ The signals are:
 1. `network-scope-enrolled` — the stored scope still resolves to the enrolled interface binding;
 2. `observation-freshness` — the newest retained Device Watch `CoverageSample` is current, internally valid, and reports both expected ARP/NDP sources available;
 3. `sensor-operational` — the configured runtime is running and completing collections within the freshness window;
-4. `ingestion-health` — the bounded controller ingestion path is not currently under queue-pressure, backpressure, generic write failure, or typed SQLite-full failure; and
+4. `ingestion-health` — accepted evidence is not measurably lagging and the bounded ingestion path has no active backpressure/drop, generic write failure, or typed SQLite-full failure; and
 5. `storage-health` — the controller database quota and, where supported, the host volume containing the state directory both have current capacity evidence without pressure/full state.
 
-All five must be fresh before the lifecycle state becomes `verified`. A current evidence sample therefore cannot keep Device Watch green after its producer disconnects or its write/capacity path becomes unhealthy.
+All five must be fresh before the lifecycle state becomes `verified`. A current evidence sample therefore cannot keep Device Watch green after its producer disconnects or its measured write/capacity path becomes unhealthy.
 
 Coverage freshness is based on `CoverageSample.EndedAt`, not insertion order. Replaying an old sample later therefore cannot make historical evidence look current. With the one-minute collection cadence, the initial bounded freshness window is three minutes: current evidence tolerates ordinary scheduling jitter, while multiple missed collections become `stale`.
 
@@ -79,7 +79,11 @@ Current Device Watch evidence maps as follows:
 
 Sensor health is evaluated separately from evidence. A runtime can be `starting`, `current`, `degraded`, `stale`, `disconnected`, or `unavailable`. A failed collection records only a coarse bounded error class; it is operational evidence, not a security finding.
 
-The ingestion path reports current queue depth/capacity, active pressure/backpressure/write-failure state, an optional bounded failure class, and cumulative drop/failure totals. SQLite `FULL` is detected from the typed SQLite result code and reported as `sqlite-full`; Cozy SOC does not parse a human-readable error message or expose raw database error text. Historical totals remain available for diagnosis but do not permanently degrade a recovered pipeline.
+The ingestion path reports queue depth/capacity and `queue_pressure` as utilization telemetry, plus measured accepted-to-durable latency, queue wait, storage-processing time, pending age, recent slow streak, active backpressure/write-failure state, an optional bounded failure class, and cumulative drop/failure totals. Queue pressure begins at 75% of the bounded queue but no longer degrades verification by itself when measured durable latency remains current.
+
+The initial measured-lag rule uses a 5-second threshold: the pipeline degrades when the oldest accepted pending record reaches that age, or when three consecutive recent successful durable completions each take at least 5 seconds. The 5-second value is provisional operational guidance anchored to half of the existing 10-second storage-operation timeout; it is not a measured hardware SLO. Recent latency samples age out after one minute when the pipeline is quiet, and one later fast successful write resets the slow streak.
+
+SQLite `FULL` is detected from the typed SQLite result code and reported as `sqlite-full`; Cozy SOC does not parse a human-readable error message or expose raw database error text. Historical totals remain available for diagnosis but do not permanently degrade a recovered pipeline.
 
 A current `sqlite-full` episode does not clear merely because disk/quota capacity later appears healthy. It stays degraded until a subsequent successful storage operation proves that the write path recovered.
 
@@ -194,6 +198,6 @@ This work still does not close #11. Remaining work includes:
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
-- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, and write-pressure/full-volume recovery scenarios.
+- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, ingestion lag, and write-pressure/full-volume recovery scenarios.
 
-Broader #12 work still includes measured ingestion latency, explicit permission-state evidence where sources can prove it, and equivalent operational coverage semantics for future sensors/capabilities. Real low-disk/full-volume recovery behavior on named filesystems/hardware remains a #29 lab claim rather than something CI fixtures can certify.
+Broader #12 work still includes explicit permission-state evidence where sources can prove it and equivalent operational coverage semantics for future sensors/capabilities. Named-workload calibration for latency/resource thresholds and real low-disk/full-volume recovery behavior on named filesystems/hardware remain #29 lab claims rather than things CI fixtures can certify.

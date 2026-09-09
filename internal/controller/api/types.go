@@ -146,14 +146,24 @@ type DeviceWatchSensorHealth struct {
 }
 
 type DeviceWatchPipelineHealth struct {
-	State        string `json:"state"`
-	Reason       string `json:"reason,omitempty"`
-	FailureClass string `json:"failure_class,omitempty"`
-	Capacity     int    `json:"capacity"`
-	Depth        int    `json:"depth"`
-	Dropped      uint64 `json:"dropped_total"`
-	Failed       uint64 `json:"failed_total"`
-	NextStep     string `json:"next_step,omitempty"`
+	State                string     `json:"state"`
+	Reason               string     `json:"reason,omitempty"`
+	FailureClass         string     `json:"failure_class,omitempty"`
+	Capacity             int        `json:"capacity"`
+	Depth                int        `json:"depth"`
+	QueuePressure        bool       `json:"queue_pressure"`
+	Dropped              uint64     `json:"dropped_total"`
+	Failed               uint64     `json:"failed_total"`
+	LatencyState         string     `json:"latency_state"`
+	LatencyThresholdMS   int64      `json:"latency_threshold_ms"`
+	Pending              int        `json:"pending"`
+	OldestPendingMS      int64      `json:"oldest_pending_ms"`
+	LastDurableLatencyMS int64      `json:"last_durable_latency_ms"`
+	LastQueueWaitMS      int64      `json:"last_queue_wait_ms"`
+	LastProcessingMS     int64      `json:"last_processing_ms"`
+	LastCompletedAt      *time.Time `json:"last_completed_at,omitempty"`
+	SlowStreak           int        `json:"slow_streak"`
+	NextStep             string     `json:"next_step,omitempty"`
 }
 
 type DeviceWatchDatabaseHealth struct {

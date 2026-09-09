@@ -44,7 +44,13 @@ Operational-health fixtures additionally prove that:
 
 - a configured runtime can be distinguished as starting, current, degraded, stale, disconnected, or unavailable;
 - an otherwise-fresh evidence sample does not keep coverage green after the runtime disconnects;
-- active ingestion queue pressure/backpressure and storage-write failure degrade the pipeline;
+- queue utilization at 75% remains visible as pressure telemetry without degrading the capability when measured durable latency is current;
+- actual accepted queue records are timed from synchronized channel acceptance to processing start and successful durable completion;
+- an accepted pending record becomes `lagging` once its age reaches the bounded 5-second threshold;
+- completed durable latency requires three consecutive recent slow completions before degrading, while one later fast successful completion resets the slow streak;
+- old slow completion samples age to `idle` after the one-minute freshness window when no work is pending;
+- failed writes leave the pending timing set but do not become successful durable-latency evidence;
+- active ingestion backpressure/drop and storage-write failure still degrade the pipeline independently from measured latency;
 - historical dropped/failed counters remain visible without permanently degrading a recovered pipeline;
 - SQLite quota pressure is classified from used pages rather than raw allocated file size, with reusable free-list pages preserved as headroom;
 - host-volume states distinguish current, bounded pressure, zero-available full, and unavailable capacity;
@@ -53,7 +59,7 @@ Operational-health fixtures additionally prove that:
 - effective coverage prefers a current diagnosed database-quota or filesystem-full cause over the generic SQLite-full symptom while retaining both details; and
 - Device Watch lifecycle verification requires the operational sensor/ingestion/storage signals in addition to scope and evidence freshness.
 
-The controller/API projection test also verifies that a synthetic `sqlite-full` pipeline failure plus current zero filesystem headroom is returned as `storage-filesystem-full`, with the typed failure class and filesystem/quota states still available underneath.
+Controller/API projection tests additionally prove both sides of the ingestion distinction: high queue utilization with fast measured latency stays `active-limited`, while measured lag surfaces as `ingestion-latency` with bounded timing details in milliseconds. The existing storage-full projection test continues to verify that a synthetic `sqlite-full` pipeline failure plus current zero filesystem headroom is returned as `storage-filesystem-full` with the underlying cause details intact.
 
 ## What this does not prove
 
@@ -61,14 +67,16 @@ A Linux process E2E suite does not certify macOS service lifetime, macOS permiss
 
 Network-enrollment/control/coverage-read E2E proves authorization and control/read-plane behavior on the Linux runner; it does not prove that Linux provides useful Device Watch presence evidence. The v0.1 passive observation source remains macOS-first until real platform evidence says otherwise.
 
+The deterministic 5-second ingestion threshold proves state transitions, not that 5 seconds is the correct production SLO for named hardware or workloads. It is currently anchored to half of the controller's existing 10-second storage-operation timeout. #29 must measure normal and overload latency on named systems before the threshold is promoted beyond provisional operational guidance.
+
 Deterministic filesystem-capacity tests prove classification semantics, not that a particular APFS/ext4 volume will exhibit a specific failure sequence under exhaustion. The Linux CI runner's real `statfs` result proves only that the code can read that runner's current capacity. Darwin cross-compilation proves the macOS implementation compiles, not real APFS low-disk/full-disk behavior.
 
 Likewise, typed `SQLITE_FULL` fixtures and compile-time driver conformance prove classification/recovery logic, but do not replace an owned-lab test that intentionally exhausts a disposable volume and observes actual recovery. That remains #29 evidence and must not be inferred from CI fixtures.
 
-Those hardware/filesystem-dependent claims require the named real-hardware evidence tracked by the Foundation feasibility work and issue #29. Hardware-unavailable remains `untested`; CI fixture success must not promote it to tested support.
+Those hardware/filesystem/performance-dependent claims require the named real-hardware evidence tracked by the Foundation feasibility work and issue #29. Hardware-unavailable remains `untested`; CI fixture success must not promote it to tested support.
 
 ## Growth model
 
-Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include measured ingestion latency/overload recovery, real disposable-volume low-disk/full-disk lab evidence, identity correction flows, and installation/service lifecycle once those product flows exist.
+Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include named-workload latency/overload calibration, real disposable-volume low-disk/full-disk lab evidence, identity correction flows, and installation/service lifecycle once those product flows exist.
 
-Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, packet labs, deliberately exhausted filesystems, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.
+Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, deliberately exhausted filesystems, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.

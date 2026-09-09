@@ -48,10 +48,32 @@ Observation checkpoints are advanced only after the observation insert succeeds.
 
 The queue publishes bounded in-memory statistics for accepted, processed, deduplicated, rejected, dropped, and failed records. Queue-overflow and storage-write failure episodes use a small reserved internal event lane and become `ingestion-backpressure` or `ingestion-write-failed` storage events. These events never contain the rejected observation payload or a raw driver/database error.
 
-Current ingestion health is derived from the active episode and queue state, not only cumulative counters:
+### Measured latency
 
-- `current` when no current problem is detected;
-- `pressure` once queue depth reaches 75% of its known bounded capacity;
+Each successful channel acceptance has a synchronized acceptance timestamp. The single worker waits for that acceptance marker before it begins processing, so the timing boundary is the real accepted queue entry rather than the caller's submission attempt.
+
+For successfully durable records the controller measures:
+
+- queue wait: accepted → processing start;
+- processing duration: processing start → storage completion; and
+- durable latency: accepted → successful storage completion.
+
+The initial lag threshold is 5 seconds, anchored conservatively to half of the existing 10-second per-storage-operation timeout. It is an implementation warning threshold, not a measured hardware SLO. #29 remains responsible for named-workload calibration.
+
+Current latency state can be:
+
+- `idle` — no pending work and no recent successful latency sample;
+- `current` — recent/pending work remains below the lag rule; or
+- `lagging` — the oldest accepted pending item is at least 5 seconds old, or three consecutive recent successful durable completions each took at least 5 seconds.
+
+Successful latency samples remain current for one minute. Quiet pipelines therefore age old measurements to `idle` instead of staying degraded from historical slowness. A later fast successful write resets the slow streak. Failed writes are removed from the pending timing set but do not become successful durable-latency evidence.
+
+Queue utilization remains separate: depth at or above 75% sets a queue-pressure diagnostic, but high utilization alone no longer fails ingestion health. This avoids using queue depth as a proxy for slowness when accepted records are still reaching durable storage promptly.
+
+Current ingestion health states are therefore:
+
+- `current` when no current measured lag, backpressure, or write failure is established;
+- `lagging` while the measured durable-latency rule is tripped;
 - `backpressure` while the current saturation episode is dropping/rejecting evidence;
 - `write-failed` while a generic current storage-write failure is active;
 - `storage-full` when the current write failure carries SQLite's typed `SQLITE_FULL` result code; and
@@ -60,8 +82,6 @@ Current ingestion health is derived from the active episode and queue state, not
 The SQLite-full classifier uses the driver's typed error code rather than matching human-readable database error text. The active failure stores only a bounded class such as `sqlite-full`; raw database errors are not copied into storage events or the coverage API.
 
 A `storage-full` ingestion episode remains degraded until a later storage operation succeeds. Current filesystem or quota capacity may recover first, but Cozy SOC does not claim the write path recovered until a successful write proves it. Cumulative dropped/failed totals remain visible for diagnostics after recovery without permanently poisoning current health.
-
-Queue-pressure percentage is an operational utilization threshold against a known finite buffer, not a security or protection score.
 
 Shutdown stops new submissions and drains all already-accepted records. A shutdown context may time out, but the ingestor does not silently discard the remaining accepted queue when that happens.
 
@@ -128,6 +148,6 @@ Secret bytes do not belong in this database. Credential-bearing capability field
 The normalized-storage milestone is complete. Follow-on issues still own product and lab work that builds on it, including:
 
 - auditable merge/split correction UX and broader multi-sensor overlap behavior where later capabilities need it;
-- measured ingestion latency and overload recovery under named workloads;
+- named-workload calibration and overload recovery for the measured latency/resource thresholds;
 - real low-disk/full-volume recovery evidence on named filesystems/hardware; and
 - broader controller/API projections for future sensors and capabilities.
