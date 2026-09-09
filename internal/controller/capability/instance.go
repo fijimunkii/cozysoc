@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
@@ -26,6 +27,7 @@ type Instance struct {
 }
 
 type Instances struct {
+	mu         sync.RWMutex
 	registry   *Registry
 	configured map[string]Configuration
 }
@@ -55,9 +57,11 @@ func (i *Instances) List() []Instance {
 		return nil
 	}
 	manifests := i.registry.List()
+	i.mu.RLock()
+	defer i.mu.RUnlock()
 	out := make([]Instance, 0, len(manifests))
 	for _, manifest := range manifests {
-		out = append(out, i.instanceFor(manifest))
+		out = append(out, i.instanceForLocked(manifest))
 	}
 	return out
 }
@@ -70,10 +74,51 @@ func (i *Instances) Get(id string) (Instance, bool) {
 	if !ok {
 		return Instance{}, false
 	}
-	return i.instanceFor(manifest), true
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	return i.instanceForLocked(manifest), true
 }
 
-func (i *Instances) instanceFor(manifest Manifest) Instance {
+func (i *Instances) Configuration(id string) (Configuration, bool) {
+	if i == nil || i.registry == nil {
+		return Configuration{}, false
+	}
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	configuration, ok := i.configured[id]
+	if !ok {
+		return Configuration{}, false
+	}
+	return cloneConfiguration(configuration), true
+}
+
+func (i *Instances) SetConfiguration(configuration Configuration) error {
+	if i == nil || i.registry == nil {
+		return fmt.Errorf("capability instances are unavailable")
+	}
+	if err := ValidateConfiguration(i.registry, configuration); err != nil {
+		return err
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.configured[configuration.ID] = cloneConfiguration(configuration)
+	return nil
+}
+
+func (i *Instances) RemoveConfiguration(id string) error {
+	if i == nil || i.registry == nil {
+		return fmt.Errorf("capability instances are unavailable")
+	}
+	if _, ok := i.registry.Get(id); !ok {
+		return fmt.Errorf("unknown capability %q", id)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.configured, id)
+	return nil
+}
+
+func (i *Instances) instanceForLocked(manifest Manifest) Instance {
 	configuration, explicit := i.configured[manifest.ID]
 	if !explicit {
 		configuration = defaultConfiguration(manifest)
