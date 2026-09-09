@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 )
 
 func TestCurrentCoverageReportsMissingEvidenceAndBlindSpots(t *testing.T) {
@@ -50,36 +52,29 @@ func TestCurrentCoverageReportsUnavailableStaleAndInvalidStates(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	tests := []struct {
 		name   string
-		sample func(*testing.T) domainCoverageSample
+		sample domain.CoverageSample
 		want   CoverageState
 		reason string
 	}{
 		{
 			name: "all sources unavailable",
-			sample: func(t *testing.T) domainCoverageSample {
-				return domainCoverageSample{coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", false, false, 0)}
-			},
+			sample: coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", false, false, 0),
 			want: CoverageDegraded, reason: "source-unavailable",
 		},
 		{
 			name: "stale",
-			sample: func(t *testing.T) domainCoverageSample {
-				return domainCoverageSample{coverageDetailFixture(t, now.Add(-4*time.Minute), "partial", true, true, 0)}
-			},
+			sample: coverageDetailFixture(t, now.Add(-4*time.Minute), "partial", true, true, 0),
 			want: CoverageStale, reason: "stale-evidence",
 		},
 		{
 			name: "status source mismatch",
-			sample: func(t *testing.T) domainCoverageSample {
-				return domainCoverageSample{coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", true, false, 0)}
-			},
+			sample: coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", true, false, 0),
 			want: CoverageDegraded, reason: "invalid-evidence",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sample := test.sample(t).CoverageSample
-			report, err := CurrentCoverage(context.Background(), fakeCoverageReader{sample: sample, ok: true}, "scope.home", now)
+			report, err := CurrentCoverage(context.Background(), fakeCoverageReader{sample: test.sample, ok: true}, "scope.home", now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -122,13 +117,8 @@ func TestCurrentCoverageDoesNotEchoStoredLimitationText(t *testing.T) {
 	}
 }
 
-type domainCoverageSample struct {
-	CoverageSample domain.CoverageSample
-}
-
 func coverageDetailFixture(t *testing.T, endedAt time.Time, status string, arpAvailable, ndpAvailable bool, neighbors int) domain.CoverageSample {
 	t.Helper()
-	inserted := neighbors
 	evidence, err := json.Marshal(map[string]any{
 		"schema_version": 1,
 		"interface":      "en0",
@@ -137,7 +127,7 @@ func coverageDetailFixture(t *testing.T, endedAt time.Time, status string, arpAv
 			{"method": MethodNDPCache, "available": ndpAvailable},
 		},
 		"neighbors_in_scope":            neighbors,
-		"observations_inserted":         inserted,
+		"observations_inserted":         neighbors,
 		"observations_deduplicated":     0,
 		"whole_network_traffic_visible": false,
 		"limitations": []string{
