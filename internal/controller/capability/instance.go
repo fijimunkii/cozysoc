@@ -155,8 +155,12 @@ func ValidateConfiguration(registry *Registry, configuration Configuration) erro
 }
 
 func validateConfiguredValue(field ConfigField, raw json.RawMessage) error {
-	if len(raw) == 0 {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
 		return fmt.Errorf("value is empty")
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
+		return fmt.Errorf("null is not a configured value")
 	}
 	switch field.Type {
 	case ConfigString:
