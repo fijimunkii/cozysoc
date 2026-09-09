@@ -57,19 +57,19 @@ func TestCurrentCoverageReportsUnavailableStaleAndInvalidStates(t *testing.T) {
 		reason string
 	}{
 		{
-			name: "all sources unavailable",
+			name:   "all sources unavailable",
 			sample: coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", false, false, 0),
-			want: CoverageDegraded, reason: "source-unavailable",
+			want:   CoverageDegraded, reason: "source-unavailable",
 		},
 		{
-			name: "stale",
+			name:   "stale",
 			sample: coverageDetailFixture(t, now.Add(-4*time.Minute), "partial", true, true, 0),
-			want: CoverageStale, reason: "stale-evidence",
+			want:   CoverageStale, reason: "stale-evidence",
 		},
 		{
-			name: "status source mismatch",
+			name:   "status source mismatch",
 			sample: coverageDetailFixture(t, now.Add(-time.Minute), "unavailable", true, false, 0),
-			want: CoverageDegraded, reason: "invalid-evidence",
+			want:   CoverageDegraded, reason: "invalid-evidence",
 		},
 	}
 	for _, test := range tests {
