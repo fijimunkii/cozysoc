@@ -26,7 +26,7 @@ func TestIngestionHealthKeepsQueueUtilizationSeparateFromLag(t *testing.T) {
 func TestIngestionHealthPromotesMeasuredPendingLag(t *testing.T) {
 	base := time.Unix(1_800_000_000, 0).UTC()
 	tracker := newIngestionLatencyTracker()
-	tracker.accept(base)
+	tracker.accept(&receiptState{}, base)
 	ingestor := &Ingestor{
 		queue:   make(chan ingestionItem, 4),
 		now:     func() time.Time { return base.Add(ingestionLatencyThreshold + time.Second) },
