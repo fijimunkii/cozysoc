@@ -38,6 +38,16 @@ Capability state has three independent dimensions:
 
 This prevents `enabled` or `running` from becoming a synonym for observed coverage. Device Watch is builtin, so its independent process state is `not-applicable`; it still requires explicit verification signals before coverage can be represented as verified.
 
+## Configured instances
+
+Controller config schema `2` persists only durable capability intent: the capability ID, selected allowed ownership mode, desired state, and typed configuration values. Secret-bearing fields accept only opaque `secret-ref` identifiers; raw secret bytes remain in the secret store.
+
+A valid schema `1` controller config is migrated atomically to schema `2`. Unknown config fields, duplicate capability entries, oversized configuration, invalid ownership, unknown settings, and wrong setting types fail closed rather than being ignored.
+
+Runtime process and verification states are **not** restored from config. Every controller start reconstructs them from current runtime/evidence, beginning unverified. Historical operational and verification state belongs in the bounded controller-owned persistence introduced by #10 rather than in durable configuration.
+
+The authenticated read-only local API exposes `capabilities.list`. It returns catalog metadata, whether an instance was explicitly configured, selected ownership, and desired/process/verification state. It deliberately does not return configured values or secret references.
+
 ## Current builtin
 
 `Device Watch` is the first manifest. It requires an enrolled network scope, declares local-network access as a conditional platform prerequisite, has no deep links, and exposes only `preflight`, `enable`, `verify`, and `disable` lifecycle actions.
@@ -46,11 +56,10 @@ The manifest reserves `device-observation` and `coverage-sample` output contract
 
 ## What remains in #9
 
-This PR establishes the catalog and validation boundary only. Issue #9 remains open for:
+The catalog and read-only instance model are now established. Issue #9 remains open for:
 
-- capability-instance persistence and controller API exposure;
 - idempotent/cancelable lifecycle orchestration with bounded retries;
 - real preflight checks for permissions/runtime/disk/network prerequisites;
-- managed versus external ownership transitions;
+- safe configuration mutation and managed-versus-external ownership transitions;
 - artifact provenance/update/uninstall handling; and
 - demonstration against a real external service integration before generalizing the adapter contract.
