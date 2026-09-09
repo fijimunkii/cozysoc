@@ -3,22 +3,31 @@ package storage
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 )
 
 type HealthState string
 
 const (
-	HealthCurrent  HealthState = "current"
-	HealthPressure HealthState = "pressure"
-	HealthAtQuota  HealthState = "at-quota"
+	HealthCurrent            HealthState = "current"
+	HealthPressure           HealthState = "pressure"
+	HealthAtQuota            HealthState = "at-quota"
+	HealthFilesystemPressure HealthState = "filesystem-pressure"
+	HealthFilesystemFull     HealthState = "filesystem-full"
 )
 
 type Health struct {
-	State         HealthState
-	DatabaseBytes int64
-	UsedBytes     int64
-	ReusableBytes int64
-	MaxBytes      int64
+	State                     HealthState
+	QuotaState                HealthState
+	DatabaseBytes             int64
+	UsedBytes                 int64
+	ReusableBytes             int64
+	MaxBytes                  int64
+	FilesystemState           FilesystemCapacityState
+	FilesystemSupported       bool
+	FilesystemTotalBytes      int64
+	FilesystemAvailableBytes  int64
+	FilesystemPressureAtBytes int64
 }
 
 func (s *Store) Health(ctx context.Context) (Health, error) {
@@ -43,14 +52,40 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	reusable := freePages * pageSize
 	used := (pageCount - freePages) * pageSize
 	maxBytes := maxPages * pageSize
-	health := Health{
-		State:         classifyStorageHealth(used, maxBytes),
-		DatabaseBytes: allocated,
-		UsedBytes:     used,
-		ReusableBytes: reusable,
-		MaxBytes:      maxBytes,
+	quotaState := classifyStorageHealth(used, maxBytes)
+
+	filesystem, filesystemErr := readFilesystemCapacity(filepath.Dir(s.path))
+	if filesystemErr != nil {
+		// Capacity introspection is diagnostic evidence, not a prerequisite for
+		// storage operation. Preserve the quota result and report the filesystem
+		// state as unavailable instead of guessing that the volume is full.
+		filesystem = classifyFilesystemCapacity(true, 0, 0)
 	}
-	return health, nil
+	state := quotaState
+	if filesystem.Supported {
+		switch filesystem.State {
+		case FilesystemCapacityFull:
+			state = HealthFilesystemFull
+		case FilesystemCapacityPressure:
+			if quotaState != HealthAtQuota {
+				state = HealthFilesystemPressure
+			}
+		}
+	}
+
+	return Health{
+		State:                     state,
+		QuotaState:                quotaState,
+		DatabaseBytes:             allocated,
+		UsedBytes:                 used,
+		ReusableBytes:             reusable,
+		MaxBytes:                  maxBytes,
+		FilesystemState:           filesystem.State,
+		FilesystemSupported:       filesystem.Supported,
+		FilesystemTotalBytes:      filesystem.TotalBytes,
+		FilesystemAvailableBytes:  filesystem.AvailableBytes,
+		FilesystemPressureAtBytes: filesystem.PressureAtBytes,
+	}, nil
 }
 
 func classifyStorageHealth(usedBytes, maxBytes int64) HealthState {

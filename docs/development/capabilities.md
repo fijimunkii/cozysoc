@@ -77,15 +77,15 @@ Enablement requires exactly one enrolled Device Watch network scope. A proposed 
 
 Disable is safety-biased. The desired state is durably changed to `disabled` before runtime stop executes, and disable preflight never depends on the enrolled network still being reachable/present. If runtime stop fails, the durable state stays disabled so a restart cannot resurrect monitoring the user asked to stop; an emergency stop is attempted as containment.
 
-Device Watch verification now requires five independent signals: `network-scope-enrolled`, `observation-freshness`, `sensor-operational`, `ingestion-health`, and `storage-health`. Fresh retained evidence is therefore insufficient by itself: the current sensor runtime, ingestion path, and controller-database capacity must also be healthy.
+Device Watch verification requires five independent signals: `network-scope-enrolled`, `observation-freshness`, `sensor-operational`, `ingestion-health`, and `storage-health`. Fresh retained evidence is therefore insufficient by itself: the current sensor runtime, ingestion path, controller-database quota, and supported host-volume capacity evidence must also be healthy.
 
 `observation-freshness` is derived from the newest Device Watch sample by its evidence timestamp. Fresh evidence with both expected ARP and NDP sources available satisfies the declared **limited passive neighbor-cache evidence** check; a current gap in either source degrades it; old evidence becomes stale; and no evidence remains unverified. A quiet but current sample with zero neighbors can still be fresh because the heartbeat proves collection ran. Historical replay cannot refresh health because ordering and freshness use `CoverageSample.EndedAt` rather than insertion time.
 
-`sensor-operational` separately proves that the configured runtime is still running and completing collections. `ingestion-health` fails during current queue saturation/backpressure or write-failure episodes. `storage-health` fails when actively used SQLite pages approach or reach the configured database quota. A stale-but-recent evidence sample therefore cannot keep Device Watch verified after its producer disconnects or its write path fails.
+`sensor-operational` separately proves that the configured runtime is still running and completing collections. `ingestion-health` fails during current queue saturation/backpressure, generic write-failure episodes, or typed SQLite-full episodes that have not yet demonstrated a successful recovery write. `storage-health` keeps the controller SQLite quota separate from host-volume capacity and fails on quota pressure/reached, supported filesystem pressure/full, or an expected filesystem-capacity probe that is currently unavailable. A recent evidence sample therefore cannot keep Device Watch verified after its producer disconnects or its write/capacity path fails.
 
 The controller periodically reconciles those signals while durable Device Watch intent is enabled. `capabilities.list` remains a read-only projection of the resulting state. `verified` is therefore scoped to the capability's declared evidence and operational path and never means whole-network visibility or a global protection score.
 
-The manifest reserves `device-observation` and `coverage-sample` output contracts for the v0.1 data/coverage work in #10/#12. Those issues remain responsible for the normalized schemas and broader current-evidence/sensor-health semantics.
+The manifest reserves `device-observation` and `coverage-sample` output contracts established by the completed #10 data contract; #12 owns the broader current-evidence and sensor/operational-health semantics built on top of them.
 
 ## What remains in #9
 

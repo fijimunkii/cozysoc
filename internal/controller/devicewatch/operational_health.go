@@ -29,23 +29,30 @@ type SensorHealth struct {
 }
 
 type PipelineHealth struct {
-	State    OperationalState
-	Reason   string
-	Capacity int
-	Depth    int
-	Dropped  uint64
-	Failed   uint64
-	NextStep string
+	State        OperationalState
+	Reason       string
+	FailureClass string
+	Capacity     int
+	Depth        int
+	Dropped      uint64
+	Failed       uint64
+	NextStep     string
 }
 
 type DatabaseHealth struct {
-	State         OperationalState
-	Reason        string
-	DatabaseBytes int64
-	UsedBytes     int64
-	ReusableBytes int64
-	MaxBytes      int64
-	NextStep      string
+	State                     OperationalState
+	Reason                    string
+	QuotaState                storage.HealthState
+	FilesystemState           storage.FilesystemCapacityState
+	FilesystemSupported       bool
+	DatabaseBytes             int64
+	UsedBytes                 int64
+	ReusableBytes             int64
+	MaxBytes                  int64
+	FilesystemTotalBytes      int64
+	FilesystemAvailableBytes  int64
+	FilesystemPressureAtBytes int64
+	NextStep                  string
 }
 
 type OperationalHealth struct {
@@ -145,11 +152,12 @@ func sensorErrorNextStep(reason string) string {
 
 func pipelineHealth(health storage.IngestionHealth) PipelineHealth {
 	result := PipelineHealth{
-		State:    OperationalCurrent,
-		Capacity: health.Capacity,
-		Depth:    health.Depth,
-		Dropped:  health.Dropped,
-		Failed:   health.Failed,
+		State:        OperationalCurrent,
+		FailureClass: health.FailureClass,
+		Capacity:     health.Capacity,
+		Depth:        health.Depth,
+		Dropped:      health.Dropped,
+		Failed:       health.Failed,
 	}
 	switch health.State {
 	case storage.IngestionHealthCurrent:
@@ -162,6 +170,10 @@ func pipelineHealth(health storage.IngestionHealth) PipelineHealth {
 		result.State = OperationalDegraded
 		result.Reason = "backpressure"
 		result.NextStep = "Restore ingestion throughput; some evidence has been dropped while the queue was saturated."
+	case storage.IngestionHealthStorageFull:
+		result.State = OperationalDegraded
+		result.Reason = "sqlite-full"
+		result.NextStep = "SQLite rejected a write as full. Free the limiting database or host-volume capacity shown below, then wait for a successful collection to prove write recovery."
 	case storage.IngestionHealthWriteFailed:
 		result.State = OperationalDegraded
 		result.Reason = "write-failed"
@@ -184,14 +196,25 @@ func pipelineHealth(health storage.IngestionHealth) PipelineHealth {
 
 func databaseHealth(health storage.Health) DatabaseHealth {
 	result := DatabaseHealth{
-		State:         OperationalCurrent,
-		DatabaseBytes: health.DatabaseBytes,
-		UsedBytes:     health.UsedBytes,
-		ReusableBytes: health.ReusableBytes,
-		MaxBytes:      health.MaxBytes,
+		State:                     OperationalCurrent,
+		QuotaState:                health.QuotaState,
+		FilesystemState:           health.FilesystemState,
+		FilesystemSupported:       health.FilesystemSupported,
+		DatabaseBytes:             health.DatabaseBytes,
+		UsedBytes:                 health.UsedBytes,
+		ReusableBytes:             health.ReusableBytes,
+		MaxBytes:                  health.MaxBytes,
+		FilesystemTotalBytes:      health.FilesystemTotalBytes,
+		FilesystemAvailableBytes:  health.FilesystemAvailableBytes,
+		FilesystemPressureAtBytes: health.FilesystemPressureAtBytes,
 	}
 	switch health.State {
 	case storage.HealthCurrent:
+		if health.FilesystemSupported && health.FilesystemState == storage.FilesystemCapacityUnavailable {
+			result.State = OperationalDegraded
+			result.Reason = "filesystem-unknown"
+			result.NextStep = "Check the controller state-directory volume before relying on filesystem-capacity health."
+		}
 		return result
 	case storage.HealthPressure:
 		result.State = OperationalDegraded
@@ -201,6 +224,14 @@ func databaseHealth(health storage.Health) DatabaseHealth {
 		result.State = OperationalDegraded
 		result.Reason = "quota-reached"
 		result.NextStep = "Free Cozy SOC database capacity before relying on new evidence writes."
+	case storage.HealthFilesystemPressure:
+		result.State = OperationalDegraded
+		result.Reason = "filesystem-pressure"
+		result.NextStep = "Free space on the volume containing the Cozy SOC state directory before available write headroom is exhausted."
+	case storage.HealthFilesystemFull:
+		result.State = OperationalDegraded
+		result.Reason = "filesystem-full"
+		result.NextStep = "Free space on the volume containing the Cozy SOC state directory before relying on new evidence writes."
 	default:
 		result.State = OperationalDegraded
 		result.Reason = "unknown"

@@ -146,23 +146,30 @@ type DeviceWatchSensorHealth struct {
 }
 
 type DeviceWatchPipelineHealth struct {
-	State    string `json:"state"`
-	Reason   string `json:"reason,omitempty"`
-	Capacity int    `json:"capacity"`
-	Depth    int    `json:"depth"`
-	Dropped  uint64 `json:"dropped_total"`
-	Failed   uint64 `json:"failed_total"`
-	NextStep string `json:"next_step,omitempty"`
+	State        string `json:"state"`
+	Reason       string `json:"reason,omitempty"`
+	FailureClass string `json:"failure_class,omitempty"`
+	Capacity     int    `json:"capacity"`
+	Depth        int    `json:"depth"`
+	Dropped      uint64 `json:"dropped_total"`
+	Failed       uint64 `json:"failed_total"`
+	NextStep     string `json:"next_step,omitempty"`
 }
 
 type DeviceWatchDatabaseHealth struct {
-	State         string `json:"state"`
-	Reason        string `json:"reason,omitempty"`
-	DatabaseBytes int64  `json:"database_bytes"`
-	UsedBytes     int64  `json:"used_bytes"`
-	ReusableBytes int64  `json:"reusable_bytes"`
-	MaxBytes      int64  `json:"max_bytes"`
-	NextStep      string `json:"next_step,omitempty"`
+	State                     string `json:"state"`
+	Reason                    string `json:"reason,omitempty"`
+	QuotaState                string `json:"quota_state"`
+	FilesystemState           string `json:"filesystem_state"`
+	FilesystemSupported       bool   `json:"filesystem_supported"`
+	DatabaseBytes             int64  `json:"database_bytes"`
+	UsedBytes                 int64  `json:"used_bytes"`
+	ReusableBytes             int64  `json:"reusable_bytes"`
+	MaxBytes                  int64  `json:"max_bytes"`
+	FilesystemTotalBytes      int64  `json:"filesystem_total_bytes,omitempty"`
+	FilesystemAvailableBytes  int64  `json:"filesystem_available_bytes,omitempty"`
+	FilesystemPressureAtBytes int64  `json:"filesystem_pressure_at_bytes,omitempty"`
+	NextStep                  string `json:"next_step,omitempty"`
 }
 
 type DeviceWatchOperationalHealth struct {

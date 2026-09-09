@@ -61,10 +61,10 @@ The signals are:
 1. `network-scope-enrolled` — the stored scope still resolves to the enrolled interface binding;
 2. `observation-freshness` — the newest retained Device Watch `CoverageSample` is current, internally valid, and reports both expected ARP/NDP sources available;
 3. `sensor-operational` — the configured runtime is running and completing collections within the freshness window;
-4. `ingestion-health` — the bounded controller ingestion path is not currently under queue-pressure/backpressure or write failure; and
-5. `storage-health` — actively used SQLite pages are below the controller-database quota pressure threshold.
+4. `ingestion-health` — the bounded controller ingestion path is not currently under queue-pressure, backpressure, generic write failure, or typed SQLite-full failure; and
+5. `storage-health` — the controller database quota and, where supported, the host volume containing the state directory both have current capacity evidence without pressure/full state.
 
-All five must be fresh before the lifecycle state becomes `verified`. A current evidence sample therefore cannot keep Device Watch green after its producer disconnects or its write path becomes unhealthy.
+All five must be fresh before the lifecycle state becomes `verified`. A current evidence sample therefore cannot keep Device Watch green after its producer disconnects or its write/capacity path becomes unhealthy.
 
 Coverage freshness is based on `CoverageSample.EndedAt`, not insertion order. Replaying an old sample later therefore cannot make historical evidence look current. With the one-minute collection cadence, the initial bounded freshness window is three minutes: current evidence tolerates ordinary scheduling jitter, while multiple missed collections become `stale`.
 
@@ -79,9 +79,15 @@ Current Device Watch evidence maps as follows:
 
 Sensor health is evaluated separately from evidence. A runtime can be `starting`, `current`, `degraded`, `stale`, `disconnected`, or `unavailable`. A failed collection records only a coarse bounded error class; it is operational evidence, not a security finding.
 
-The ingestion path also reports current queue depth/capacity, active pressure/backpressure/write-failure state, and cumulative drop/failure totals. Historical totals remain available for diagnosis but do not permanently degrade the recovered pipeline.
+The ingestion path reports current queue depth/capacity, active pressure/backpressure/write-failure state, an optional bounded failure class, and cumulative drop/failure totals. SQLite `FULL` is detected from the typed SQLite result code and reported as `sqlite-full`; Cozy SOC does not parse a human-readable error message or expose raw database error text. Historical totals remain available for diagnosis but do not permanently degrade a recovered pipeline.
 
-Storage capacity reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective SQLite `max_page_count` capacity. The 90% warning threshold applies to **used** quota, so reusable pages recovered through retention remain usable headroom. This is database-quota health, not host-filesystem free-space detection.
+A current `sqlite-full` episode does not clear merely because disk/quota capacity later appears healthy. It stays degraded until a subsequent successful storage operation proves that the write path recovered.
+
+Storage health keeps the controller database quota separate from host-volume capacity. Database detail still reports allocated bytes, actively used page bytes, reusable free-list bytes, and the effective SQLite `max_page_count` capacity; the 90% quota warning applies to **used** quota, so reusable pages recovered through retention remain usable headroom.
+
+On Darwin and Linux the same storage detail also reports filesystem total bytes and bytes currently available to the process for the volume containing the state directory. Host-volume `pressure` begins at 128 MiB of remaining available headroom, while `full` is reserved for the operating system reporting zero available bytes. The 128 MiB threshold is operational guidance, not a prediction of the next write failure or a security score.
+
+When a typed SQLite-full write coincides with current filesystem-full evidence, coverage reports `storage-filesystem-full`; when the database quota is reached, it reports `storage-quota-reached`. If current capacity no longer explains the prior SQLite-full failure, coverage remains `ingestion-sqlite-full` until a successful write proves recovery. Unsupported filesystem introspection is exposed without guessing; a supported platform whose capacity probe currently fails is `filesystem-unknown` and degrades storage verification.
 
 A successful current sample may contain zero neighbors. That is still current heartbeat/validation evidence that the passive collection ran; a quiet network is not automatically treated as sensor failure.
 
@@ -188,6 +194,6 @@ This work still does not close #11. Remaining work includes:
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
-- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, and write-pressure scenarios.
+- owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, and write-pressure/full-volume recovery scenarios.
 
-Broader #12 work still includes explicit host-filesystem free-space diagnosis, measured ingestion latency, and equivalent operational coverage semantics for future sensors/capabilities.
+Broader #12 work still includes measured ingestion latency, explicit permission-state evidence where sources can prove it, and equivalent operational coverage semantics for future sensors/capabilities. Real low-disk/full-volume recovery behavior on named filesystems/hardware remains a #29 lab claim rather than something CI fixtures can certify.
