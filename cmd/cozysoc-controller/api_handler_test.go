@@ -14,13 +14,13 @@ import (
 )
 
 type fakeDeviceStore struct {
-	page      storage.DeviceEvidencePage
-	err       error
-	setScope  string
-	setDevice string
-	setLabel  string
+	page       storage.DeviceEvidencePage
+	err        error
+	setScope   string
+	setDevice  string
+	setLabel   string
 	setChanged bool
-	setErr    error
+	setErr     error
 }
 
 func (f *fakeDeviceStore) ListDeviceEvidence(context.Context, storage.DeviceEvidenceQuery) (storage.DeviceEvidencePage, error) {
@@ -95,7 +95,7 @@ func TestControllerAPIHandlerLabelsOnlyConfiguredScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: "Living Room TV"})
+	result, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("Living Room TV")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +114,9 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 		t.Fatal(err)
 	}
 	for _, params := range []api.DeviceLabelParams{
-		{DeviceID: "../device", Label: "TV"},
-		{DeviceID: "device.one", Label: " TV"},
+		{DeviceID: "device.one"},
+		{DeviceID: "../device", Label: stringPtr("TV")},
+		{DeviceID: "device.one", Label: stringPtr(" TV")},
 	} {
 		if _, err := handler.LabelDevice(context.Background(), params); !errors.Is(err, localapi.ErrInvalidMutation) {
 			t.Fatalf("invalid params %+v error = %v", params, err)
@@ -123,7 +124,7 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 	}
 
 	store.setErr = storage.ErrDeviceNotInScope
-	if _, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: "TV"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+	if _, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("TV")}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
 		t.Fatalf("out-of-scope error = %v", err)
 	}
 
@@ -131,7 +132,11 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := disabled.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: "TV"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+	if _, err := disabled.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("TV")}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
 		t.Fatalf("disabled mutation error = %v", err)
 	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
