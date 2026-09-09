@@ -48,6 +48,16 @@ Observation checkpoints are advanced only after the observation insert succeeds.
 
 The queue publishes bounded in-memory statistics for accepted, processed, deduplicated, rejected, dropped, and failed records. Queue-overflow and storage-write failure episodes use a small reserved internal event lane and become `ingestion-backpressure` or `ingestion-write-failed` storage events. These events never contain the rejected observation payload or a raw driver/database error.
 
+Current ingestion health is derived from the active episode and queue state, not only cumulative counters:
+
+- `current` when no current problem is detected;
+- `pressure` once queue depth reaches 75% of its known bounded capacity;
+- `backpressure` while the current saturation episode is dropping/rejecting evidence;
+- `write-failed` while the current write-failure episode is active; and
+- `closing` / `closed` during shutdown or disconnection.
+
+Cumulative dropped/failed totals remain visible for diagnostics, but a recovered pipeline does not stay degraded forever just because those historical totals are nonzero. Queue-pressure percentage is an operational utilization threshold against a known finite buffer, not a security or protection score.
+
 Shutdown stops new submissions and drains all already-accepted records. A shutdown context may time out, but the ingestor does not silently discard the remaining accepted queue when that happens.
 
 ## Bounded queries
@@ -85,6 +95,10 @@ The store records an explicit expiry timestamp on evidence-bearing rows and has 
 
 #30 will expose and refine user-facing retention controls. The current store hard-limits the main database with SQLite `max_page_count`; the default is the architecture target of 1 GiB. Transient filesystem overhead and sustained-growth behavior still require #29 measurement.
 
+Operational quota health uses SQLite page accounting rather than raw file size alone. The controller reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective `max_page_count` capacity. Pressure begins when used pages reach 90% of that configured database quota; reusable free-list pages count as headroom, so retention pruning can recover capacity even if the database file has not physically shrunk.
+
+This quota health is not host-filesystem monitoring. It cannot prove that the volume has free space or diagnose a full disk. A filesystem-full condition will still surface as an ingestion write failure when a write actually fails, but exact low-disk diagnosis remains future work.
+
 Retention deletion is bounded per call. When rows expire, the controller writes a `retention-expired` storage event with per-table counts rather than allowing old evidence to disappear with no operational trace.
 
 ## Privacy
@@ -100,5 +114,5 @@ This slice still does not close #10. Remaining work includes:
 - merge/split correction operations with audit records;
 - overlap/double-count representation for multiple sensors;
 - richer migration fixtures;
-- low-disk/`SQLITE_FULL` recovery; and
-- controller/API wiring once #11 begins producing real Device Watch observations.
+- explicit filesystem free-space/low-disk diagnosis and `SQLITE_FULL` recovery; and
+- broader controller/API wiring for future sensors and capabilities.
