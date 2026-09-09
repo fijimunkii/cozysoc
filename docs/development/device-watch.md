@@ -50,7 +50,27 @@ A failed enable is compensated: Cozy SOC attempts to stop any runtime side effec
 
 Disable is intentionally easier than enable. It never requires the network to still be present or healthy. Desired state is written as `disabled` before runtime stop, so a failed stop or abrupt controller restart cannot cause Device Watch to come back merely because the previous runtime was still alive. Failed disable also triggers an emergency stop attempt.
 
-`enabled` still does **not** mean verified coverage. Device Watch is builtin, so process state remains `not-applicable`; runtime activity is reported separately by the control result. Verification remains `unverified` until #12 can establish all required fresh evidence, including `observation-freshness`.
+`enabled` still does **not** mean verified coverage. Device Watch is builtin, so process state remains `not-applicable`; runtime activity is reported separately by the control result. Verification advances only from current evidence as described below.
+
+## Evidence-based verification
+
+Device Watch re-evaluates its declared verification signals while durable desired state is `enabled`. Reads such as `capabilities.list` remain side-effect-free; the controller performs verification reconciliation independently.
+
+The `network-scope-enrolled` signal is fresh only while the stored scope still resolves to the currently enrolled interface binding. The `observation-freshness` signal comes from the latest retained Device Watch `CoverageSample` for that scope.
+
+Coverage freshness is based on `CoverageSample.EndedAt`, not insertion order. Replaying an old sample later therefore cannot make historical evidence look current. With the one-minute collection cadence, the initial bounded freshness window is three minutes: current evidence tolerates ordinary scheduling jitter, while multiple missed collections become `stale`.
+
+Current Device Watch sample states map as follows:
+
+- no retained sample: `missing`, leaving verification `unverified`;
+- fresh `partial`: `fresh`, allowing Device Watch verification to become `verified` for its **limited passive neighbor-cache capability**;
+- fresh `unavailable`: `failed`, making verification `degraded`;
+- evidence older than the freshness window: `stale`; and
+- an unsupported status or implausibly future evidence timestamp: `failed` rather than guessed healthy.
+
+A successful `partial` sample may contain zero neighbors. That is still current heartbeat/validation evidence that the passive collection ran; a quiet network is not automatically treated as sensor failure.
+
+`verified` here is deliberately scoped. It means the declared Device Watch evidence is current. It does **not** mean every LAN client is visible, other devices' internet traffic is observed, every VLAN is covered, or the household is globally "protected." The coverage sample continues to record `whole_network_traffic_visible=false` and the known passive-cache limitations.
 
 ## macOS passive source
 
@@ -80,7 +100,7 @@ The loop:
 
 Startup reconciliation uses the same lifecycle driver as live enablement. A persisted enabled intent is never implemented through a separate manual runtime-start path.
 
-The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records only a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar) and leaves capability verification unchanged.
+The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar), while current coverage evidence is independently re-evaluated into verification state. A source-unavailable sample degrades Device Watch; a gap that stops producing samples eventually makes evidence stale.
 
 A controller restart safely reuses the same deterministic Device Watch sensor. Replayed observations and reconciliation are idempotent.
 
@@ -149,7 +169,7 @@ The mutation does not grant network, generic capability-lifecycle, process, file
 
 This work still does not close #11. Remaining work includes:
 
-- #12 coverage/sensor-health wiring so actual fresh evidence can advance verification state;
+- richer #12 coverage/sensor-health states beyond this first Device Watch freshness slice;
 - desktop UI exposure for network selection, enable/disable, device presence, and labeling;
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
