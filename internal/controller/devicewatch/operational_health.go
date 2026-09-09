@@ -29,19 +29,21 @@ type SensorHealth struct {
 }
 
 type PipelineHealth struct {
-	State     OperationalState
-	Reason    string
-	Capacity  int
-	Depth     int
-	Dropped   uint64
-	Failed    uint64
-	NextStep  string
+	State    OperationalState
+	Reason   string
+	Capacity int
+	Depth    int
+	Dropped  uint64
+	Failed   uint64
+	NextStep string
 }
 
 type DatabaseHealth struct {
 	State         OperationalState
 	Reason        string
 	DatabaseBytes int64
+	UsedBytes     int64
+	ReusableBytes int64
 	MaxBytes      int64
 	NextStep      string
 }
@@ -67,7 +69,7 @@ func (r *Runtime) IngestionHealth() storage.IngestionHealth {
 func (d *LifecycleDriver) OperationalHealth(ctx context.Context, now time.Time) (OperationalHealth, error) {
 	now = now.UTC()
 	operational := OperationalHealth{
-		Sensor: sensorHealth(nil, now),
+		Sensor:   sensorHealth(nil, now),
 		Pipeline: pipelineHealth(storage.IngestionHealth{State: storage.IngestionHealthClosed}),
 	}
 	if d != nil && d.runtime != nil {
@@ -184,6 +186,8 @@ func databaseHealth(health storage.Health) DatabaseHealth {
 	result := DatabaseHealth{
 		State:         OperationalCurrent,
 		DatabaseBytes: health.DatabaseBytes,
+		UsedBytes:     health.UsedBytes,
+		ReusableBytes: health.ReusableBytes,
 		MaxBytes:      health.MaxBytes,
 	}
 	switch health.State {
