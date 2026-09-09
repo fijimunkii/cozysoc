@@ -5,22 +5,22 @@ package storage
 type IngestionHealthState string
 
 const (
-	IngestionHealthCurrent       IngestionHealthState = "current"
-	IngestionHealthPressure      IngestionHealthState = "pressure"
-	IngestionHealthBackpressure  IngestionHealthState = "backpressure"
-	IngestionHealthWriteFailed   IngestionHealthState = "write-failed"
-	IngestionHealthClosing       IngestionHealthState = "closing"
-	IngestionHealthClosed        IngestionHealthState = "closed"
+	IngestionHealthCurrent      IngestionHealthState = "current"
+	IngestionHealthPressure     IngestionHealthState = "pressure"
+	IngestionHealthBackpressure IngestionHealthState = "backpressure"
+	IngestionHealthWriteFailed  IngestionHealthState = "write-failed"
+	IngestionHealthClosing      IngestionHealthState = "closing"
+	IngestionHealthClosed       IngestionHealthState = "closed"
 )
 
 type IngestionHealth struct {
-	State        IngestionHealthState
-	Capacity     int
-	Depth        int
-	Accepted     uint64
-	Processed    uint64
-	Dropped      uint64
-	Failed       uint64
+	State     IngestionHealthState
+	Capacity  int
+	Depth     int
+	Accepted  uint64
+	Processed uint64
+	Dropped   uint64
+	Failed    uint64
 }
 
 func (i *Ingestor) Health() IngestionHealth {
