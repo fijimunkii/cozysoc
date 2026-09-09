@@ -69,6 +69,41 @@ func TestEnabledConfigurationRequiresTypedRequiredValues(t *testing.T) {
 	}
 }
 
+func TestIntegerConfigurationRequiresNumericJSON(t *testing.T) {
+	builtins, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, ok := builtins.Get("device-watch")
+	if !ok {
+		t.Fatal("device-watch builtin missing")
+	}
+	manifest.ID = "typed-test"
+	manifest.Config.Fields = []ConfigField{
+		{Name: "count", Type: ConfigInteger, Required: true, Description: "Test integer value."},
+	}
+	registry, err := NewRegistry(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	quoted := Configuration{
+		ID:        "typed-test",
+		Ownership: OwnershipBuiltin,
+		Desired:   DesiredEnabled,
+		Values:    map[string]json.RawMessage{"count": json.RawMessage(`"1"`)},
+	}
+	if err := ValidateConfiguration(registry, quoted); err == nil {
+		t.Fatal("quoted numeric string was accepted as integer JSON")
+	}
+
+	numeric := quoted
+	numeric.Values = map[string]json.RawMessage{"count": json.RawMessage(`1`)}
+	if err := ValidateConfiguration(registry, numeric); err != nil {
+		t.Fatalf("numeric integer JSON was rejected: %v", err)
+	}
+}
+
 func TestConfigurationRejectsUnknownCapabilityOwnershipAndFields(t *testing.T) {
 	registry, err := Builtins()
 	if err != nil {
