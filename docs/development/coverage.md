@@ -27,11 +27,13 @@ If Device Watch is not enabled/configured, the response is `unconfigured` and po
 The detail read model uses the same current evidence that feeds lifecycle verification:
 
 - `unverified` — no retained current Device Watch coverage evidence exists yet;
-- `active-limited` — current passive neighbor-cache evidence exists within Device Watch's declared limited scope;
-- `degraded` — current sources are unavailable or the retained coverage evidence is invalid/untrustworthy;
+- `active-limited` — current passive neighbor-cache evidence exists and both expected ARP/NDP sources were available, while Device Watch still has its declared observation-point limitations;
+- `degraded` — one or more expected current sources are unavailable, or the retained coverage evidence is invalid/untrustworthy;
 - `stale` — the newest valid evidence is older than the bounded freshness window.
 
 `active-limited` is deliberately not named `healthy`, `protected`, or `full`. Even with both ARP and NDP sources current, Device Watch remains a local passive-neighbor capability.
+
+A current sample with one working source and one unavailable source is **degraded**, not verified merely because some evidence still arrives. The working source remains visible as `current` in the detail response so partial usefulness is preserved without hiding the gap.
 
 ## Source health
 
@@ -83,9 +85,9 @@ Each gap includes one concrete next step. These are guidance, not automated resp
 
 The lifecycle state and this detail endpoint share one evaluator.
 
-That matters because the UI must never say that evidence is invalid or stale while `capabilities.list` independently says the same evidence is verified. Invalid evidence now degrades the existing `observation-freshness` verification signal too.
+That matters because the UI must never say that evidence is invalid, source-degraded, or stale while `capabilities.list` independently says the same evidence is verified. Invalid evidence and current ARP/NDP source gaps degrade the existing `observation-freshness` verification signal too.
 
-A fresh `partial` sample may still contain zero neighbors. The sample itself is heartbeat/validation evidence that collection ran, so a quiet network is not automatically a source failure.
+A fresh sample may still contain zero neighbors. The sample itself is heartbeat/validation evidence that collection ran, so a quiet network is not automatically a source failure.
 
 ## Still outside this slice
 
