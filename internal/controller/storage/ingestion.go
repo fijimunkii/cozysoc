@@ -44,8 +44,10 @@ type IngestionReceipt struct {
 }
 
 type receiptState struct {
-	ready   chan struct{}
-	outcome ingestionOutcome
+	ready      chan struct{}
+	accepted   chan struct{}
+	acceptedAt time.Time
+	outcome    ingestionOutcome
 }
 
 func (r IngestionReceipt) Wait(ctx context.Context) (IngestionResult, error) {
@@ -111,6 +113,7 @@ type Ingestor struct {
 	eventQueue chan ingestionEpisode
 	logger     *slog.Logger
 	now        func() time.Time
+	latency    *ingestionLatencyTracker
 
 	stateMu sync.Mutex
 	closing bool
@@ -153,6 +156,7 @@ func newIngestor(sink ingestionSink, capacity int, logger *slog.Logger) (*Ingest
 		eventQueue: make(chan ingestionEpisode, 8),
 		logger:     logger,
 		now:        time.Now,
+		latency:    newIngestionLatencyTracker(),
 		done:       make(chan struct{}),
 		stats: IngestionStats{
 			Capacity: capacity,
@@ -262,11 +266,11 @@ func (i *Ingestor) submit(ctx context.Context, item ingestionItem, nonBlocking b
 	}
 	defer i.submitters.Done()
 
-	item.receipt = &receiptState{ready: make(chan struct{})}
+	item.receipt = &receiptState{ready: make(chan struct{}), accepted: make(chan struct{})}
 	if nonBlocking {
 		select {
 		case i.queue <- item:
-			i.noteAccepted()
+			i.markAccepted(item.receipt)
 			return IngestionReceipt{state: item.receipt}, nil
 		default:
 			i.noteDropped(item.kind, "queue-full")
@@ -276,12 +280,20 @@ func (i *Ingestor) submit(ctx context.Context, item ingestionItem, nonBlocking b
 
 	select {
 	case i.queue <- item:
-		i.noteAccepted()
+		i.markAccepted(item.receipt)
 		return IngestionReceipt{state: item.receipt}, nil
 	case <-ctx.Done():
 		i.noteDropped(item.kind, "submit-context-ended")
 		return IngestionReceipt{}, errors.Join(ErrBackpressure, ctx.Err())
 	}
+}
+
+func (i *Ingestor) markAccepted(receipt *receiptState) {
+	acceptedAt := i.now().UTC()
+	receipt.acceptedAt = acceptedAt
+	i.latency.accept(acceptedAt)
+	i.noteAccepted()
+	close(receipt.accepted)
 }
 
 func (i *Ingestor) beginSubmit() bool {
@@ -310,7 +322,11 @@ func (i *Ingestor) run() {
 				i.drainEpisodes()
 				return
 			}
+			<-item.receipt.accepted
+			startedAt := i.now().UTC()
 			result, err := i.process(item)
+			completedAt := i.now().UTC()
+			i.latency.complete(item.receipt.acceptedAt, startedAt, completedAt, err == nil)
 			if err != nil {
 				i.noteFailure(item.kind, err)
 			} else {
@@ -357,7 +373,6 @@ func (i *Ingestor) process(item ingestionItem) (IngestionResult, error) {
 			if err := i.sink.SaveCheckpoint(ctx, *item.checkpoint); err != nil {
 				return result, err
 			}
-		}
 	case IngestionIdentityClaim:
 		if err := i.sink.InsertIdentityClaim(ctx, *item.claim); err != nil {
 			return result, err
