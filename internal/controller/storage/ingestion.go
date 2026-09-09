@@ -373,6 +373,7 @@ func (i *Ingestor) process(item ingestionItem) (IngestionResult, error) {
 			if err := i.sink.SaveCheckpoint(ctx, *item.checkpoint); err != nil {
 				return result, err
 			}
+		}
 	case IngestionIdentityClaim:
 		if err := i.sink.InsertIdentityClaim(ctx, *item.claim); err != nil {
 			return result, err
