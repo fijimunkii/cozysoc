@@ -63,6 +63,7 @@ type CoverageObservationPoint struct {
 type CoverageReport struct {
 	CapabilityID      string                     `json:"capability_id"`
 	Configured        bool                       `json:"configured"`
+	AsOf              time.Time                  `json:"as_of"`
 	State             string                     `json:"state"`
 	Reason            string                     `json:"reason"`
 	ObservationPoints []CoverageObservationPoint `json:"observation_points"`
