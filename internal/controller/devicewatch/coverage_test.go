@@ -22,8 +22,18 @@ func (f fakeCoverageReader) LatestCoverageSample(context.Context, string, string
 
 func TestCoverageVerificationSignalStates(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
-	malformed := coverageFixture(now.Add(-time.Minute), "partial")
-	malformed.Evidence = json.RawMessage(`{"schema_version":1,"whole_network_traffic_visible":true}`)
+	falseTrafficClaim := coverageFixture(now.Add(-time.Minute), "partial")
+	var falseTrafficEvidence map[string]any
+	if err := json.Unmarshal(falseTrafficClaim.Evidence, &falseTrafficEvidence); err != nil {
+		t.Fatal(err)
+	}
+	falseTrafficEvidence["whole_network_traffic_visible"] = true
+	encoded, err := json.Marshal(falseTrafficEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	falseTrafficClaim.Evidence = encoded
+
 	tests := []struct {
 		name   string
 		reader fakeCoverageReader
@@ -35,7 +45,7 @@ func TestCoverageVerificationSignalStates(t *testing.T) {
 		{name: "stale historical replay", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Hour), "partial")}, want: capability.SignalStale},
 		{name: "future clock skew", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(2*time.Minute), "partial")}, want: capability.SignalFailed},
 		{name: "unknown status fails closed", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Minute), "mystery")}, want: capability.SignalFailed},
-		{name: "malformed evidence fails closed", reader: fakeCoverageReader{ok: true, sample: malformed}, want: capability.SignalFailed},
+		{name: "false traffic claim fails closed", reader: fakeCoverageReader{ok: true, sample: falseTrafficClaim}, want: capability.SignalFailed},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -70,8 +80,8 @@ func coverageFixture(endedAt time.Time, status string) domain.CoverageSample {
 		ndpAvailable = false
 	}
 	evidence, _ := json.Marshal(map[string]any{
-		"schema_version":                1,
-		"interface":                     "en0",
+		"schema_version": 1,
+		"interface":      "en0",
 		"sources": []map[string]any{
 			{"method": MethodARPCache, "available": arpAvailable},
 			{"method": MethodNDPCache, "available": ndpAvailable},
