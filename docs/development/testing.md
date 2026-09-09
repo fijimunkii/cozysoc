@@ -36,7 +36,7 @@ The network-enrollment E2E does not need a packet/network fixture. It reads the 
 
 The Device Watch control E2E builds on that real enrollment. Linux intentionally does not implement the v0.1 passive runtime, so `device-watch-enable` must fail with `precondition_failed` before enabled intent or a capability-intent audit transition is written. CI then proves `device-watch-disable` is a safe no-op and restart keeps Device Watch disabled. Successful live start/stop semantics are covered by deterministic lifecycle-driver/controller tests and Darwin cross-compilation; they are not misrepresented as Linux runtime evidence.
 
-The coverage-read process E2E deliberately checks only the fresh-controller `unconfigured` state on Linux. It proves the real CLI/authenticated Unix-socket/controller projection is wired without pretending Linux produced macOS ARP/NDP evidence.
+The coverage-read process E2E deliberately checks only the fresh-controller `unconfigured` state on Linux. It proves the real CLI/authenticated Unix-socket/controller projection is wired without pretending Linux produced macOS ARP/NDP evidence. It now also verifies that the nested capability-independent coverage report says `device-watch`, `unconfigured`, and zero observation points, and that the legacy aggregate fields agree with the shared report.
 
 Device Watch coverage verification is tested deterministically at the storage/evaluator/lifecycle boundary. Fixtures prove that evidence time wins over insertion order, logical expiry is respected, current evidence with both ARP/NDP sources available can verify the limited capability, a current gap in either source degrades it, both sources unavailable degrades it, old evidence becomes stale, unsupported/future/contradictory evidence fails closed, and a quiet sample with zero neighbors can still be a healthy current heartbeat.
 
@@ -49,7 +49,7 @@ Operational-health fixtures additionally prove that:
 - an accepted pending record becomes `lagging` once its age reaches the bounded 5-second threshold;
 - completed durable latency requires three consecutive recent slow completions before degrading, while one later fast successful completion resets the slow streak;
 - old slow completion samples age to `idle` after the one-minute freshness window when no work is pending;
-- failed writes leave the pending timing set but do not become successful durable-latency evidence;
+- failed writes are removed from pending timing but do not become successful durable-latency evidence;
 - active ingestion backpressure/drop and storage-write failure still degrade the pipeline independently from measured latency;
 - historical dropped/failed counters remain visible without permanently degrading a recovered pipeline;
 - SQLite quota pressure is classified from used pages rather than raw allocated file size, with reusable free-list pages preserved as headroom;
@@ -60,6 +60,24 @@ Operational-health fixtures additionally prove that:
 - Device Watch lifecycle verification requires the operational sensor/ingestion/storage signals in addition to scope and evidence freshness.
 
 Controller/API projection tests additionally prove both sides of the ingestion distinction: high queue utilization with fast measured latency stays `active-limited`, while measured lag surfaces as `ingestion-latency` with bounded timing details in milliseconds. The existing storage-full projection test continues to verify that a synthetic `sqlite-full` pipeline failure plus current zero filesystem headroom is returned as `storage-filesystem-full` with the underlying cause details intact.
+
+## Shared coverage-contract fixtures
+
+The capability-independent coverage model has its own deterministic validation suite. It proves structural invariants such as bounded identifiers/text, configured versus verified versus expected-unverified scope, coherent evidence windows, typed directions, and cadence requirements. It also rejects impossible combinations such as one dimension being both verified and expected-unverified, or a hopping observation point with no dwell.
+
+Representability fixtures cover:
+
+- Device Watch with configured network/interface/address families, no observed traffic directions, and explicit traffic-direction gaps;
+- DNS resolver evidence where clients A/B/C are verified while expected client D remains unverified and resolver bypass remains a gap;
+- a gateway packet observation point that sees ingress/egress while east-west remains explicitly unobserved;
+- a wireless radio that samples channels 1/6/11 with finite hopping dwell plus encrypted-content limitations; and
+- a producer that can explicitly establish `permission-required` rather than conflating that state with generic source unavailability.
+
+These fixtures validate the **schema vocabulary only** for DNS, packet, and wireless examples. They do not run those engines, inspect household traffic, validate router APIs, certify mirror directionality, or certify monitor-mode hardware. They therefore do not promote any corresponding support-matrix entry.
+
+Device Watch has a producer-specific mapper test showing that its current evidence and operational state project into the shared contract without losing facts: a current IPv4 source can remain verified while IPv6 is expected-unverified, operational ingestion lag can degrade the point without erasing current address-family evidence, and Device Watch continues to declare no observed packet directions.
+
+The authenticated local API test round-trips the nested shared contract as JSON. The controller handler tests additionally require the legacy Device Watch aggregate state/reason/next-step to equal the validated shared report so the compatibility surface cannot silently diverge from the new contract.
 
 ## What this does not prove
 
@@ -77,6 +95,6 @@ Those hardware/filesystem/performance-dependent claims require the named real-ha
 
 ## Growth model
 
-Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include named-workload latency/overload calibration, real disposable-volume low-disk/full-disk lab evidence, identity correction flows, and installation/service lifecycle once those product flows exist.
+Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include real source-specific permission transitions, the first non-Device-Watch coverage producer, multi-observation-point aggregation once real evidence exists, named-workload latency/overload calibration, real disposable-volume low-disk/full-disk lab evidence, identity correction flows, and installation/service lifecycle once those product flows exist.
 
-Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, deliberately exhausted filesystems, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.
+Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, deliberately exhausted filesystems, packet labs, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.

@@ -97,6 +97,16 @@ A successful current sample may contain zero neighbors. That is still current he
 
 `verified` here is deliberately scoped. It means the declared Device Watch evidence and its current operational path satisfy the manifest. It does **not** mean every LAN client is visible, other devices' internet traffic is observed, every VLAN is covered, or the household is globally "protected." The coverage sample continues to record `whole_network_traffic_visible=false` and the known passive-cache limitations.
 
+### Shared coverage projection
+
+`device-watch.coverage` keeps its existing Device-Watch-specific fields and also returns a nested capability-independent `coverage` report described in [`coverage-contract.md`](coverage-contract.md). The legacy aggregate state/reason/next-step and the shared report come from the same validated evaluator result.
+
+The live Device Watch projection uses one observation point, `device-watch.local-neighbor-cache`, with kind `host-neighbor-cache`. It represents the configured network and expected IPv4/IPv6 families, marks address families verified independently from current ARP/NDP evidence, uses the one-minute periodic cadence, and maps the curated blind spots into explicit shared gaps.
+
+The observation point declares **no observed traffic directions**. Its `no-traffic-monitoring` gap explicitly identifies ingress, egress, and east-west as traffic directions not established by Device Watch. Operational degradation such as measured ingestion lag can make the point degraded without erasing the latest address-family evidence that was actually verified.
+
+Before the first trusted coverage sample, the shared projection does not invent an interface value merely because the enrollment record exists elsewhere. It exposes the configured network and expected IPv4/IPv6 dimensions immediately and adds the interface once that fact is present in the trusted Device Watch coverage report.
+
 ## macOS passive source
 
 The v0.1 observation source is macOS-first, matching the current support matrix.
@@ -200,4 +210,4 @@ This work still does not close #11. Remaining work includes:
 - conservative, consented active probes only if passive evidence proves insufficient; and
 - owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, ingestion lag, and write-pressure/full-volume recovery scenarios.
 
-Broader #12 work still includes explicit permission-state evidence where sources can prove it and equivalent operational coverage semantics for future sensors/capabilities. Named-workload calibration for latency/resource thresholds and real low-disk/full-volume recovery behavior on named filesystems/hardware remain #29 lab claims rather than things CI fixtures can certify.
+The shared #12 coverage vocabulary can now represent permission-required state, other observation points, traffic direction gaps, DNS client scope, and wireless hopping/dwell limits. Broader #12 work still requires **real producers** for those capabilities, source-specific permission evidence, aggregation once multiple real observation points exist, and generic frontend presentation. Named-workload calibration for latency/resource thresholds and real low-disk/full-volume recovery behavior on named filesystems/hardware remain #29 lab claims rather than things CI fixtures can certify.

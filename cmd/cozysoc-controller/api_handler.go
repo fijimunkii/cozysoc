@@ -117,13 +117,17 @@ func (h *controllerAPIHandler) DeviceWatchCoverage(ctx context.Context) (api.Dev
 		return api.DeviceWatchCoverage{}, err
 	}
 	if !configured {
+		contract := devicewatch.UnconfiguredCoverageContract()
+		projected := projectCoverageReport(contract)
 		return api.DeviceWatchCoverage{
 			Configured: false,
 			AsOf:       asOf,
-			State:      "unconfigured",
+			State:      projected.State,
+			Reason:     projected.Reason,
+			Coverage:   &projected,
 			Sources:    []api.DeviceWatchCoverageSource{},
 			BlindSpots: []api.DeviceWatchCoverageBlindSpot{},
-			NextStep:   "Enroll a home network and enable Device Watch before evaluating its coverage.",
+			NextStep:   projected.NextStep,
 		}, nil
 	}
 
@@ -139,19 +143,24 @@ func (h *controllerAPIHandler) DeviceWatchCoverage(ctx context.Context) (api.Dev
 	if err != nil {
 		return api.DeviceWatchCoverage{}, err
 	}
-	state, reason, nextStep := devicewatch.EffectiveCoverage(report, operational)
+	contract, err := devicewatch.CoverageContract(report, operational)
+	if err != nil {
+		return api.DeviceWatchCoverage{}, err
+	}
+	projected := projectCoverageReport(contract)
 	result := api.DeviceWatchCoverage{
-		Configured:    true,
+		Configured:    projected.Configured,
 		ScopeID:       scopeID,
 		AsOf:          asOf,
-		State:         string(state),
-		Reason:        reason,
+		State:         projected.State,
+		Reason:        projected.Reason,
+		Coverage:      &projected,
 		SensorID:      report.SensorID,
 		InterfaceName: report.InterfaceName,
 		Sources:       make([]api.DeviceWatchCoverageSource, 0, len(report.Sources)),
 		Operational:   projectDeviceWatchOperational(operational),
 		BlindSpots:    make([]api.DeviceWatchCoverageBlindSpot, 0, len(report.BlindSpots)),
-		NextStep:      nextStep,
+		NextStep:      projected.NextStep,
 	}
 	if report.HasEvidence {
 		evidenceAt := report.EvidenceAt
