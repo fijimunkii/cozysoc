@@ -37,7 +37,11 @@ jobs:
 
       - name: Run controller checks
         run: |
-          test -z "$(gofmt -l cmd internal tests)"
+          unformatted="$(gofmt -l cmd internal tests)"
+          if [[ -n "${unformatted}" ]]; then
+            printf '%s\n' "${unformatted}"
+            exit 1
+          fi
           go vet ./...
           go test ./...
 
