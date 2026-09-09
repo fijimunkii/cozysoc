@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"time"
 
 	sqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -13,7 +14,7 @@ type IngestionHealthState string
 
 const (
 	IngestionHealthCurrent      IngestionHealthState = "current"
-	IngestionHealthPressure     IngestionHealthState = "pressure"
+	IngestionHealthLagging      IngestionHealthState = "lagging"
 	IngestionHealthBackpressure IngestionHealthState = "backpressure"
 	IngestionHealthWriteFailed  IngestionHealthState = "write-failed"
 	IngestionHealthStorageFull  IngestionHealthState = "storage-full"
@@ -27,21 +28,32 @@ const (
 )
 
 type IngestionHealth struct {
-	State        IngestionHealthState
-	FailureClass string
-	Capacity     int
-	Depth        int
-	Accepted     uint64
-	Processed    uint64
-	Dropped      uint64
-	Failed       uint64
+	State                  IngestionHealthState
+	FailureClass           string
+	Capacity               int
+	Depth                  int
+	QueuePressure          bool
+	Accepted               uint64
+	Processed              uint64
+	Dropped                uint64
+	Failed                 uint64
+	LatencyState           IngestionLatencyState
+	LatencyThreshold       time.Duration
+	Pending                int
+	OldestPendingAge       time.Duration
+	LastDurableLatency     time.Duration
+	LastQueueWait          time.Duration
+	LastProcessingDuration time.Duration
+	LastCompletedAt        time.Time
+	SlowStreak             int
 }
 
 func (i *Ingestor) Health() IngestionHealth {
 	if i == nil {
-		return IngestionHealth{State: IngestionHealthClosed}
+		return IngestionHealth{State: IngestionHealthClosed, LatencyState: IngestionLatencyIdle}
 	}
 	stats := i.Stats()
+	latency := i.latency.snapshot(i.now().UTC())
 
 	i.episodeMu.Lock()
 	overflowActive := i.overflowActive
@@ -50,14 +62,24 @@ func (i *Ingestor) Health() IngestionHealth {
 	i.episodeMu.Unlock()
 
 	health := IngestionHealth{
-		State:        IngestionHealthCurrent,
-		FailureClass: failureClass,
-		Capacity:     stats.Capacity,
-		Depth:        stats.Depth,
-		Accepted:     stats.Accepted,
-		Processed:    stats.Processed,
-		Dropped:      stats.Dropped,
-		Failed:       stats.Failed,
+		State:                  IngestionHealthCurrent,
+		FailureClass:           failureClass,
+		Capacity:               stats.Capacity,
+		Depth:                  stats.Depth,
+		QueuePressure:          stats.Capacity > 0 && stats.Depth*4 >= stats.Capacity*3,
+		Accepted:               stats.Accepted,
+		Processed:              stats.Processed,
+		Dropped:                stats.Dropped,
+		Failed:                 stats.Failed,
+		LatencyState:           latency.State,
+		LatencyThreshold:       latency.Threshold,
+		Pending:                latency.Pending,
+		OldestPendingAge:       latency.OldestPendingAge,
+		LastDurableLatency:     latency.LastDurableLatency,
+		LastQueueWait:          latency.LastQueueWait,
+		LastProcessingDuration: latency.LastProcessingDuration,
+		LastCompletedAt:        latency.LastCompletedAt,
+		SlowStreak:             latency.SlowStreak,
 	}
 	switch {
 	case stats.Closed:
@@ -70,8 +92,8 @@ func (i *Ingestor) Health() IngestionHealth {
 		health.State = IngestionHealthWriteFailed
 	case overflowActive:
 		health.State = IngestionHealthBackpressure
-	case stats.Capacity > 0 && stats.Depth*4 >= stats.Capacity*3:
-		health.State = IngestionHealthPressure
+	case latency.State == IngestionLatencyLagging:
+		health.State = IngestionHealthLagging
 	}
 	return health
 }
