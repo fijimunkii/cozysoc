@@ -13,10 +13,10 @@ import (
 
 type controllerAPIHandler struct {
 	controller            *core.Controller
-	presenceReader         devicewatch.DeviceEvidenceReader
-	deviceWatchScopeID     string
-	deviceWatchConfigured  bool
-	now                    func() time.Time
+	presenceReader        devicewatch.DeviceEvidenceReader
+	deviceWatchScopeID    string
+	deviceWatchConfigured bool
+	now                   func() time.Time
 }
 
 func newControllerAPIHandler(controller *core.Controller, reader devicewatch.DeviceEvidenceReader, scopeID string, configured bool) (*controllerAPIHandler, error) {
@@ -27,7 +27,7 @@ func newControllerAPIHandler(controller *core.Controller, reader devicewatch.Dev
 		return nil, fmt.Errorf("configured Device Watch API requires a scope and presence reader")
 	}
 	return &controllerAPIHandler{
-		controller:           controller,
+		controller:            controller,
 		presenceReader:        reader,
 		deviceWatchScopeID:    scopeID,
 		deviceWatchConfigured: configured,
