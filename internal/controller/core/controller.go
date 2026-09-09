@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 )
 
 const gapMultiplier = 3
@@ -16,6 +17,7 @@ type Controller struct {
 	configVersion int
 	startedAt     time.Time
 	tickInterval  time.Duration
+	capabilities  *capability.Instances
 
 	mu        sync.RWMutex
 	lastTick  time.Time
@@ -23,7 +25,7 @@ type Controller struct {
 	lastGapAt *time.Time
 }
 
-func New(version string, configVersion int, tickInterval time.Duration) *Controller {
+func New(version string, configVersion int, tickInterval time.Duration, capabilities *capability.Instances) *Controller {
 	now := time.Now()
 	return &Controller{
 		version:       version,
@@ -31,6 +33,7 @@ func New(version string, configVersion int, tickInterval time.Duration) *Control
 		startedAt:     now,
 		tickInterval:  tickInterval,
 		lastTick:      now,
+		capabilities:  capabilities,
 	}
 }
 
@@ -99,5 +102,16 @@ func (c *Controller) Health() api.Health {
 		LastTickAt: c.lastTick.UTC(),
 		GapCount:   c.gapCount,
 		LastGapAt:  lastGap,
+	}
+}
+
+func (c *Controller) Capabilities() api.CapabilityList {
+	var instances []capability.Instance
+	if c.capabilities != nil {
+		instances = c.capabilities.List()
+	}
+	return api.CapabilityList{
+		CatalogSchemaVersion: capability.SchemaVersion,
+		Capabilities:         instances,
 	}
 }
