@@ -1,12 +1,12 @@
 # Normalized local storage v1
 
-Issue #10 introduces the first controller-owned local persistence contract for normalized Cozy SOC evidence.
+Issue #10 introduces the controller-owned persistence and ingestion contract for normalized Cozy SOC evidence.
 
 ## Boundaries
 
 The database is an implementation detail of the controller. Renderers, engines, integrations, and future sensors do not open the SQLite file directly.
 
-The first store uses one dedicated controller connection and rollback journaling. This is a correctness baseline, not a claim that rollback mode will always outperform WAL. #29 owns workload measurements before a journal-mode change.
+The store uses one dedicated controller connection and rollback journaling. This is a correctness baseline, not a claim that rollback mode will always outperform WAL. #29 owns workload measurements before a journal-mode change.
 
 ## Logical model
 
@@ -22,9 +22,9 @@ The v1 schema persists:
 - `Finding` records plus observation evidence references;
 - security-relevant `AuditEvent` records;
 - ingestion checkpoints for safe restart/replay; and
-- storage/retention events so expired evidence is observable.
+- storage/retention events so expired or dropped evidence is observable.
 
-`Activity` is a query projection over observations and temporal device links. It is not stored as a second copy of the same event stream.
+`Activity` remains a query projection over observations and temporal device links. It is not stored as a second copy of the same event stream.
 
 ## Observation idempotency
 
@@ -35,6 +35,28 @@ Every normalized observation has both a Cozy SOC ID and a source identity tuple:
 That tuple is unique in SQLite. An adapter should use an upstream event ID when available; otherwise it must derive a stable source key from the source record rather than generating a new random value on every replay.
 
 `source_event_id` is retained separately for upstream provenance. `source_time` may be missing, skewed, or out of order; Cozy SOC also records its own trusted ingestion time. Clock disagreement is evidence, not a reason to reorder or discard the source event.
+
+## Bounded ingestion
+
+Live evidence enters storage through a bounded controller-owned ingestion queue. The default capacity is 256 records and the implementation refuses capacities above 8192.
+
+The normal `Submit...` methods apply backpressure by waiting for queue capacity until the caller context ends. Callers that explicitly choose non-blocking observation submission receive `ErrQueueFull` rather than silent loss.
+
+Every accepted record receives an `IngestionReceipt`. The receipt completes only after the storage operation finishes, so a producer may batch asynchronously and still wait at a durability boundary when needed. Receipt results distinguish a newly inserted observation from a replay that was deduplicated.
+
+Observation checkpoints are advanced only after the observation insert succeeds. If the observation was already present because of replay, the checkpoint is still advanced. Therefore a crash between the original observation write and checkpoint write is recoverable by replay rather than creating duplicate evidence.
+
+The queue publishes bounded in-memory statistics for accepted, processed, deduplicated, rejected, dropped, and failed records. Queue-overflow and storage-write failure episodes use a small reserved internal event lane and become `ingestion-backpressure` or `ingestion-write-failed` storage events. These events never contain the rejected observation payload or a raw driver/database error.
+
+Shutdown stops new submissions and drains all already-accepted records. A shutdown context may time out, but the ingestor does not silently discard the remaining accepted queue when that happens.
+
+## Bounded queries
+
+Observation history queries are always scoped to one enrolled network. They use keyset pagination over trusted controller ingestion time, default to a 24-hour window, reject windows over 31 days, and cap pages at 200 records.
+
+The query layer filters logically expired evidence even before a retention-prune pass physically removes it. Optional sensor and observation-kind filters remain parameterized SQL values rather than dynamic SQL identifiers.
+
+Device listing is also network-scoped and temporal. A device appears only when retained identity evidence and a device↔claim link are valid at the requested time. Overlapping links are not collapsed: if current evidence genuinely supports two possible devices, both remain visible until later evidence or an audited user correction resolves the ambiguity.
 
 ## Temporal identity
 
@@ -73,12 +95,10 @@ Secret bytes do not belong in this database. Credential-bearing capability field
 
 ## What remains in #10
 
-This first slice does not close #10. Remaining work includes:
+This slice still does not close #10. Remaining work includes:
 
-- bounded asynchronous ingestion/backpressure;
-- indexed device/activity/history query APIs;
 - merge/split correction operations with audit records;
 - overlap/double-count representation for multiple sensors;
 - richer migration fixtures;
-- low-disk/SQLITE_FULL recovery; and
-- controller wiring once #11 begins producing real Device Watch observations.
+- low-disk/`SQLITE_FULL` recovery; and
+- controller/API wiring once #11 begins producing real Device Watch observations.
