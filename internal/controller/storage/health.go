@@ -14,11 +14,11 @@ const (
 )
 
 type Health struct {
-	State          HealthState
-	DatabaseBytes  int64
-	UsedBytes      int64
-	ReusableBytes  int64
-	MaxBytes       int64
+	State         HealthState
+	DatabaseBytes int64
+	UsedBytes     int64
+	ReusableBytes int64
+	MaxBytes      int64
 }
 
 func (s *Store) Health(ctx context.Context) (Health, error) {
