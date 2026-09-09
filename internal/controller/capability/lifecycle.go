@@ -343,11 +343,16 @@ func (e *LifecycleEngine) setState(id string, manifest Manifest, state InstanceS
 func (e *LifecycleEngine) operationLock(id string) *sync.Mutex {
 	e.lockMu.Lock()
 	defer e.lockMu.Unlock()
-	lock, ok := e.locks[id]
-	if !ok {
-		lock = &sync.Mutex{}
-		e.locks[id] = lock
+	if lock, ok := e.locks[id]; ok {
+		return lock
 	}
+	if e.instances != nil && e.instances.registry != nil {
+		if _, ok := e.instances.registry.Get(id); !ok {
+			return &sync.Mutex{}
+		}
+	}
+	lock := &sync.Mutex{}
+	e.locks[id] = lock
 	return lock
 }
 
