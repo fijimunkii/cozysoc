@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -136,9 +137,9 @@ func cloneConfig(input Config) Config {
 func cloneCapabilityConfiguration(input capability.Configuration) capability.Configuration {
 	out := input
 	if input.Values != nil {
-		out.Values = make(map[string][]byte, len(input.Values))
+		out.Values = make(map[string]json.RawMessage, len(input.Values))
 		for name, value := range input.Values {
-			out.Values[name] = append([]byte(nil), value...)
+			out.Values[name] = append(json.RawMessage(nil), value...)
 		}
 	}
 	return out
