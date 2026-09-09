@@ -26,7 +26,7 @@ func (s *macOSKeychainStore) Put(ctx context.Context, ref Reference, secret Secr
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.keychain.Set(macOSKeychainService, string(ref), secret.Bytes()); err != nil {
+	if err := s.keychain.Set(macOSKeychainService, ref.String(), secret.Bytes()); err != nil {
 		return mapKeychainError("put", ref, err)
 	}
 	return ctx.Err()
@@ -36,7 +36,7 @@ func (s *macOSKeychainStore) Get(ctx context.Context, ref Reference) (Secret, er
 	if err := ctx.Err(); err != nil {
 		return Secret{}, err
 	}
-	value, err := s.keychain.Get(macOSKeychainService, string(ref))
+	value, err := s.keychain.Get(macOSKeychainService, ref.String())
 	if err != nil {
 		return Secret{}, mapKeychainError("get", ref, err)
 	}
@@ -50,7 +50,7 @@ func (s *macOSKeychainStore) Delete(ctx context.Context, ref Reference) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.keychain.Delete(macOSKeychainService, string(ref)); err != nil {
+	if err := s.keychain.Delete(macOSKeychainService, ref.String()); err != nil {
 		return mapKeychainError("delete", ref, err)
 	}
 	return ctx.Err()
@@ -81,5 +81,5 @@ func mapKeychainError(operation string, ref Reference, err error) error {
 	case errors.Is(err, keychain.ErrInvalidKey):
 		mapped = ErrInvalidRef
 	}
-	return fmt.Errorf("macOS Keychain %s %q: %w", operation, ref, mapped)
+	return fmt.Errorf("macOS Keychain %s %q: %w", operation, ref.String(), mapped)
 }

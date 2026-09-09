@@ -18,24 +18,30 @@ var (
 	ErrInvalidRef   = errors.New("invalid secret reference")
 )
 
-type Reference string
+type Reference struct {
+	value string
+}
 
 func ParseReference(value string) (Reference, error) {
 	if len(value) == 0 || len(value) > maxReferenceLength {
-		return "", fmt.Errorf("%w: length must be 1..%d", ErrInvalidRef, maxReferenceLength)
+		return Reference{}, fmt.Errorf("%w: length must be 1..%d", ErrInvalidRef, maxReferenceLength)
 	}
 	for i := 0; i < len(value); i++ {
 		c := value[i]
 		allowed := c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-' || c == '/'
 		if !allowed {
-			return "", fmt.Errorf("%w: references use lowercase ASCII letters, digits, '.', '_', '-', and '/'", ErrInvalidRef)
+			return Reference{}, fmt.Errorf("%w: references use lowercase ASCII letters, digits, '.', '_', '-', and '/'", ErrInvalidRef)
 		}
 	}
 	first := value[0]
 	if !((first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')) {
-		return "", fmt.Errorf("%w: reference must start with a letter or digit", ErrInvalidRef)
+		return Reference{}, fmt.Errorf("%w: reference must start with a letter or digit", ErrInvalidRef)
 	}
-	return Reference(value), nil
+	return Reference{value: value}, nil
+}
+
+func (r Reference) String() string {
+	return r.value
 }
 
 type Secret struct {
