@@ -187,11 +187,7 @@ func validateDeviceWatchScopeMetadata(metadata json.RawMessage) error {
 	if !ok || len(raw) == 0 || string(raw) == "null" {
 		return fmt.Errorf("Device Watch network scope metadata is missing device_watch")
 	}
-	var object map[string]any
-	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
-		return fmt.Errorf("Device Watch network scope metadata has invalid device_watch binding")
-	}
-	return nil
+	return validateStoredDeviceWatchBinding(raw)
 }
 
 func equalJSON(left, right json.RawMessage) bool {
