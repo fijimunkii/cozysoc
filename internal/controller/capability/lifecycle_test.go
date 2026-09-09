@@ -253,3 +253,30 @@ func TestVerificationRejectsUndeclaredSignal(t *testing.T) {
 		t.Fatal("undeclared verification signal was accepted")
 	}
 }
+
+func TestUnknownCapabilityDoesNotAllocateOperationLock(t *testing.T) {
+	engine, _ := newLifecycleHarness(t, OwnershipManagedLocal, DesiredEnabled)
+	if _, err := engine.Run(context.Background(), "unknown-capability", ActionStart); err == nil {
+		t.Fatal("unknown capability was accepted")
+	}
+	if len(engine.locks) != 0 {
+		t.Fatalf("unknown capability allocated lifecycle lock: %d", len(engine.locks))
+	}
+}
+
+func TestRetryableCancellationIsNeverRetried(t *testing.T) {
+	engine, driver := newLifecycleHarness(t, OwnershipManagedLocal, DesiredEnabled)
+	ctx, cancel := context.WithCancel(context.Background())
+	driver.execute = func(context.Context, LifecycleAction, DriverRequest) (StepResult, error) {
+		cancel()
+		return StepResult{}, Retryable(context.Canceled)
+	}
+
+	result, err := engine.Run(ctx, "lifecycle-test", ActionStart)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled retryable error = %v", err)
+	}
+	if result.Attempts != 1 || driver.executeCalls != 1 {
+		t.Fatalf("cancellation was retried: attempts=%d calls=%d", result.Attempts, driver.executeCalls)
+	}
+}
