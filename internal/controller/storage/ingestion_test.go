@@ -63,10 +63,8 @@ func (*fakeIngestionSink) InsertIdentityClaim(context.Context, domain.IdentityCl
 func (*fakeIngestionSink) InsertCoverageSample(context.Context, domain.CoverageSample) error {
 	return nil
 }
-func (*fakeIngestionSink) InsertFinding(context.Context, domain.Finding) error { return nil }
-func (*fakeIngestionSink) InsertAuditEvent(context.Context, domain.AuditEvent) error {
-	return nil
-}
+func (*fakeIngestionSink) InsertFinding(context.Context, domain.Finding) error       { return nil }
+func (*fakeIngestionSink) InsertAuditEvent(context.Context, domain.AuditEvent) error { return nil }
 
 func (f *fakeIngestionSink) recordIngestionEvent(_ context.Context, kind string, _ time.Time, _ json.RawMessage) error {
 	f.mu.Lock()
@@ -166,6 +164,10 @@ func TestObservationReplayStillAdvancesCheckpoint(t *testing.T) {
 	result, err := receipt.Wait(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	repeated, err := receipt.Wait(context.Background())
+	if err != nil || repeated != result {
+		t.Fatalf("receipt was not repeatable: result=%+v repeated=%+v err=%v", result, repeated, err)
 	}
 	if result.Inserted {
 		t.Fatal("replayed observation reported as newly inserted")

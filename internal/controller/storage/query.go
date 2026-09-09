@@ -254,6 +254,13 @@ func validateQueryID(label, value string) error {
 	if value == "" || len(value) > 128 || strings.TrimSpace(value) != value {
 		return fmt.Errorf("invalid %s", label)
 	}
+	for index := 0; index < len(value); index++ {
+		c := value[index]
+		allowed := c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == ':' || c == '-'
+		if !allowed || (index == 0 && !(c >= 'a' && c <= 'z')) {
+			return fmt.Errorf("invalid %s", label)
+		}
+	}
 	return nil
 }
 

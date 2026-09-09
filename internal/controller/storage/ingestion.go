@@ -40,16 +40,21 @@ type IngestionResult struct {
 }
 
 type IngestionReceipt struct {
-	done <-chan ingestionOutcome
+	state *receiptState
+}
+
+type receiptState struct {
+	ready   chan struct{}
+	outcome ingestionOutcome
 }
 
 func (r IngestionReceipt) Wait(ctx context.Context) (IngestionResult, error) {
-	if r.done == nil {
+	if r.state == nil {
 		return IngestionResult{}, fmt.Errorf("invalid ingestion receipt")
 	}
 	select {
-	case outcome := <-r.done:
-		return outcome.result, outcome.err
+	case <-r.state.ready:
+		return r.state.outcome.result, r.state.outcome.err
 	case <-ctx.Done():
 		return IngestionResult{}, ctx.Err()
 	}
@@ -86,7 +91,7 @@ type ingestionItem struct {
 	coverage    *domain.CoverageSample
 	finding     *domain.Finding
 	audit       *domain.AuditEvent
-	done        chan ingestionOutcome
+	receipt     *receiptState
 }
 
 type ingestionOutcome struct {
@@ -256,12 +261,12 @@ func (i *Ingestor) submit(ctx context.Context, item ingestionItem, nonBlocking b
 	}
 	defer i.submitters.Done()
 
-	item.done = make(chan ingestionOutcome, 1)
+	item.receipt = &receiptState{ready: make(chan struct{})}
 	if nonBlocking {
 		select {
 		case i.queue <- item:
 			i.noteAccepted()
-			return IngestionReceipt{done: item.done}, nil
+			return IngestionReceipt{state: item.receipt}, nil
 		default:
 			i.noteDropped(item.kind, "queue-full")
 			return IngestionReceipt{}, ErrQueueFull
@@ -271,7 +276,7 @@ func (i *Ingestor) submit(ctx context.Context, item ingestionItem, nonBlocking b
 	select {
 	case i.queue <- item:
 		i.noteAccepted()
-		return IngestionReceipt{done: item.done}, nil
+		return IngestionReceipt{state: item.receipt}, nil
 	case <-ctx.Done():
 		i.noteDropped(item.kind, "submit-context-ended")
 		return IngestionReceipt{}, errors.Join(ErrBackpressure, ctx.Err())
@@ -310,8 +315,8 @@ func (i *Ingestor) run() {
 			} else {
 				i.noteProcessed(result)
 			}
-			item.done <- ingestionOutcome{result: result, err: err}
-			close(item.done)
+			item.receipt.outcome = ingestionOutcome{result: result, err: err}
+			close(item.receipt.ready)
 			i.maybeEndOverflowEpisode()
 		}
 	}
