@@ -29,6 +29,7 @@ var ErrAlreadyRunning = errors.New("controller is already running")
 type Handler interface {
 	Status() api.Status
 	Health() api.Health
+	Capabilities() api.CapabilityList
 }
 
 type Server struct {
@@ -210,6 +211,8 @@ func (s *Server) handleConn(conn net.Conn) {
 		result = s.handler.Status()
 	case api.MethodHealth:
 		result = s.handler.Health()
+	case api.MethodCapabilitiesList:
+		result = s.handler.Capabilities()
 	default:
 		s.writeError(conn, request.ID, "method_not_found", "method is not available")
 		return
