@@ -25,33 +25,37 @@ type controllerStore interface {
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
 }
 
+type deviceWatchAPIControl interface {
+	Current() (string, bool, error)
+	Enable(context.Context) (api.DeviceWatchControlResult, error)
+	Disable(context.Context) (api.DeviceWatchControlResult, error)
+}
+
 type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
 type controllerAPIHandler struct {
-	controller            *core.Controller
-	store                 controllerStore
-	deviceWatchScopeID    string
-	deviceWatchConfigured bool
-	networkInspector      devicewatch.InterfaceInspector
-	listScopeCandidates   scopeCandidateLister
-	now                   func() time.Time
+	controller          *core.Controller
+	store               controllerStore
+	deviceWatch         deviceWatchAPIControl
+	networkInspector    devicewatch.InterfaceInspector
+	listScopeCandidates scopeCandidateLister
+	now                 func() time.Time
 }
 
-func newControllerAPIHandler(controller *core.Controller, store controllerStore, scopeID string, configured bool) (*controllerAPIHandler, error) {
+func newControllerAPIHandler(controller *core.Controller, store controllerStore, deviceWatch deviceWatchAPIControl) (*controllerAPIHandler, error) {
 	if controller == nil {
 		return nil, fmt.Errorf("controller API handler requires controller core")
 	}
-	if configured && (store == nil || scopeID == "") {
-		return nil, fmt.Errorf("configured Device Watch API requires a scope and device store")
+	if store == nil || deviceWatch == nil {
+		return nil, fmt.Errorf("controller API handler requires storage and Device Watch control")
 	}
 	return &controllerAPIHandler{
-		controller:            controller,
-		store:                 store,
-		deviceWatchScopeID:    scopeID,
-		deviceWatchConfigured: configured,
-		networkInspector:      devicewatch.NewSystemInterfaceInspector(),
-		listScopeCandidates:   devicewatch.ListScopeCandidates,
-		now:                   time.Now,
+		controller:          controller,
+		store:               store,
+		deviceWatch:         deviceWatch,
+		networkInspector:    devicewatch.NewSystemInterfaceInspector(),
+		listScopeCandidates: devicewatch.ListScopeCandidates,
+		now:                 time.Now,
 	}, nil
 }
 
@@ -69,16 +73,20 @@ func (h *controllerAPIHandler) Capabilities() api.CapabilityList {
 
 func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, error) {
 	asOf := h.now().UTC()
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceList{}, err
+	}
 	result := api.DeviceList{
-		Configured: h.deviceWatchConfigured,
+		Configured: configured,
 		AsOf:       asOf,
 		Devices:    []api.DevicePresence{},
 	}
-	if !h.deviceWatchConfigured {
+	if !configured {
 		return result, nil
 	}
 
-	presence, err := devicewatch.ListPresence(ctx, h.store, h.deviceWatchScopeID, asOf, "", storage.MaxQueryLimit)
+	presence, err := devicewatch.ListPresence(ctx, h.store, scopeID, asOf, "", storage.MaxQueryLimit)
 	if err != nil {
 		return api.DeviceList{}, err
 	}
@@ -98,7 +106,11 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 }
 
 func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.DeviceLabelParams) (api.DeviceLabelResult, error) {
-	if !h.deviceWatchConfigured || h.store == nil || h.deviceWatchScopeID == "" {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceLabelResult{}, err
+	}
+	if !configured || scopeID == "" {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
 	if params.Label == nil || !deviceIDPattern.MatchString(params.DeviceID) || storage.ValidateDeviceLabel(*params.Label) != nil {
@@ -106,7 +118,7 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 	}
 	label := *params.Label
 
-	changed, err := h.store.SetDeviceLabel(ctx, h.deviceWatchScopeID, params.DeviceID, label)
+	changed, err := h.store.SetDeviceLabel(ctx, scopeID, params.DeviceID, label)
 	if errors.Is(err, storage.ErrDeviceNotInScope) {
 		return api.DeviceLabelResult{}, localapi.ErrMutationTargetNotFound
 	}
@@ -118,6 +130,14 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 		UserLabel: label,
 		Changed:   changed,
 	}, nil
+}
+
+func (h *controllerAPIHandler) EnableDeviceWatch(ctx context.Context) (api.DeviceWatchControlResult, error) {
+	return h.deviceWatch.Enable(ctx)
+}
+
+func (h *controllerAPIHandler) DisableDeviceWatch(ctx context.Context) (api.DeviceWatchControlResult, error) {
+	return h.deviceWatch.Disable(ctx)
 }
 
 func (h *controllerAPIHandler) Networks(ctx context.Context) (api.NetworkList, error) {
