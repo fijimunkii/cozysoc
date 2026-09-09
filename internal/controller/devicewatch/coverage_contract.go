@@ -55,7 +55,7 @@ func CoverageContract(report CoverageReport, operational OperationalHealth) (sha
 		ObservationPoints: []sharedcoverage.ObservationPoint{point},
 		NextStep:          nextStep,
 	}
-	if err := sharedcoverage.ValidateReport(contract); err != nil {
+	if err := sharedcoverage.ValidateSinglePointReport(contract); err != nil {
 		return sharedcoverage.Report{}, fmt.Errorf("validate Device Watch coverage contract: %w", err)
 	}
 	return contract, nil
