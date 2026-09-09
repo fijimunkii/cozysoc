@@ -12,12 +12,16 @@ import (
 
 const gapMultiplier = 3
 
+type capabilityLister interface {
+	List() []capability.Instance
+}
+
 type Controller struct {
 	version       string
 	configVersion int
 	startedAt     time.Time
 	tickInterval  time.Duration
-	capabilities  *capability.Instances
+	capabilities  capabilityLister
 
 	mu        sync.RWMutex
 	lastTick  time.Time
@@ -25,7 +29,7 @@ type Controller struct {
 	lastGapAt *time.Time
 }
 
-func New(version string, configVersion int, tickInterval time.Duration, capabilities *capability.Instances) *Controller {
+func New(version string, configVersion int, tickInterval time.Duration, capabilities capabilityLister) *Controller {
 	now := time.Now()
 	return &Controller{
 		version:       version,
