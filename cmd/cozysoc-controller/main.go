@@ -18,7 +18,9 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/config"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
+	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
 const defaultTickInterval = 2 * time.Second
@@ -109,6 +111,40 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, lifecycle)
 	controller.Start(ctx)
 
+	store, err := storage.Open(dir, storage.DefaultLimits())
+	if err != nil {
+		return fmt.Errorf("open controller storage: %w", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			logger.Warn("storage_close_failed")
+		}
+	}()
+	ingestor, err := storage.NewIngestor(store, 0, logger)
+	if err != nil {
+		return fmt.Errorf("initialize storage ingestion: %w", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := ingestor.Close(closeCtx); err != nil {
+			logger.Warn("ingestion_close_failed")
+		}
+	}()
+
+	scopeID, deviceWatchEnabled, err := devicewatch.EnabledScopeID(cfg.Capabilities)
+	if err != nil {
+		return err
+	}
+	if deviceWatchEnabled {
+		runtime, runtimeErr := devicewatch.NewRuntime(store, ingestor, logger)
+		if runtimeErr != nil {
+			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(runtimeErr))
+		} else if runtimeErr = runtime.Start(ctx, scopeID); runtimeErr != nil {
+			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(runtimeErr))
+		}
+	}
+
 	server, err := localapi.NewServer(dir, controller, logger)
 	if err != nil {
 		return err
@@ -129,6 +165,21 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	}
 	logger.Info("controller_stopped")
 	return nil
+}
+
+func deviceWatchStartupReason(err error) string {
+	switch {
+	case errors.Is(err, devicewatch.ErrPlatformUnsupported):
+		return "platform-unsupported"
+	case errors.Is(err, storage.ErrNetworkScopeNotFound):
+		return "scope-not-found"
+	case errors.Is(err, devicewatch.ErrScopeMismatch):
+		return "scope-mismatch"
+	case errors.Is(err, devicewatch.ErrUnsupportedInterface):
+		return "unsupported-interface"
+	default:
+		return "preflight-failed"
+	}
 }
 
 func runReadCommand(ctx context.Context, method string, args []string, stdout, stderr *os.File) error {

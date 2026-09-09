@@ -14,9 +14,11 @@ Enrollment captures a `device_watch` binding inside `NetworkScope.metadata` with
 - the interface index observed at enrollment; and
 - the set of usable IPv4/IPv6 prefixes present at enrollment.
 
-Loopback and point-to-point interfaces are rejected by this first slice so a VPN/tunnel is not accidentally treated as the home LAN. Before every collection, the current interface must still be up, retain the same name/index, and share at least one enrolled prefix. A mismatch blocks collection with a scope-revalidation error rather than silently following the machine onto a new network.
+Loopback and point-to-point interfaces are rejected so a VPN/tunnel is not accidentally treated as the home LAN. Before every collection, the current interface must still be up, retain the same name/index, and share at least one enrolled prefix. A mismatch blocks collection with a scope-revalidation error rather than silently following the machine onto a new network.
 
 Neighbors are filtered again against the enrolled prefixes before persistence. New address families/prefixes that were not part of the enrolled binding are therefore not silently added to scope.
+
+The controller runtime does not invent or auto-enroll a scope. Device Watch remains dormant unless capability intent is explicitly `enabled` with a `network_scope_id` that already exists in controller-owned storage and contains a valid Device Watch binding. The future enrollment mutation/API remains separate work.
 
 ## macOS source
 
@@ -32,6 +34,21 @@ It invokes only two fixed, read-only system utilities without a shell:
 Command output is capped at 1 MiB, individual parsed lines are bounded, and a snapshot may contain at most 4096 neighbors. Incomplete entries and entries without a valid unicast link-layer address are ignored because they do not establish a visible peer.
 
 One source may be unavailable while the other remains usable; the coverage evidence records source availability independently. If neither source is available, Device Watch records an `unavailable` coverage sample and emits no device-arrival/departure inference.
+
+## Controller runtime
+
+When Device Watch is enabled for a valid stored scope, the controller creates or reuses one deterministic built-in sensor identity for that scope/interface and starts a one-minute passive collection loop.
+
+The loop:
+
+1. revalidates the enrolled interface and prefixes;
+2. reads the passive ARP/NDP snapshot;
+3. writes observations and coverage through the bounded #10 ingestion queue; and
+4. reconciles each persisted neighbor observation into temporal identity evidence.
+
+Startup or collection failure does not terminate the controller. The runtime records only a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar) and leaves capability verification unchanged. Starting the producer is **not** equivalent to satisfying Device Watch coverage verification; #12 remains responsible for turning fresh coverage evidence into capability verification state.
+
+A controller restart safely reuses the same deterministic Device Watch sensor. Replayed observations and reconciliation are idempotent.
 
 ## Normalized observations
 
@@ -50,21 +67,42 @@ Neighbor observations use a deterministic one-minute source bucket. Repeated sna
 
 Every collection also emits a `device-watch` coverage sample. Even a fully successful ARP+NDP snapshot is marked `partial`; its evidence explicitly sets `whole_network_traffic_visible=false` and carries the passive-cache limitations above.
 
-## No departure inference yet
+## Temporal identity reconciliation
 
-This slice intentionally emits only positive `seen` evidence. A missing neighbor in the next cache snapshot is **not** a departure event.
+Device Watch does not make IP addresses or MAC addresses permanent device identifiers.
 
-That is important for sleep/resume, cache expiry, Wi-Fi roaming, temporary IPv6 addresses, and client isolation. Presence-state transitions will be added only after the observation history can distinguish a source gap from a meaningful absence interval.
+For every persisted neighbor observation it creates immutable temporal claims for:
+
+- the observed IP address; and
+- the observed MAC/link-layer address.
+
+The IP claim is never used by itself to reconnect a device identity, preventing DHCP/address reuse from merging unrelated devices.
+
+MAC continuity is treated as an inference. If exactly one device has matching retained MAC evidence within the previous seven days, the new observation extends that device's temporal evidence chain. If no device matches, Device Watch creates a new candidate Device. If multiple devices match, the current claims remain preserved but unlinked and the result stays ambiguous rather than selecting a winner.
+
+A locally administered/private MAC receives lower inference confidence than a globally administered address. User corrections and future stronger sources can still merge or split Device records without deleting the original observations or claims.
+
+Reconciliation uses deterministic claim/link/device identifiers for crash recovery. If the controller stops after writing the raw observation but before all identity links are written, replay safely completes the same reconciliation rather than creating duplicate identity history.
+
+## Presence projection
+
+Device presence currently has two passive states:
+
+- `visible`: positive Device Watch evidence was observed within the last three minutes; and
+- `uncertain`: the latest positive evidence is older than that freshness window.
+
+The projection exposes the preserved first-seen and latest-seen timestamps. It deliberately has **no automatic `offline` state** yet.
+
+A missing neighbor in the next cache snapshot is not a departure event. Sleep/resume, cache expiry, Wi-Fi roaming, temporary IPv6 addresses, client isolation, and a controller source gap all therefore age a device to `uncertain` instead of generating a false leave/rejoin sequence.
 
 ## What remains in #11
 
-This PR does not close #11. Remaining work includes:
+This work still does not close #11. Remaining work includes:
 
-- controller/store wiring for enrolled scopes and the Device Watch sensor;
-- periodic scheduling and lifecycle-driver registration;
-- temporal identity-claim/device reconciliation from neighbor observations;
-- visible-now / last-seen / uncertain-offline presence projection;
-- labeling/correction flows;
-- service-discovery enrichment where justified;
+- authenticated enrollment/configuration mutation and user-facing scope selection;
+- lifecycle-driver registration and #12 coverage-verification wiring;
+- read-only device/presence API/UI exposure;
+- labeling and auditable merge/split correction flows;
+- optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
 - owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, and permission/source failures.
