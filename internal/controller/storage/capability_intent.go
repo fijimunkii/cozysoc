@@ -67,3 +67,18 @@ func (s *Store) InsertCapabilityIntentAudit(ctx context.Context, capabilityID st
 		Retention:     domain.RetentionAudit,
 	})
 }
+
+func (s *Store) CapabilityIntentAuditCount(ctx context.Context, capabilityID string) (int, error) {
+	if s == nil || s.conn == nil {
+		return 0, fmt.Errorf("storage is unavailable")
+	}
+	if capabilityID == "" || len(capabilityID) > 128 || strings.TrimSpace(capabilityID) != capabilityID {
+		return 0, fmt.Errorf("invalid capability audit id")
+	}
+	var count int
+	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM audit_events
+		WHERE kind = ? AND json_extract(payload, '$.capability_id') = ?`, CapabilityIntentAuditKind, capabilityID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count capability intent audit events: %w", err)
+	}
+	return count, nil
+}
