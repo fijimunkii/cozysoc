@@ -167,14 +167,15 @@ func (e *LifecycleEngine) Run(ctx context.Context, id string, action LifecycleAc
 		return result, fmt.Errorf("capability lifecycle engine is unavailable")
 	}
 
-	operationLock := e.operationLock(id)
-	operationLock.Lock()
-	defer operationLock.Unlock()
-
 	instance, configuration, err := e.operationSnapshot(id)
 	if err != nil {
 		return result, err
 	}
+
+	operationLock := e.operationLock(id)
+	operationLock.Lock()
+	defer operationLock.Unlock()
+
 	result.State = e.currentState(id, instance.State)
 	if !hasLifecycleAction(instance.Manifest, action) {
 		return result, fmt.Errorf("%w: %s does not declare %s", ErrActionNotDeclared, id, action)
@@ -503,6 +504,9 @@ func Retryable(err error) error {
 }
 
 func IsRetryable(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	var marker interface{ Retryable() bool }
 	return errors.As(err, &marker) && marker.Retryable()
 }
