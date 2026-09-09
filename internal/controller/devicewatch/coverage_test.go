@@ -41,6 +41,7 @@ func TestCoverageVerificationSignalStates(t *testing.T) {
 	}{
 		{name: "missing", reader: fakeCoverageReader{}, want: capability.SignalMissing},
 		{name: "fresh partial", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Minute), "partial")}, want: capability.SignalFresh},
+		{name: "fresh one-source gap", reader: fakeCoverageReader{ok: true, sample: coverageFixtureWithSources(now.Add(-time.Minute), "partial", true, false)}, want: capability.SignalFailed},
 		{name: "fresh unavailable", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Minute), "unavailable")}, want: capability.SignalFailed},
 		{name: "stale historical replay", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(-time.Hour), "partial")}, want: capability.SignalStale},
 		{name: "future clock skew", reader: fakeCoverageReader{ok: true, sample: coverageFixture(now.Add(2*time.Minute), "partial")}, want: capability.SignalFailed},
@@ -79,6 +80,10 @@ func coverageFixture(endedAt time.Time, status string) domain.CoverageSample {
 		arpAvailable = false
 		ndpAvailable = false
 	}
+	return coverageFixtureWithSources(endedAt, status, arpAvailable, ndpAvailable)
+}
+
+func coverageFixtureWithSources(endedAt time.Time, status string, arpAvailable, ndpAvailable bool) domain.CoverageSample {
 	evidence, _ := json.Marshal(map[string]any{
 		"schema_version": 1,
 		"interface":      "en0",
