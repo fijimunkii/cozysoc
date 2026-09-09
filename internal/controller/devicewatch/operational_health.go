@@ -29,14 +29,24 @@ type SensorHealth struct {
 }
 
 type PipelineHealth struct {
-	State        OperationalState
-	Reason       string
-	FailureClass string
-	Capacity     int
-	Depth        int
-	Dropped      uint64
-	Failed       uint64
-	NextStep     string
+	State                  OperationalState
+	Reason                 string
+	FailureClass           string
+	Capacity               int
+	Depth                  int
+	QueuePressure          bool
+	Dropped                uint64
+	Failed                 uint64
+	LatencyState           storage.IngestionLatencyState
+	LatencyThreshold       time.Duration
+	Pending                int
+	OldestPendingAge       time.Duration
+	LastDurableLatency     time.Duration
+	LastQueueWait          time.Duration
+	LastProcessingDuration time.Duration
+	LastCompletedAt        time.Time
+	SlowStreak             int
+	NextStep               string
 }
 
 type DatabaseHealth struct {
@@ -152,20 +162,34 @@ func sensorErrorNextStep(reason string) string {
 
 func pipelineHealth(health storage.IngestionHealth) PipelineHealth {
 	result := PipelineHealth{
-		State:        OperationalCurrent,
-		FailureClass: health.FailureClass,
-		Capacity:     health.Capacity,
-		Depth:        health.Depth,
-		Dropped:      health.Dropped,
-		Failed:       health.Failed,
+		State:                  OperationalCurrent,
+		FailureClass:           health.FailureClass,
+		Capacity:               health.Capacity,
+		Depth:                  health.Depth,
+		QueuePressure:          health.QueuePressure,
+		Dropped:                health.Dropped,
+		Failed:                 health.Failed,
+		LatencyState:           health.LatencyState,
+		LatencyThreshold:       health.LatencyThreshold,
+		Pending:                health.Pending,
+		OldestPendingAge:       health.OldestPendingAge,
+		LastDurableLatency:     health.LastDurableLatency,
+		LastQueueWait:          health.LastQueueWait,
+		LastProcessingDuration: health.LastProcessingDuration,
+		LastCompletedAt:        health.LastCompletedAt,
+		SlowStreak:             health.SlowStreak,
 	}
 	switch health.State {
 	case storage.IngestionHealthCurrent:
+		if health.QueuePressure {
+			result.Reason = "queue-pressure"
+			result.NextStep = "Queue utilization is high, but measured accepted-to-durable latency remains within the current lag threshold."
+		}
 		return result
-	case storage.IngestionHealthPressure:
+	case storage.IngestionHealthLagging:
 		result.State = OperationalDegraded
-		result.Reason = "queue-pressure"
-		result.NextStep = "Reduce ingestion load or investigate a slow storage path before the queue reaches backpressure."
+		result.Reason = "latency"
+		result.NextStep = "Restore ingestion throughput; accepted evidence is taking too long to reach durable storage."
 	case storage.IngestionHealthBackpressure:
 		result.State = OperationalDegraded
 		result.Reason = "backpressure"
