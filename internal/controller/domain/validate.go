@@ -50,8 +50,8 @@ func ValidateSensor(sensor Sensor) error {
 
 func ValidateObservation(observation Observation) error {
 	for label, value := range map[string]string{
-		"observation id":       observation.ID,
-		"observation scope id": observation.ScopeID,
+		"observation id":        observation.ID,
+		"observation scope id":  observation.ScopeID,
 		"observation sensor id": observation.SensorID,
 	} {
 		if err := validateID(label, value); err != nil {
@@ -140,9 +140,9 @@ func ValidateIdentityClaim(claim IdentityClaim) error {
 
 func ValidateDeviceClaimLink(link DeviceClaimLink) error {
 	for label, value := range map[string]string{
-		"device claim link id": link.ID,
+		"device claim link id":        link.ID,
 		"device claim link device id": link.DeviceID,
-		"device claim link claim id": link.ClaimID,
+		"device claim link claim id":  link.ClaimID,
 	} {
 		if err := validateID(label, value); err != nil {
 			return err
@@ -172,9 +172,9 @@ func ValidateDeviceClaimLink(link DeviceClaimLink) error {
 
 func ValidateCoverageSample(sample CoverageSample) error {
 	for label, value := range map[string]string{
-		"coverage sample id": sample.ID,
-		"coverage sample scope id": sample.ScopeID,
-		"coverage sample sensor id": sample.SensorID,
+		"coverage sample id":            sample.ID,
+		"coverage sample scope id":      sample.ScopeID,
+		"coverage sample sensor id":     sample.SensorID,
 		"coverage sample capability id": sample.CapabilityID,
 	} {
 		if err := validateID(label, value); err != nil {
