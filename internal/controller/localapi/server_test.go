@@ -27,6 +27,10 @@ func (testHandler) Health() api.Health {
 	return api.Health{State: "ok", LastTickAt: time.Unix(1, 0).UTC()}
 }
 
+func (testHandler) Capabilities() api.CapabilityList {
+	return api.CapabilityList{CatalogSchemaVersion: 1}
+}
+
 func startTestServer(t *testing.T, verifier peerVerifier) (*Server, context.CancelFunc) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -75,6 +79,22 @@ func TestServerStatusRoundTripAndPrivateFiles(t *testing.T) {
 	}
 	if status.ControllerVersion != "test" || status.APIVersion != api.Version {
 		t.Fatalf("unexpected status: %+v", status)
+	}
+}
+
+func TestCapabilitiesListRoundTrip(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	client := NewClient(server.stateDir)
+	result, err := client.Call(context.Background(), api.MethodCapabilitiesList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list api.CapabilityList
+	if err := json.Unmarshal(result, &list); err != nil {
+		t.Fatal(err)
+	}
+	if list.CatalogSchemaVersion != 1 {
+		t.Fatalf("unexpected capability list: %+v", list)
 	}
 }
 
