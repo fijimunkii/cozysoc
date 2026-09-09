@@ -144,11 +144,13 @@ func CurrentCoverage(ctx context.Context, reader CoverageSampleReader, scopeID s
 
 	switch sample.Status {
 	case "partial":
-		report.State = CoverageActiveLimited
-		report.Reason = "fresh-limited"
 		if hasUnavailableCoverageSource(report.Sources) {
+			report.State = CoverageDegraded
+			report.Reason = "source-partial"
 			report.NextStep = "Restore the unavailable neighbor source if dual-stack device visibility matters; Device Watch remains limited even when both sources are current."
 		} else {
+			report.State = CoverageActiveLimited
+			report.Reason = "fresh-limited"
 			report.NextStep = "Use Traffic Watch rather than Device Watch when packet or flow visibility is required."
 		}
 	case "unavailable":
