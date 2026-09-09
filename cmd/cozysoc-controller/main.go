@@ -102,7 +102,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	}
 
 	logger := newLogger(stderr, cfg.LogLevel)
-	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, instances)
+	lifecycle, err := capability.NewLifecycleEngine(instances, nil, logger)
+	if err != nil {
+		return fmt.Errorf("initialize capability lifecycle: %w", err)
+	}
+	controller := core.New(buildVersion(), cfg.SchemaVersion, defaultTickInterval, lifecycle)
 	controller.Start(ctx)
 
 	server, err := localapi.NewServer(dir, controller, logger)
