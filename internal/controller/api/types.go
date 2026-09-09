@@ -10,13 +10,15 @@ import (
 const Version = 1
 
 const (
-	MethodStatus           = "status"
-	MethodHealth           = "health"
-	MethodCapabilitiesList = "capabilities.list"
-	MethodDevicesList      = "devices.list"
-	MethodDeviceLabel      = "device.label"
-	MethodNetworksList     = "networks.list"
-	MethodNetworkEnroll    = "network.enroll"
+	MethodStatus             = "status"
+	MethodHealth             = "health"
+	MethodCapabilitiesList   = "capabilities.list"
+	MethodDevicesList        = "devices.list"
+	MethodDeviceLabel        = "device.label"
+	MethodNetworksList       = "networks.list"
+	MethodNetworkEnroll      = "network.enroll"
+	MethodDeviceWatchEnable  = "device-watch.enable"
+	MethodDeviceWatchDisable = "device-watch.disable"
 )
 
 type Request struct {
@@ -115,4 +117,11 @@ type NetworkEnrollResult struct {
 	EnrolledAt time.Time        `json:"enrolled_at"`
 	Interface  NetworkInterface `json:"interface"`
 	Changed    bool             `json:"changed"`
+}
+
+type DeviceWatchControlResult struct {
+	ScopeID string                   `json:"scope_id,omitempty"`
+	Changed bool                     `json:"changed"`
+	Active  bool                     `json:"active"`
+	State   capability.InstanceState `json:"state"`
 }
