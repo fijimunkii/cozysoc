@@ -12,6 +12,10 @@
 .env.*
 !.env.example
 
+# Node/frontend
+node_modules/
+.vite/
+
 # Local scratch/output
 .tmp/
 tmp/
