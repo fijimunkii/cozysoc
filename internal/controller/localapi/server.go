@@ -25,9 +25,9 @@ const (
 )
 
 var (
-	ErrAlreadyRunning          = errors.New("controller is already running")
-	ErrInvalidMutation         = errors.New("invalid mutation request")
-	ErrMutationTargetNotFound  = errors.New("mutation target is not available")
+	ErrAlreadyRunning         = errors.New("controller is already running")
+	ErrInvalidMutation        = errors.New("invalid mutation request")
+	ErrMutationTargetNotFound = errors.New("mutation target is not available")
 )
 
 type Handler interface {
@@ -259,7 +259,7 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		var params api.DeviceLabelParams
-		if err := decodeRequiredParams(request.Params, &params); err != nil {
+		if err := decodeRequiredParams(request.Params, &params); err != nil || params.DeviceID == "" || params.Label == nil {
 			s.writeError(conn, request.ID, "invalid_request", "invalid device label parameters")
 			return
 		}
