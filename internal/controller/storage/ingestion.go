@@ -124,6 +124,7 @@ type Ingestor struct {
 	episodeMu      sync.Mutex
 	overflowActive bool
 	failureActive  bool
+	failureClass   string
 }
 
 func NewIngestor(store *Store, capacity int, logger *slog.Logger) (*Ingestor, error) {
@@ -311,7 +312,7 @@ func (i *Ingestor) run() {
 			}
 			result, err := i.process(item)
 			if err != nil {
-				i.noteFailure(item.kind)
+				i.noteFailure(item.kind, err)
 			} else {
 				i.noteProcessed(result)
 			}
@@ -404,25 +405,27 @@ func (i *Ingestor) noteProcessed(result IngestionResult) {
 
 	i.episodeMu.Lock()
 	i.failureActive = false
+	i.failureClass = ""
 	i.episodeMu.Unlock()
 }
 
-func (i *Ingestor) noteFailure(kind IngestionKind) {
+func (i *Ingestor) noteFailure(kind IngestionKind, err error) {
 	i.stateMu.Lock()
 	i.stats.Failed++
 	failed := i.stats.Failed
 	i.stateMu.Unlock()
 
+	failureClass := classifyIngestionFailure(err)
 	i.episodeMu.Lock()
 	first := !i.failureActive
-	if first {
-		i.failureActive = true
-	}
+	i.failureActive = true
+	i.failureClass = failureClass
 	i.episodeMu.Unlock()
 	if first {
 		i.recordEpisode("ingestion-write-failed", map[string]any{
-			"kind":         kind,
-			"failed_total": failed,
+			"kind":          kind,
+			"failure_class": failureClass,
+			"failed_total":  failed,
 		})
 	}
 }
