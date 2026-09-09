@@ -48,6 +48,25 @@ Runtime process and verification states are **not** restored from config. Every 
 
 The authenticated read-only local API exposes `capabilities.list`. It returns catalog metadata, whether an instance was explicitly configured, selected ownership, and desired/process/verification state. It deliberately does not return configured values or secret references.
 
+## Lifecycle execution contract
+
+Lifecycle execution is a controller-internal reconciliation boundary. Drivers are compiled-in Go implementations registered by capability ID; a manifest cannot supply executable code, a command line, a dynamic hook, or an environment block.
+
+Before an action executes, the lifecycle engine checks that:
+
+- the action is declared by the capability manifest;
+- the selected ownership mode permits it;
+- the action agrees with the already-persisted desired state; and
+- the registered driver's action-specific preflight has no unresolved blocking checks.
+
+Preflight is side-effect-free and returns bounded typed checks (`pass`, `fail`, or `unknown`). A blocked preflight prevents the mutating driver call. Retryable driver errors use a controller-owned bounded retry policy; cancellation interrupts both calls and retry waits. Operations for the same capability are serialized so two callers cannot concurrently race the same lifecycle transition.
+
+External ownership is protected independently of the manifest: external services cannot be installed, started, stopped, upgraded, or uninstalled through this engine. A future explicit ownership transition must occur before Cozy SOC gains those management rights.
+
+Process state and verification remain separate after execution. Any mutating lifecycle action invalidates prior verification. `verify` only becomes `verified` when **every** verification signal declared by the manifest is reported fresh; missing signals remain unverified, stale signals become stale, and failed signals become degraded. A running process by itself can never produce verified coverage.
+
+The engine is wired into the controller's capability snapshots, but no public lifecycle mutation method is exposed yet. This lets the execution semantics and adapters be reviewed before `enable`/`disable` become management API operations.
+
 ## Current builtin
 
 `Device Watch` is the first manifest. It requires an enrolled network scope, declares local-network access as a conditional platform prerequisite, has no deep links, and exposes only `preflight`, `enable`, `verify`, and `disable` lifecycle actions.
@@ -56,10 +75,9 @@ The manifest reserves `device-observation` and `coverage-sample` output contract
 
 ## What remains in #9
 
-The catalog and read-only instance model are now established. Issue #9 remains open for:
+The catalog, configured-instance model, and internal lifecycle execution contract are now established. Issue #9 remains open for:
 
-- idempotent/cancelable lifecycle orchestration with bounded retries;
-- real preflight checks for permissions/runtime/disk/network prerequisites;
+- real Device Watch prerequisite/evidence probes as #11 becomes available;
 - safe configuration mutation and managed-versus-external ownership transitions;
-- artifact provenance/update/uninstall handling; and
-- demonstration against a real external service integration before generalizing the adapter contract.
+- artifact provenance/update/uninstall behavior; and
+- demonstration against a real external service integration before generalizing managed service lifecycle behavior.
