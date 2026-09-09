@@ -50,7 +50,7 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 	}}
 	snapshotter := &fakeSnapshotter{snapshot: Snapshot{
 		CapturedAt: now, InterfaceName: "en0",
-		Sources: []SourceStatus{{Method: MethodARPCache, Available: true}, {Method: MethodNDPCache}},
+		Sources:   []SourceStatus{{Method: MethodARPCache, Available: true}, {Method: MethodNDPCache}},
 		Neighbors: []Neighbor{neighborFixture("192.168.1.10", "aa:bb:cc:dd:ee:01", "en0", MethodARPCache)},
 	}}
 	runtime, err := newRuntime(store, ingestor, slog.Default(), inspector, snapshotter, 10*time.Second)
@@ -91,7 +91,7 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 
 func TestPresenceBecomesUncertainWithoutFabricatedOffline(t *testing.T) {
 	reader := fakeDeviceEvidenceReader{page: storage.DeviceEvidencePage{Devices: []storage.DeviceEvidenceSummary{{
-		Device: domain.Device{ID: "device.one", CreatedAt: time.Unix(100, 0).UTC()},
+		Device:    domain.Device{ID: "device.one", CreatedAt: time.Unix(100, 0).UTC()},
 		FirstSeen: time.Unix(100, 0).UTC(), LastSeen: time.Unix(200, 0).UTC(),
 	}}}}
 	page, err := ListPresence(context.Background(), reader, "scope.home", time.Unix(500, 0).UTC(), "", 10)
