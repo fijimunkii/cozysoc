@@ -31,6 +31,17 @@ func (testHandler) Capabilities() api.CapabilityList {
 	return api.CapabilityList{CatalogSchemaVersion: 1}
 }
 
+func (testHandler) Devices(context.Context) (api.DeviceList, error) {
+	return api.DeviceList{
+		Configured: true,
+		ScopeID:    "scope.home",
+		AsOf:       time.Unix(2, 0).UTC(),
+		Devices: []api.DevicePresence{
+			{ID: "device.one", FirstSeen: time.Unix(1, 0).UTC(), LastSeen: time.Unix(2, 0).UTC(), State: "visible"},
+		},
+	}, nil
+}
+
 func startTestServer(t *testing.T, verifier peerVerifier) (*Server, context.CancelFunc) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -95,6 +106,22 @@ func TestCapabilitiesListRoundTrip(t *testing.T) {
 	}
 	if list.CatalogSchemaVersion != 1 {
 		t.Fatalf("unexpected capability list: %+v", list)
+	}
+}
+
+func TestDevicesListRoundTrip(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	client := NewClient(server.stateDir)
+	result, err := client.Call(context.Background(), api.MethodDevicesList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list api.DeviceList
+	if err := json.Unmarshal(result, &list); err != nil {
+		t.Fatal(err)
+	}
+	if !list.Configured || list.ScopeID != "scope.home" || len(list.Devices) != 1 || list.Devices[0].State != "visible" {
+		t.Fatalf("unexpected device list: %+v", list)
 	}
 }
 

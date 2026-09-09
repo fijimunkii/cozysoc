@@ -13,6 +13,7 @@ const (
 	MethodStatus           = "status"
 	MethodHealth           = "health"
 	MethodCapabilitiesList = "capabilities.list"
+	MethodDevicesList      = "devices.list"
 )
 
 type Request struct {
@@ -54,4 +55,20 @@ type Health struct {
 type CapabilityList struct {
 	CatalogSchemaVersion int                   `json:"catalog_schema_version"`
 	Capabilities         []capability.Instance `json:"capabilities"`
+}
+
+type DevicePresence struct {
+	ID        string    `json:"id"`
+	UserLabel string    `json:"user_label,omitempty"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+	State     string    `json:"state"`
+}
+
+type DeviceList struct {
+	Configured bool             `json:"configured"`
+	ScopeID    string           `json:"scope_id,omitempty"`
+	AsOf       time.Time        `json:"as_of"`
+	Devices    []DevicePresence `json:"devices"`
+	Truncated  bool             `json:"truncated"`
 }
