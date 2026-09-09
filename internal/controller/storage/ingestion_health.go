@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 
+	sqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
@@ -79,6 +80,8 @@ type sqliteCodeError interface {
 	error
 	Code() int
 }
+
+var _ sqliteCodeError = (*sqlite.Error)(nil)
 
 func classifyIngestionFailure(err error) string {
 	var coded sqliteCodeError
