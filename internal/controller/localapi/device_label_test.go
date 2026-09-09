@@ -34,7 +34,10 @@ func (h *mutationTestHandler) LabelDevice(_ context.Context, params api.DeviceLa
 	if h.labelErr != nil {
 		return api.DeviceLabelResult{}, h.labelErr
 	}
-	return api.DeviceLabelResult{DeviceID: params.DeviceID, UserLabel: params.Label, Changed: true}, nil
+	if params.Label == nil {
+		return api.DeviceLabelResult{}, ErrInvalidMutation
+	}
+	return api.DeviceLabelResult{DeviceID: params.DeviceID, UserLabel: *params.Label, Changed: true}, nil
 }
 
 func startMutationTestServer(t *testing.T, handler Handler) *Server {
@@ -54,9 +57,10 @@ func startMutationTestServer(t *testing.T, handler Handler) *Server {
 
 func TestDeviceLabelRoundTrip(t *testing.T) {
 	server := startMutationTestServer(t, &mutationTestHandler{})
+	labelValue := "Living Room TV"
 	result, err := NewClient(server.stateDir).CallWithParams(context.Background(), api.MethodDeviceLabel, api.DeviceLabelParams{
 		DeviceID: "device.one",
-		Label:    "Living Room TV",
+		Label:    &labelValue,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -82,8 +86,9 @@ func TestDeviceLabelRejectsMissingAndUnknownParams(t *testing.T) {
 	server := startMutationTestServer(t, &mutationTestHandler{})
 	client := NewClient(server.stateDir)
 	for name, params := range map[string]any{
-		"missing": nil,
-		"unknown": map[string]any{"device_id": "device.one", "label": "TV", "extra": true},
+		"missing params": nil,
+		"missing label":  map[string]any{"device_id": "device.one"},
+		"unknown":        map[string]any{"device_id": "device.one", "label": "TV", "extra": true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var err error
@@ -100,6 +105,7 @@ func TestDeviceLabelRejectsMissingAndUnknownParams(t *testing.T) {
 }
 
 func TestDeviceLabelMapsSafeHandlerErrors(t *testing.T) {
+	labelValue := "TV"
 	for name, test := range map[string]struct {
 		handlerErr error
 		want       string
@@ -112,7 +118,7 @@ func TestDeviceLabelMapsSafeHandlerErrors(t *testing.T) {
 			server := startMutationTestServer(t, &mutationTestHandler{labelErr: test.handlerErr})
 			_, err := NewClient(server.stateDir).CallWithParams(context.Background(), api.MethodDeviceLabel, api.DeviceLabelParams{
 				DeviceID: "device.one",
-				Label:    "TV",
+				Label:    &labelValue,
 			})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("handler error = %v", err)
