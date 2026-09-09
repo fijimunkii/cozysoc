@@ -142,10 +142,30 @@ func TestLifecycleVerifyConsumesFreshCoverageSample(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	evidence, err := json.Marshal(map[string]any{
+		"schema_version": 1,
+		"interface":      "en0",
+		"sources": []map[string]any{
+			{"method": MethodARPCache, "available": true},
+			{"method": MethodNDPCache, "available": true},
+		},
+		"neighbors_in_scope":            0,
+		"observations_inserted":         0,
+		"observations_deduplicated":     0,
+		"whole_network_traffic_visible": false,
+		"limitations": []string{
+			"passive neighbor caches include only peers the host has recently resolved on the local link",
+			"client isolation, other VLANs, and devices behind other observation points may be absent",
+			"a successful neighbor snapshot does not provide whole-network traffic visibility",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.InsertCoverageSample(context.Background(), domain.CoverageSample{
 		ID: "coverage.dw.test", ScopeID: "scope.home", SensorID: "sensor.dw.test", CapabilityID: CapabilityID,
 		Status: "partial", StartedAt: now.Add(-time.Minute), EndedAt: now.Add(-time.Minute), SchemaVersion: 1,
-		Evidence: json.RawMessage(`{"schema_version":1,"neighbors_in_scope":0,"whole_network_traffic_visible":false}`), Retention: domain.RetentionShort,
+		Evidence: evidence, Retention: domain.RetentionShort,
 	}); err != nil {
 		t.Fatal(err)
 	}
