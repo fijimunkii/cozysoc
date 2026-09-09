@@ -29,6 +29,8 @@ func coverageVerificationSignal(ctx context.Context, reader CoverageSampleReader
 	case CoverageDegraded:
 		signal.Status = capability.SignalFailed
 		switch report.Reason {
+		case "source-partial":
+			signal.Message = "one or more current passive neighbor sources are unavailable"
 		case "source-unavailable":
 			signal.Message = "current passive neighbor sources are unavailable"
 		case "clock-skew":
