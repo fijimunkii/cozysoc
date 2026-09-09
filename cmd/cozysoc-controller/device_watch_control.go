@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
@@ -18,6 +19,7 @@ import (
 
 type deviceWatchActivity interface {
 	Active() bool
+	Close(context.Context) error
 }
 
 type deviceWatchControl struct {
@@ -62,6 +64,7 @@ func (c *deviceWatchControl) Enable(ctx context.Context) (api.DeviceWatchControl
 		}
 		result, err := c.lifecycle.Run(ctx, devicewatch.CapabilityID, capability.ActionEnable)
 		if err != nil {
+			c.emergencyStop()
 			return api.DeviceWatchControlResult{}, mapDeviceWatchLifecycleError(err)
 		}
 		return c.controlResult(scopeID, result.Changed), nil
@@ -97,12 +100,12 @@ func (c *deviceWatchControl) Enable(ctx context.Context) (api.DeviceWatchControl
 
 	previous, configChanged, err := c.configs.ReplaceCapability(devicewatch.CapabilityID, &proposed)
 	if err != nil {
-		c.recordOutcome(ctx, capability.DesiredEnabled, scopeID, "failed", "config-write")
+		c.recordOutcome(capability.DesiredEnabled, scopeID, "failed", "config-write")
 		return api.DeviceWatchControlResult{}, err
 	}
 	if err := c.lifecycle.ApplyConfiguration(proposed); err != nil {
 		rollbackErr := c.restorePreviousConfiguration(previous)
-		c.recordOutcome(ctx, capability.DesiredEnabled, scopeID, "failed", "config-apply")
+		c.recordOutcome(capability.DesiredEnabled, scopeID, "failed", "config-apply")
 		if rollbackErr != nil {
 			return api.DeviceWatchControlResult{}, fmt.Errorf("apply Device Watch configuration: %v; rollback: %w", err, rollbackErr)
 		}
@@ -111,14 +114,15 @@ func (c *deviceWatchControl) Enable(ctx context.Context) (api.DeviceWatchControl
 
 	lifecycleResult, err := c.lifecycle.Run(ctx, devicewatch.CapabilityID, capability.ActionEnable)
 	if err != nil {
+		c.emergencyStop()
 		rollbackErr := c.restorePreviousConfiguration(previous)
-		c.recordOutcome(ctx, capability.DesiredEnabled, scopeID, "failed", "runtime-enable")
+		c.recordOutcome(capability.DesiredEnabled, scopeID, "failed", "runtime-enable")
 		if rollbackErr != nil {
 			return api.DeviceWatchControlResult{}, fmt.Errorf("enable Device Watch: %v; rollback: %w", err, rollbackErr)
 		}
 		return api.DeviceWatchControlResult{}, mapDeviceWatchLifecycleError(err)
 	}
-	c.recordOutcome(ctx, capability.DesiredEnabled, scopeID, "applied", "")
+	c.recordOutcome(capability.DesiredEnabled, scopeID, "applied", "")
 	return c.controlResult(scopeID, configChanged || lifecycleResult.Changed), nil
 }
 
@@ -136,10 +140,11 @@ func (c *deviceWatchControl) Disable(ctx context.Context) (api.DeviceWatchContro
 		}
 		result, err := c.lifecycle.Run(ctx, devicewatch.CapabilityID, capability.ActionDisable)
 		if err != nil {
-			c.recordOutcome(ctx, capability.DesiredDisabled, configuredScopeIDBestEffort(current), "failed", "runtime-disable")
+			c.emergencyStop()
+			c.recordOutcome(capability.DesiredDisabled, configuredScopeIDBestEffort(current), "failed", "runtime-disable")
 			return api.DeviceWatchControlResult{}, err
 		}
-		c.recordOutcome(ctx, capability.DesiredDisabled, configuredScopeIDBestEffort(current), "applied", "")
+		c.recordOutcome(capability.DesiredDisabled, configuredScopeIDBestEffort(current), "applied", "")
 		return c.controlResult(configuredScopeIDBestEffort(current), result.Changed), nil
 	}
 
@@ -157,21 +162,23 @@ func (c *deviceWatchControl) Disable(ctx context.Context) (api.DeviceWatchContro
 	}
 	_, configChanged, err := c.configs.ReplaceCapability(devicewatch.CapabilityID, &proposed)
 	if err != nil {
-		c.recordOutcome(ctx, capability.DesiredDisabled, scopeID, "failed", "config-write")
+		c.recordOutcome(capability.DesiredDisabled, scopeID, "failed", "config-write")
 		return api.DeviceWatchControlResult{}, err
 	}
 	if err := c.lifecycle.ApplyConfiguration(proposed); err != nil {
-		c.recordOutcome(ctx, capability.DesiredDisabled, scopeID, "failed", "config-apply")
+		c.emergencyStop()
+		c.recordOutcome(capability.DesiredDisabled, scopeID, "failed", "config-apply")
 		return api.DeviceWatchControlResult{}, err
 	}
 	lifecycleResult, err := c.lifecycle.Run(ctx, devicewatch.CapabilityID, capability.ActionDisable)
 	if err != nil {
 		// Durable desired state intentionally remains disabled. A restart must not
 		// resurrect a runtime that the user asked to stop.
-		c.recordOutcome(ctx, capability.DesiredDisabled, scopeID, "failed", "runtime-disable")
+		c.emergencyStop()
+		c.recordOutcome(capability.DesiredDisabled, scopeID, "failed", "runtime-disable")
 		return api.DeviceWatchControlResult{}, err
 	}
-	c.recordOutcome(ctx, capability.DesiredDisabled, scopeID, "applied", "")
+	c.recordOutcome(capability.DesiredDisabled, scopeID, "applied", "")
 	return c.controlResult(scopeID, configChanged || lifecycleResult.Changed), nil
 }
 
@@ -199,8 +206,18 @@ func (c *deviceWatchControl) controlResult(scopeID string, changed bool) api.Dev
 	return result
 }
 
-func (c *deviceWatchControl) recordOutcome(ctx context.Context, desired capability.DesiredState, scopeID, state, reason string) {
-	if err := c.store.InsertCapabilityIntentAudit(ctx, devicewatch.CapabilityID, desired, state, scopeID, reason); err != nil {
+func (c *deviceWatchControl) emergencyStop() {
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.activity.Close(stopCtx); err != nil {
+		c.logger.Warn("device_watch_emergency_stop_failed")
+	}
+}
+
+func (c *deviceWatchControl) recordOutcome(desired capability.DesiredState, scopeID, state, reason string) {
+	auditCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := c.store.InsertCapabilityIntentAudit(auditCtx, devicewatch.CapabilityID, desired, state, scopeID, reason); err != nil {
 		c.logger.Warn("capability_intent_audit_outcome_failed", "capability", devicewatch.CapabilityID, "state", state)
 	}
 }
