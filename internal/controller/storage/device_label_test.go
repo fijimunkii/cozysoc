@@ -161,7 +161,7 @@ func newLabelFixture(t *testing.T) (*Store, string, string) {
 func readDeviceLabel(t *testing.T, store *Store, deviceID string) string {
 	t.Helper()
 	var label sql.NullString
-	if err := store.conn.QueryRow(`SELECT user_label FROM devices WHERE id = ?`, deviceID).Scan(&label); err != nil {
+	if err := store.conn.QueryRowContext(context.Background(), `SELECT user_label FROM devices WHERE id = ?`, deviceID).Scan(&label); err != nil {
 		t.Fatal(err)
 	}
 	if !label.Valid {
@@ -173,7 +173,7 @@ func readDeviceLabel(t *testing.T, store *Store, deviceID string) string {
 func labelAuditCount(t *testing.T, store *Store, deviceID string) int {
 	t.Helper()
 	var count int
-	if err := store.conn.QueryRow(`SELECT count(*) FROM audit_events WHERE kind = 'device-label' AND json_extract(payload, '$.device_id') = ?`, deviceID).Scan(&count); err != nil {
+	if err := store.conn.QueryRowContext(context.Background(), `SELECT count(*) FROM audit_events WHERE kind = 'device-label' AND json_extract(payload, '$.device_id') = ?`, deviceID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	return count
