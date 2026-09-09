@@ -50,6 +50,7 @@ jobs:
           go build ./cmd/cozysoc-controller
           go test -c ./internal/controller/localapi -o "${RUNNER_TEMP}/localapi-darwin.test"
           go test -c ./internal/controller/secretstore -o "${RUNNER_TEMP}/secretstore-darwin.test"
+          go test -c ./internal/controller/devicewatch -o "${RUNNER_TEMP}/devicewatch-darwin.test"
 
       - name: Run Foundation feasibility checks
         working-directory: experiments/foundation/feasibility
