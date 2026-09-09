@@ -20,6 +20,7 @@ var deviceIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
 
 type controllerStore interface {
 	devicewatch.DeviceEvidenceReader
+	devicewatch.CoverageSampleReader
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
 	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
@@ -100,6 +101,68 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 			FirstSeen: device.FirstSeen,
 			LastSeen:  device.LastSeen,
 			State:     string(device.State),
+		})
+	}
+	return result, nil
+}
+
+func (h *controllerAPIHandler) DeviceWatchCoverage(ctx context.Context) (api.DeviceWatchCoverage, error) {
+	asOf := h.now().UTC()
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceWatchCoverage{}, err
+	}
+	if !configured {
+		return api.DeviceWatchCoverage{
+			Configured: false,
+			AsOf:       asOf,
+			State:      "unconfigured",
+			Sources:    []api.DeviceWatchCoverageSource{},
+			BlindSpots: []api.DeviceWatchCoverageBlindSpot{},
+			NextStep:   "Enroll a home network and enable Device Watch before evaluating its coverage.",
+		}, nil
+	}
+
+	report, err := devicewatch.CurrentCoverage(ctx, h.store, scopeID, asOf)
+	if err != nil {
+		return api.DeviceWatchCoverage{}, err
+	}
+	result := api.DeviceWatchCoverage{
+		Configured:    true,
+		ScopeID:       scopeID,
+		AsOf:          asOf,
+		State:         string(report.State),
+		Reason:        report.Reason,
+		SensorID:      report.SensorID,
+		InterfaceName: report.InterfaceName,
+		Sources:       make([]api.DeviceWatchCoverageSource, 0, len(report.Sources)),
+		BlindSpots:    make([]api.DeviceWatchCoverageBlindSpot, 0, len(report.BlindSpots)),
+		NextStep:      report.NextStep,
+	}
+	if report.HasEvidence {
+		evidenceAt := report.EvidenceAt
+		freshUntil := report.FreshUntil
+		neighbors := report.NeighborsInScope
+		result.EvidenceAt = &evidenceAt
+		result.FreshUntil = &freshUntil
+		result.NeighborsInScope = &neighbors
+	}
+	for _, source := range report.Sources {
+		result.Sources = append(result.Sources, api.DeviceWatchCoverageSource{
+			ID:                    source.ID,
+			AddressFamily:         source.AddressFamily,
+			State:                 string(source.State),
+			Reported:              source.Observed,
+			AvailableAtLastSample: source.AvailableAtLastSample,
+			NextStep:              source.NextStep,
+		})
+	}
+	for _, blindSpot := range report.BlindSpots {
+		result.BlindSpots = append(result.BlindSpots, api.DeviceWatchCoverageBlindSpot{
+			ID:       blindSpot.ID,
+			Summary:  blindSpot.Summary,
+			Detail:   blindSpot.Detail,
+			NextStep: blindSpot.NextStep,
 		})
 	}
 	return result, nil
