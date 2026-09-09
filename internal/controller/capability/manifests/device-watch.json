@@ -53,7 +53,13 @@
   },
   "health": {
     "process_required": false,
-    "verification_signals": ["network-scope-enrolled", "observation-freshness"],
+    "verification_signals": [
+      "network-scope-enrolled",
+      "observation-freshness",
+      "sensor-operational",
+      "ingestion-health",
+      "storage-health"
+    ],
     "coverage_requires_verification": true
   },
   "outputs": [
