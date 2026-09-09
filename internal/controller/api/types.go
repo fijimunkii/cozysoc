@@ -194,6 +194,7 @@ type DeviceWatchCoverage struct {
 	AsOf             time.Time                      `json:"as_of"`
 	State            string                         `json:"state"`
 	Reason           string                         `json:"reason,omitempty"`
+	Coverage         *CoverageReport                `json:"coverage,omitempty"`
 	SensorID         string                         `json:"sensor_id,omitempty"`
 	InterfaceName    string                         `json:"interface_name,omitempty"`
 	EvidenceAt       *time.Time                     `json:"evidence_at,omitempty"`
