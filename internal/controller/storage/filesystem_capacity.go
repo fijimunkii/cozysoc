@@ -12,10 +12,10 @@ const (
 )
 
 type FilesystemCapacity struct {
-	Supported      bool
-	State          FilesystemCapacityState
-	TotalBytes     int64
-	AvailableBytes int64
+	Supported       bool
+	State           FilesystemCapacityState
+	TotalBytes      int64
+	AvailableBytes  int64
 	PressureAtBytes int64
 }
 
