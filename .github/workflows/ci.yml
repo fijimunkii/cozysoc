@@ -37,15 +37,7 @@ jobs:
 
       - name: Run controller checks
         run: |
-          unformatted="$(gofmt -l cmd internal tests)"
-          if [[ -n "${unformatted}" ]]; then
-            printf 'gofmt required for:\n%s\n' "${unformatted}"
-            while IFS= read -r file; do
-              [[ -z "${file}" ]] && continue
-              gofmt -d "${file}" || true
-            done <<< "${unformatted}"
-            exit 1
-          fi
+          test -z "$(gofmt -l cmd internal tests)"
           go vet ./...
           go test ./...
 
