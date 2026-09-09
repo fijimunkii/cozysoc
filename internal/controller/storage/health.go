@@ -54,9 +54,12 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	maxBytes := maxPages * pageSize
 	quotaState := classifyStorageHealth(used, maxBytes)
 
-	filesystem, err := readFilesystemCapacity(filepath.Dir(s.path))
-	if err != nil {
-		return Health{}, err
+	filesystem, filesystemErr := readFilesystemCapacity(filepath.Dir(s.path))
+	if filesystemErr != nil {
+		// Capacity introspection is diagnostic evidence, not a prerequisite for
+		// storage operation. Preserve the quota result and report the filesystem
+		// state as unavailable instead of guessing that the volume is full.
+		filesystem = classifyFilesystemCapacity(true, 0, 0)
 	}
 	state := quotaState
 	if filesystem.Supported {
