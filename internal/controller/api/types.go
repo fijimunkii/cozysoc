@@ -137,19 +137,19 @@ type DeviceWatchCoverageBlindSpot struct {
 }
 
 type DeviceWatchCoverage struct {
-	Configured      bool                           `json:"configured"`
-	ScopeID         string                         `json:"scope_id,omitempty"`
-	AsOf            time.Time                      `json:"as_of"`
-	State           string                         `json:"state"`
-	Reason          string                         `json:"reason,omitempty"`
-	SensorID        string                         `json:"sensor_id,omitempty"`
-	InterfaceName   string                         `json:"interface_name,omitempty"`
-	EvidenceAt      *time.Time                     `json:"evidence_at,omitempty"`
-	FreshUntil      *time.Time                     `json:"fresh_until,omitempty"`
-	NeighborsInScope *int                          `json:"neighbors_in_scope,omitempty"`
-	Sources         []DeviceWatchCoverageSource    `json:"sources"`
-	BlindSpots      []DeviceWatchCoverageBlindSpot `json:"blind_spots"`
-	NextStep        string                         `json:"next_step"`
+	Configured       bool                           `json:"configured"`
+	ScopeID          string                         `json:"scope_id,omitempty"`
+	AsOf             time.Time                      `json:"as_of"`
+	State            string                         `json:"state"`
+	Reason           string                         `json:"reason,omitempty"`
+	SensorID         string                         `json:"sensor_id,omitempty"`
+	InterfaceName    string                         `json:"interface_name,omitempty"`
+	EvidenceAt       *time.Time                     `json:"evidence_at,omitempty"`
+	FreshUntil       *time.Time                     `json:"fresh_until,omitempty"`
+	NeighborsInScope *int                           `json:"neighbors_in_scope,omitempty"`
+	Sources          []DeviceWatchCoverageSource    `json:"sources"`
+	BlindSpots       []DeviceWatchCoverageBlindSpot `json:"blind_spots"`
+	NextStep         string                         `json:"next_step"`
 }
 
 type DeviceWatchControlResult struct {
