@@ -1,15 +1,16 @@
 # Network-quality assessment contract
 
-Related work: #14 and #29. This is the first fixture-first network-quality slice,
-not a live capability or a completed connectivity-diagnosis feature.
+Related work: #14 and #29. The assessment contract began as a fixture-first
+slice, not a completed connectivity-diagnosis feature.
 
 ## What exists
 
 `internal/controller/networkquality` validates and assesses bounded, already
 collected measurements. `Assess` is a pure function: it has no network, process,
-filesystem, controller, storage, coverage, or finding dependencies. There is no
-new CLI command, native API method, browser route, capability, or UI navigation.
-No background checks, DNS queries, external requests, or speed tests are enabled.
+filesystem, controller, storage, coverage, or finding dependencies. The controller's
+separate [local-interface read](local-network-quality.md) now supplies real OS
+metadata through a typed UDS/CLI projection. It adds no browser route, background
+checks, DNS queries, external requests, or speed tests.
 
 The contract separates local interface state, a selected gateway's ICMP checks,
 a selected resolver's DNS checks, and a selected external target's ICMP or HTTPS
@@ -85,10 +86,11 @@ connections, or physical network quality. They do not complete #14 or #29.
 
 ## Next integration boundary
 
-The next useful slice is a narrow local-interface evidence producer and a typed
-read projection. Revalidate actual enrolled interface/prefix binding before every
-collection; equality of the contract's observer fields is not authorization or
-proof that the laptop stayed on the same network.
+The narrow [local-interface evidence producer and native read projection](local-network-quality.md)
+now revalidates the enrolled interface/prefix binding before attributing local OS
+metadata. A shared frontend projection is next. Equality of the contract's
+observer fields alone remains neither authorization nor proof that the laptop
+stayed on the same network.
 
 Active gateway/resolver/external checks must follow separately with explicit
 scope/target selection, destination and privacy disclosure, cancellation,
