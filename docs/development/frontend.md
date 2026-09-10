@@ -116,7 +116,14 @@ Static serving refuses directory listings and resolves symlinks before serving f
 
 ## Product navigation and live devices
 
-The first validated information architecture intentionally exposes only **Overview**, **Devices**, and **Coverage**. Empty Activity or Settings sections are not added just to fill navigation; they should appear when they have real product data or actions.
+Current typed device read surfaces:
+
+- **Devices** shows bounded Device Watch presence, scoped user labels, and a per-device evidence view that separates current presence from current/historical identity associations.
+- **Activity** shows a bounded 24-hour Device Watch timeline: first observations, proven same-family address changes, and only the latest positive observation per otherwise-stable device. Silence never creates a departure event.
+- `GET /api/devices/detail?device_id=...` — bounded current-scope identity evidence and retained source provenance for one device; raw observation payloads are not exposed.
+- `GET /api/activity` — bounded low-noise Device Watch activity derived from retained normalized evidence; no raw payloads or inferred departures.
+
+The validated information architecture now exposes **Overview**, **Devices**, **Activity**, and **Coverage**. Settings/Tools remains deferred until there are real configuration choices, engine diagnostics, or validated advanced links to present.
 
 Authenticated `GET /api/devices` is parameterless and read-only. It is backed by the existing controller `devices.list` method and returns only the bounded device-presence read model: configured scope, stable device ID, optional user label, first/last seen timestamps, `visible`/`uncertain` presence, and truncation. It does not expose raw observations, identity claims, database access, controller credentials, or a device mutation surface.
 
@@ -132,11 +139,9 @@ This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 prove
 
 Useful #13 follow-ons are:
 
-1. build network-enrollment/onboarding and Device Watch controls only after the required browser mutation protections are in place;
-2. add browser-level accessibility, keyboard, scaling, and responsive tests around the first complete journey;
-3. add Activity only when normalized observations/findings have a bounded user-facing read model;
-4. add Settings/Tools only when there are real configuration choices, engine diagnostics, or validated advanced links to present; and
-5. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
+1. add browser-level accessibility, keyboard, scaling, and responsive tests around the first complete journey;
+2. add Settings/Tools only when there are real configuration choices, engine diagnostics, or validated advanced links to present; and
+3. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
 
 
 ## Live device labels

@@ -15,6 +15,7 @@ const (
 	MethodCapabilitiesList    = "capabilities.list"
 	MethodDevicesList         = "devices.list"
 	MethodDeviceDetail        = "device.detail"
+	MethodDeviceActivity      = "device.activity"
 	MethodDeviceLabel         = "device.label"
 	MethodNetworksList        = "networks.list"
 	MethodNetworkEnroll       = "network.enroll"
@@ -115,6 +116,28 @@ type DeviceDetail struct {
 	Device    DevicePresence           `json:"device"`
 	Evidence  []DeviceIdentityEvidence `json:"evidence"`
 	Truncated bool                     `json:"truncated"`
+}
+
+type DeviceActivityItem struct {
+	ID              string               `json:"id"`
+	Kind            string               `json:"kind"`
+	At              time.Time            `json:"at"`
+	DeviceID        string               `json:"device_id"`
+	UserLabel       string               `json:"user_label,omitempty"`
+	AddressFamily   string               `json:"address_family"`
+	Address         string               `json:"address"`
+	PreviousAddress string               `json:"previous_address,omitempty"`
+	HardwareAddress string               `json:"hardware_address"`
+	Source          DeviceEvidenceSource `json:"source"`
+}
+
+type DeviceActivityList struct {
+	Configured bool                 `json:"configured"`
+	ScopeID    string               `json:"scope_id,omitempty"`
+	Since      time.Time            `json:"since"`
+	AsOf       time.Time            `json:"as_of"`
+	Items      []DeviceActivityItem `json:"items"`
+	Truncated  bool                 `json:"truncated"`
 }
 
 type DeviceLabelParams struct {

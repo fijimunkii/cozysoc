@@ -22,6 +22,7 @@ type controllerStore interface {
 	devicewatch.DeviceEvidenceReader
 	devicewatch.CoverageSampleReader
 	GetDeviceEvidenceDetail(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error)
+	ListDeviceActivity(context.Context, storage.DeviceActivityQuery) (storage.DeviceActivityPage, error)
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
 	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
@@ -106,6 +107,41 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 			FirstSeen: device.FirstSeen,
 			LastSeen:  device.LastSeen,
 			State:     string(device.State),
+		})
+	}
+	return result, nil
+}
+
+func (h *controllerAPIHandler) DeviceActivity(ctx context.Context) (api.DeviceActivityList, error) {
+	asOf := h.now().UTC()
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceActivityList{}, err
+	}
+	result := api.DeviceActivityList{
+		Configured: configured,
+		Since:      asOf.Add(-storage.DeviceActivityWindow),
+		AsOf:       asOf,
+		Items:      []api.DeviceActivityItem{},
+	}
+	if !configured || scopeID == "" {
+		return result, nil
+	}
+	page, err := h.store.ListDeviceActivity(ctx, storage.DeviceActivityQuery{ScopeID: scopeID, AsOf: asOf, Limit: storage.MaxDeviceActivityItems})
+	if err != nil {
+		return api.DeviceActivityList{}, err
+	}
+	result.ScopeID = scopeID
+	result.Since = page.Since
+	result.Truncated = page.Truncated
+	result.Items = make([]api.DeviceActivityItem, 0, len(page.Items))
+	for _, item := range page.Items {
+		result.Items = append(result.Items, api.DeviceActivityItem{
+			ID: item.ID, Kind: string(item.Kind), At: item.At, DeviceID: item.DeviceID, UserLabel: item.UserLabel,
+			AddressFamily: item.AddressFamily, Address: item.Address, PreviousAddress: item.PreviousAddress,
+			HardwareAddress: item.HardwareAddress,
+			Source: api.DeviceEvidenceSource{ObservationID: item.Source.ObservationID, SensorID: item.Source.SensorID,
+				Kind: item.Source.Kind, SourceStream: item.Source.SourceStream, IngestedAt: item.Source.IngestedAt, Attribution: item.Source.Attribution},
 		})
 	}
 	return result, nil

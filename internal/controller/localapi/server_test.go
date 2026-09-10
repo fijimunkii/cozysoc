@@ -31,6 +31,10 @@ func (testHandler) Capabilities() api.CapabilityList {
 	return api.CapabilityList{CatalogSchemaVersion: 1}
 }
 
+func (testHandler) DeviceActivity(context.Context) (api.DeviceActivityList, error) {
+	return api.DeviceActivityList{Configured: true, ScopeID: "scope.home", Since: time.Unix(1, 0).UTC(), AsOf: time.Unix(2, 0).UTC(), Items: []api.DeviceActivityItem{{ID: "obs.one", Kind: "observed", At: time.Unix(2, 0).UTC(), DeviceID: "device.one", AddressFamily: "ipv4", Address: "192.168.1.10", HardwareAddress: "02:00:00:00:00:01", Source: api.DeviceEvidenceSource{ObservationID: "obs.one", SensorID: "sensor.one", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: time.Unix(2, 0).UTC(), Attribution: "device-watch:arp-cache"}}}}, nil
+}
+
 func (testHandler) DeviceDetail(_ context.Context, params api.DeviceDetailParams) (api.DeviceDetail, error) {
 	if params.DeviceID != "device.one" {
 		return api.DeviceDetail{}, ErrReadTargetNotFound
@@ -113,6 +117,22 @@ func TestCapabilitiesListRoundTrip(t *testing.T) {
 	}
 	if list.CatalogSchemaVersion != 1 {
 		t.Fatalf("unexpected capability list: %+v", list)
+	}
+}
+
+func TestDeviceActivityRoundTrip(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	client := NewClient(server.stateDir)
+	result, err := client.Call(context.Background(), api.MethodDeviceActivity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var activity api.DeviceActivityList
+	if err := json.Unmarshal(result, &activity); err != nil {
+		t.Fatal(err)
+	}
+	if !activity.Configured || activity.ScopeID != "scope.home" || len(activity.Items) != 1 || activity.Items[0].Kind != "observed" {
+		t.Fatalf("unexpected activity: %+v", activity)
 	}
 }
 

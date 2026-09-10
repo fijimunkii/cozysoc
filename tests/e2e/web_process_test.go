@@ -22,6 +22,15 @@ type processCoverageEnvelope struct {
 	Reports []processCoverageReport `json:"reports"`
 }
 
+type processWebActivity struct {
+	Configured bool              `json:"configured"`
+	ScopeID    string            `json:"scope_id,omitempty"`
+	Since      time.Time         `json:"since"`
+	AsOf       time.Time         `json:"as_of"`
+	Items      []json.RawMessage `json:"items"`
+	Truncated  bool              `json:"truncated"`
+}
+
 type processWebDeviceList struct {
 	Configured bool              `json:"configured"`
 	ScopeID    string            `json:"scope_id,omitempty"`
@@ -153,6 +162,31 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	report := coverage.Reports[0]
 	if report.CapabilityID != "device-watch" || report.Configured || report.State != "unconfigured" || len(report.ObservationPoints) != 0 {
 		t.Fatalf("unexpected shared web coverage report: %+v", report)
+	}
+
+	activityResponse, err := client.Get(rootURL + "api/activity")
+	if err != nil {
+		t.Fatalf("read live web activity: %v\n%s", err, web.logs())
+	}
+	activityBody, err := io.ReadAll(activityResponse.Body)
+	_ = activityResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activityResponse.StatusCode != http.StatusOK {
+		t.Fatalf("activity HTTP status = %d body=%s", activityResponse.StatusCode, activityBody)
+	}
+	for _, secret := range []string{controllerSecret, bootstrap, webSession} {
+		if strings.Contains(string(activityBody), secret) {
+			t.Fatal("web activity response exposed a controller or browser credential")
+		}
+	}
+	var activity processWebActivity
+	if err := json.Unmarshal(activityBody, &activity); err != nil {
+		t.Fatalf("decode web activity: %v: %s", err, activityBody)
+	}
+	if activity.AsOf.IsZero() || activity.Since.IsZero() || activity.Configured || activity.ScopeID != "" || len(activity.Items) != 0 || activity.Truncated {
+		t.Fatalf("unexpected fresh-state web activity: %+v", activity)
 	}
 
 	devicesResponse, err := client.Get(rootURL + "api/devices")
