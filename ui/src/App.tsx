@@ -11,7 +11,7 @@ import { demoCoverageRaw } from "./demo/coverage";
 import { demoDevicesRaw } from "./demo/devices";
 import { OverviewPage } from "./OverviewPage";
 import { SetupPanel } from "./setup/SetupPanel";
-import { createWebSetupClient, parseNetworkList, type SetupClient } from "./setup/setup";
+import { createWebSetupClient, parseNetworkList, type DeviceLabelClient, type SetupClient } from "./setup/setup";
 
 type Page = "overview" | "devices" | "coverage";
 type DataView =
@@ -41,6 +41,7 @@ const demoData: AppData = {
 export interface AppProps {
   loadData?: () => Promise<AppData>;
   setupClient?: SetupClient;
+  deviceLabelClient?: DeviceLabelClient;
 }
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
@@ -49,11 +50,13 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   coverage: { eyebrow: "Coverage", title: "Know what is visible. Know what is not.", detail: "Observation points, verified scope, expected gaps, and evidence freshness stay explicit." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
-  const liveSetupClient = useMemo(() => setupClient ?? createWebSetupClient(), [setupClient]);
+  const defaultMutationClient = useMemo(() => createWebSetupClient(), []);
+  const liveSetupClient = setupClient ?? defaultMutationClient;
+  const liveDeviceLabelClient = deviceLabelClient ?? defaultMutationClient;
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +102,11 @@ export function App({ loadData = loadAppDataFromWeb, setupClient }: AppProps) {
             <OverviewPage data={activeData} onNavigate={setPage} />
           </>
         ) : null}
-        {activeData && page === "devices" ? <DevicesPage devices={activeData.devices} /> : null}
+        {activeData && page === "devices" ? (
+          view.mode === "live"
+            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} />
+            : <DevicesPage devices={activeData.devices} />
+        ) : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>
         ) : null}

@@ -46,6 +46,16 @@ export interface SetupClient {
   disableDeviceWatch(): Promise<DeviceWatchControlResult>;
 }
 
+export interface DeviceLabelResult {
+  device_id: string;
+  user_label: string;
+  changed: boolean;
+}
+
+export interface DeviceLabelClient {
+  labelDevice(deviceID: string, label: string): Promise<DeviceLabelResult>;
+}
+
 export class SetupRequestError extends Error {
   readonly code: string;
   readonly status: number;
@@ -88,7 +98,7 @@ export async function loadNetworksFromWeb(): Promise<NetworkList> {
   return parseNetworkList(await readJSON(response, "Live network response"));
 }
 
-export function createWebSetupClient(): SetupClient {
+export function createWebSetupClient(): SetupClient & DeviceLabelClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -130,7 +140,41 @@ export function createWebSetupClient(): SetupClient {
     async disableDeviceWatch() {
       return parseDeviceWatchControl(await mutate("/api/device-watch/disable"));
     },
+    async labelDevice(deviceID: string, label: string) {
+      if (!idPattern.test(deviceID)) {
+        throw new SetupRequestError("invalid_request", "Device id is invalid. Refresh the device list and try again.");
+      }
+      const problem = validateDeviceLabelInput(label);
+      if (problem !== undefined) throw new SetupRequestError("invalid_request", problem);
+      const result = parseDeviceLabelResult(await mutate("/api/devices/label", { device_id: deviceID, label }));
+      if (result.device_id !== deviceID || result.user_label !== label) {
+        throw new SetupRequestError("invalid_response", "Device label response did not match the requested change.");
+      }
+      return result;
+    },
   };
+}
+
+export function validateDeviceLabelInput(label: string): string | undefined {
+  if (label !== label.trim()) return "Device labels cannot start or end with whitespace.";
+  if (/\p{Cc}/u.test(label)) return "Device labels cannot contain control characters.";
+  if (new TextEncoder().encode(label).length > 160) return "Device labels must be 160 UTF-8 bytes or fewer.";
+  return undefined;
+}
+
+function parseDeviceLabelResult(input: unknown): DeviceLabelResult {
+  const value = objectValue(input, "device label response");
+  if (typeof value.device_id !== "string" || !idPattern.test(value.device_id)) {
+    throw new SetupRequestError("invalid_response", "Device label response has an invalid device id.");
+  }
+  if (typeof value.changed !== "boolean") {
+    throw new SetupRequestError("invalid_response", "Device label response has an invalid changed flag.");
+  }
+  const userLabel = value.user_label === undefined ? "" : value.user_label;
+  if (typeof userLabel !== "string" || validateDeviceLabelInput(userLabel) !== undefined) {
+    throw new SetupRequestError("invalid_response", "Device label response has an invalid label.");
+  }
+  return { device_id: value.device_id, user_label: userLabel, changed: value.changed };
 }
 
 function parseNetworkInterface(input: unknown): NetworkInterface {

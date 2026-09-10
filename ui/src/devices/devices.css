@@ -28,3 +28,15 @@
   .as-of-label { display: block; margin-top: 12px; }
   .device-table th, .device-table td { padding-left: 18px; padding-right: 18px; }
 }
+
+.device-label-actions { min-width: 150px; }
+.device-label-actions .quiet-button { display: block; width: 100%; margin-bottom: 6px; text-align: left; }
+.device-label-form { min-width: 250px; display: grid; gap: 7px; }
+.device-label-form label { font-size: .76rem; font-weight: 700; color: #565b52; }
+.device-label-form input { width: 100%; box-sizing: border-box; border: 1px solid #c9c7be; border-radius: 10px; background: #fff; color: #2b2f29; padding: 9px 10px; font: inherit; }
+.device-label-form input:focus-visible { outline: 3px solid rgba(61, 94, 69, .22); outline-offset: 2px; border-color: #647867; }
+.device-label-form input[aria-invalid="true"] { border-color: #9a5a50; }
+.device-label-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #74796f; font-size: .72rem; }
+.device-label-validation { color: #8a4e45; }
+.device-label-form-actions { display: flex; gap: 8px; }
+.device-label-error { margin-top: 8px; color: #85483f; font-size: .78rem; line-height: 1.4; }
