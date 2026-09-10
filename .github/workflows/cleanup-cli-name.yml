@@ -1,0 +1,58 @@
+name: Cleanup legacy CLI name
+
+on:
+  push:
+    branches: [feat/v0.1-dev-orchestration]
+    paths:
+      - .github/workflows/cleanup-cli-name.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Replace legacy command name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('docs/development/controller.md'),
+              Path('docs/development/device-watch.md'),
+              Path('docs/development/testing.md'),
+              Path('docs/development/coverage.md'),
+              Path('tests/e2e/controller_process_test.go'),
+              Path('tests/e2e/device_watch_coverage_process_test.go'),
+              Path('tests/e2e/network_enrollment_process_test.go'),
+              Path('tests/e2e/device_watch_control_process_test.go'),
+              Path('tests/e2e/device_label_process_test.go'),
+          ]
+          for path in paths:
+              text = path.read_text()
+              updated = text.replace('cozysoc-controller', 'cozysoc')
+              if updated != text:
+                  path.write_text(updated)
+                  print(path)
+          PY
+          git diff --check
+
+      - name: Commit cleanup and remove bootstrap workflow
+        run: |
+          git rm .github/workflows/cleanup-cli-name.yml
+          git add docs/development tests/e2e
+          if git diff --cached --quiet; then
+            echo 'No cleanup changes found' >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(cli): clean up legacy command name'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
