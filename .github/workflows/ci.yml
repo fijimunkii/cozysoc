@@ -54,10 +54,11 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm run check
 
-      - name: Run controller process E2E smoke
+      - name: Run process E2E smoke
         run: |
-          go build -o "${RUNNER_TEMP}/cozysoc-controller-e2e" ./cmd/cozysoc-controller
-          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-controller-e2e" \
+          go build -o "${RUNNER_TEMP}/cozysoc-e2e" ./cmd/cozysoc
+          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-e2e" \
+          COZYSOC_E2E_UI_DIR="${GITHUB_WORKSPACE}/ui/dist" \
             go test -v -count=1 ./tests/e2e
 
       - name: Verify macOS controller build
@@ -66,7 +67,7 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: '0'
         run: |
-          go build ./cmd/cozysoc-controller
+          go build ./cmd/cozysoc
           go test -c ./internal/controller/localapi -o "${RUNNER_TEMP}/localapi-darwin.test"
           go test -c ./internal/controller/secretstore -o "${RUNNER_TEMP}/secretstore-darwin.test"
           go test -c ./internal/controller/devicewatch -o "${RUNNER_TEMP}/devicewatch-darwin.test"
