@@ -8,9 +8,9 @@ This is **presence evidence, not whole-network traffic visibility**. A host neig
 
 Device Watch never chooses a network on its own.
 
-The authenticated `networks.list` API (CLI: `cozysoc-controller networks`) lists local interfaces that are currently eligible for enrollment. Candidate discovery reads only local interface/address metadata through Go's networking APIs. It does not ping, resolve names, scan ports, enumerate an IPv6 address space, or otherwise send network traffic.
+The authenticated `networks.list` API (CLI: `cozysoc networks`) lists local interfaces that are currently eligible for enrollment. Candidate discovery reads only local interface/address metadata through Go's networking APIs. It does not ping, resolve names, scan ports, enumerate an IPv6 address space, or otherwise send network traffic.
 
-The authenticated `network.enroll` mutation (CLI: `cozysoc-controller network-enroll INTERFACE`) captures the selected interface **at execution time**. Enrollment stores a `device_watch` binding inside `NetworkScope.metadata` containing:
+The authenticated `network.enroll` mutation (CLI: `cozysoc network-enroll INTERFACE`) captures the selected interface **at execution time**. Enrollment stores a `device_watch` binding inside `NetworkScope.metadata` containing:
 
 - the exact interface name;
 - the interface index observed at enrollment; and
@@ -31,8 +31,8 @@ Before every collection, the current interface must still be up, retain the enro
 The authenticated lifecycle controls are capability-specific:
 
 ```bash
-cozysoc-controller device-watch-enable --state-dir PATH
-cozysoc-controller device-watch-disable --state-dir PATH
+cozysoc device-watch-enable --state-dir PATH
+cozysoc device-watch-disable --state-dir PATH
 ```
 
 `device-watch.enable` does not accept a caller-supplied scope. It selects the single already-enrolled Device Watch scope and builds the typed capability configuration internally.
@@ -189,7 +189,7 @@ A missing neighbor in the next cache snapshot is not a departure event. Sleep/re
 `device.label` is a bounded state-changing local API operation. The corresponding CLI surface is:
 
 ```bash
-cozysoc-controller device-label --state-dir PATH DEVICE_ID "Living Room TV"
+cozysoc device-label --state-dir PATH DEVICE_ID "Living Room TV"
 ```
 
 An empty label clears the user label. Labels are user metadata only; they do not alter the underlying temporal identity claims or increase inference confidence.
