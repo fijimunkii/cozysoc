@@ -12,7 +12,7 @@ The default GitHub Actions workflow runs on the Linux reference runner and curre
 - macOS arm64 cgo-free cross-compilation for the controller and Darwin-specific packages; and
 - Foundation feasibility harness tests.
 
-The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the real `cozysoc-controller` executable and runs the E2E package separately so the black-box step is visible as its own gate.
+The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the real `cozysoc` executable and runs the E2E package separately so the black-box step is visible as its own gate.
 
 ## Controller process E2E boundary
 

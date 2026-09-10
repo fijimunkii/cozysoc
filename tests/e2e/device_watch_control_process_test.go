@@ -41,7 +41,7 @@ func TestControllerProcessDeviceWatchControlFailsClosedOnUnsupportedLinuxRuntime
 	}
 	binary := os.Getenv(e2eBinaryEnv)
 	if binary == "" {
-		t.Skipf("set %s to a built cozysoc-controller binary to run process E2E", e2eBinaryEnv)
+		t.Skipf("set %s to a built cozysoc binary to run process E2E", e2eBinaryEnv)
 	}
 	absoluteBinary, err := filepath.Abs(binary)
 	if err != nil {

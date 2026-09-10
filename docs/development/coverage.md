@@ -15,7 +15,7 @@ device-watch.coverage
 CLI:
 
 ```bash
-cozysoc-controller device-watch-coverage --state-dir PATH
+cozysoc device-watch-coverage --state-dir PATH
 ```
 
 The method is parameterless. The caller cannot select another scope, sensor, source, historical time, or arbitrary stored evidence. The controller reports only the Device Watch scope selected by current durable intent.
