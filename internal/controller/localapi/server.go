@@ -52,6 +52,10 @@ type DeviceDetailHandler interface {
 	DeviceDetail(context.Context, api.DeviceDetailParams) (api.DeviceDetail, error)
 }
 
+type DeviceActivityHandler interface {
+	DeviceActivity(context.Context) (api.DeviceActivityList, error)
+}
+
 type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
@@ -277,6 +281,24 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = deviceList
+	case api.MethodDeviceActivity:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		activityHandler, ok := s.handler.(DeviceActivityHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		activity, activityErr := activityHandler.DeviceActivity(requestCtx)
+		cancel()
+		if activityErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceActivity)
+			s.writeError(conn, request.ID, "internal_error", "unable to load device activity")
+			return
+		}
+		result = activity
 	case api.MethodDeviceDetail:
 		detailHandler, ok := s.handler.(DeviceDetailHandler)
 		if !ok {

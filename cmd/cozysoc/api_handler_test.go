@@ -24,6 +24,9 @@ type fakeDeviceStore struct {
 	detail         storage.DeviceEvidenceDetail
 	detailErr      error
 	detailQuery    storage.DeviceEvidenceDetailQuery
+	activity       storage.DeviceActivityPage
+	activityErr    error
+	activityQuery  storage.DeviceActivityQuery
 	setScope       string
 	setDevice      string
 	setLabel       string
@@ -44,6 +47,11 @@ func (f *fakeDeviceStore) ListDeviceEvidence(context.Context, storage.DeviceEvid
 func (f *fakeDeviceStore) GetDeviceEvidenceDetail(_ context.Context, query storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error) {
 	f.detailQuery = query
 	return f.detail, f.detailErr
+}
+
+func (f *fakeDeviceStore) ListDeviceActivity(_ context.Context, query storage.DeviceActivityQuery) (storage.DeviceActivityPage, error) {
+	f.activityQuery = query
+	return f.activity, f.activityErr
 }
 
 func (f *fakeDeviceStore) SetDeviceLabel(_ context.Context, scopeID, deviceID, label string) (bool, error) {

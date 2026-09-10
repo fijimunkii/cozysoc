@@ -1,0 +1,19 @@
+.activity-page { display: grid; gap: 1rem; }
+.activity-explainer { position: relative; }
+.activity-explainer .as-of-label { display: inline-block; margin-top: .75rem; }
+.activity-list-card { padding: 0; overflow: hidden; }
+.activity-list { list-style: none; margin: 0; padding: 0; }
+.activity-item { display: grid; grid-template-columns: .8rem 1fr; gap: .8rem; padding: 1.15rem 1.25rem; border-top: 1px solid #ebe8df; }
+.activity-item:first-child { border-top: 0; }
+.activity-marker { width: .55rem; height: .55rem; margin-top: .4rem; border-radius: 50%; background: currentColor; opacity: .55; }
+.activity-content { min-width: 0; }
+.activity-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.activity-heading h3 { margin: .18rem 0 .2rem; font-size: 1rem; }
+.activity-heading time { color: #74796f; white-space: nowrap; font-size: .85rem; }
+.activity-kind { color: #74796f; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.activity-content > p { margin: .7rem 0; }
+.activity-facts { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; margin: 0; }
+.activity-facts div { display: flex; gap: .4rem; align-items: baseline; }
+.activity-facts dt { color: #777c72; font-size: .82rem; }
+.activity-facts dd { margin: 0; font-size: .86rem; }
+@media (max-width: 720px) { .activity-heading { display: block; } .activity-heading time { display: block; margin-top: .45rem; } .activity-facts { display: grid; gap: .4rem; } }

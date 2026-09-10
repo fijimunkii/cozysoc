@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AppData } from "../app-data";
+import { parseDeviceActivity } from "../activity/activity";
 import { parseCoverageBundle } from "../coverage/bundle";
 import { parseDeviceList } from "../devices/devices";
 import { demoCoverageRaw } from "../demo/coverage";
@@ -27,6 +28,7 @@ function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: s
       as_of: "2026-09-10T02:00:00Z",
       reports: [enabled ? demoCoverageRaw : unconfiguredCoverage],
     }),
+    activity: parseDeviceActivity(enabled ? { configured: true, scope_id: "scope.home", since: "2026-09-09T02:00:00Z", as_of: "2026-09-10T02:00:00Z", items: [], truncated: false } : { configured: false, since: "2026-09-09T02:00:00Z", as_of: "2026-09-10T02:00:00Z", items: [], truncated: false }),
     devices: parseDeviceList(enabled ? {
       configured: true,
       scope_id: "scope.home",

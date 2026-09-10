@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AppData } from "./app-data";
 import { App } from "./App";
+import { parseDeviceActivity } from "./activity/activity";
 import { parseCoverageBundle } from "./coverage/bundle";
 import { parseDeviceList } from "./devices/devices";
 import { demoCoverageRaw } from "./demo/coverage";
@@ -10,6 +11,7 @@ import { parseNetworkList } from "./setup/setup";
 
 const liveData: AppData = {
   coverage: parseCoverageBundle({ as_of: "2026-09-10T01:00:00Z", reports: [demoCoverageRaw] }),
+  activity: parseDeviceActivity({ configured: true, scope_id: "scope.home", since: "2026-09-09T01:00:00Z", as_of: "2026-09-10T01:00:00Z", items: [{ id: "obs.one", kind: "observed", at: "2026-09-10T00:59:00Z", device_id: "device.one", user_label: "Living Room TV", address_family: "ipv4", address: "192.168.1.20", hardware_address: "02:00:00:00:00:01", source: { observation_id: "obs.one", sensor_id: "sensor.dw", kind: "device-neighbor-seen", source_stream: "device-watch-neighbors", ingested_at: "2026-09-10T00:59:01Z", attribution: "device-watch:arp-cache" } }], truncated: false }),
   devices: parseDeviceList({
     configured: true,
     scope_id: "scope.home",
@@ -29,7 +31,7 @@ const liveData: AppData = {
 };
 
 describe("App product navigation", () => {
-  it("starts on a live evidence-based overview and navigates to devices and coverage", async () => {
+  it("starts on a live evidence-based overview and navigates to devices, activity, and coverage", async () => {
     render(<App loadData={async () => liveData} />);
     expect(await screen.findByRole("status", { name: "Live controller data" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Your home at a glance" })).toBeTruthy();
@@ -42,8 +44,30 @@ describe("App product navigation", () => {
     expect(screen.getByText("Living Room TV")).toBeTruthy();
     expect(screen.getByText("Visible now", { selector: ".presence-pill" })).toBeTruthy();
 
+    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByRole("heading", { name: "What changed on your visible network" })).toBeTruthy();
+    expect(screen.getByText("Observed recently")).toBeTruthy();
+
     fireEvent.click(screen.getByRole("button", { name: "Coverage" }));
     expect(screen.getByRole("heading", { name: "Know what is visible. Know what is not." })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "What Cozy SOC can see" })).toBeTruthy();
+  });
+
+  it("keeps core evidence live when only activity is unavailable", async () => {
+    const degraded: AppData = { ...liveData, activity: null, activity_error: "Activity projection is temporarily unavailable." };
+    render(<App loadData={async () => degraded} />);
+    expect(await screen.findByRole("status", { name: "Live controller data" })).toBeTruthy();
+    expect(screen.queryByRole("alert", { name: "Live monitoring unavailable" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    expect(screen.getByText("Living Room TV")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByRole("heading", { name: "Activity is temporarily unavailable" })).toBeTruthy();
+    expect(screen.getByText("Activity projection is temporarily unavailable.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry activity" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Coverage" }));
     expect(screen.getByRole("heading", { name: "What Cozy SOC can see" })).toBeTruthy();
   });
 
@@ -63,6 +87,8 @@ describe("App product navigation", () => {
     expect(screen.queryByRole("button", { name: "Enable Device Watch" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Devices" }));
     expect(screen.getByText("Living Room TV")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByText("Address changed")).toBeTruthy();
     expect(screen.getByRole("status", { name: "Synthetic demo data" })).toBeTruthy();
   });
 });

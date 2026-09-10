@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import "./connection.css";
+import { ActivityPage } from "./activity/ActivityPage";
+import { parseDeviceActivity } from "./activity/activity";
 import "./app-shell.css";
 import { type AppData, loadAppDataFromWeb } from "./app-data";
 import { CoveragePanel } from "./coverage/CoveragePanel";
@@ -9,12 +11,13 @@ import { DevicesPage } from "./devices/DevicesPage";
 import { loadDeviceDetailFromWeb } from "./devices/detail";
 import { parseDeviceList } from "./devices/devices";
 import { demoCoverageRaw } from "./demo/coverage";
+import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
 import { OverviewPage } from "./OverviewPage";
 import { SetupPanel } from "./setup/SetupPanel";
 import { createWebSetupClient, parseNetworkList, type DeviceLabelClient, type SetupClient } from "./setup/setup";
 
-type Page = "overview" | "devices" | "coverage";
+type Page = "overview" | "devices" | "activity" | "coverage";
 type DataView =
   | { mode: "loading" }
   | { mode: "live"; data: AppData }
@@ -24,6 +27,7 @@ type DataView =
 const demoData: AppData = {
   coverage: { as_of: "2026-09-09T23:21:00Z", reports: [parseCoverageReport(demoCoverageRaw)] },
   devices: parseDeviceList(demoDevicesRaw),
+  activity: parseDeviceActivity(demoActivityRaw),
   networks: parseNetworkList({
     candidates: [],
     candidates_truncated: false,
@@ -48,6 +52,7 @@ export interface AppProps {
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
   overview: { eyebrow: "Overview", title: "Your home at a glance", detail: "Current device evidence and coverage limits, without turning either into a security score." },
   devices: { eyebrow: "Devices", title: "What Cozy SOC has actually seen", detail: "Positive presence evidence, labels, and uncertainty when a Device Watch scope is configured." },
+  activity: { eyebrow: "Activity", title: "What changed on your visible network", detail: "A low-noise timeline of positive device evidence and proven identity changes—never inferred departures from silence." },
   coverage: { eyebrow: "Coverage", title: "Know what is visible. Know what is not.", detail: "Observation points, verified scope, expected gaps, and evidence freshness stay explicit." },
 };
 
@@ -81,6 +86,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         <nav className="primary-nav" aria-label="Primary">
           <NavButton page="overview" current={page} onNavigate={setPage}>Overview</NavButton>
           <NavButton page="devices" current={page} onNavigate={setPage}>Devices</NavButton>
+          <NavButton page="activity" current={page} onNavigate={setPage}>Activity</NavButton>
           <NavButton page="coverage" current={page} onNavigate={setPage}>Coverage</NavButton>
         </nav>
         <p className="sidebar-note">Local-first. Evidence and limitations stay on this machine unless you explicitly add another integration.</p>
@@ -107,6 +113,11 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           view.mode === "live"
             ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
+        ) : null}
+        {activeData && page === "activity" ? (
+          activeData.activity === null
+            ? <section className="product-card empty-product-state" aria-labelledby="activity-unavailable-title"><h2 id="activity-unavailable-title">Activity is temporarily unavailable</h2><p>{activeData.activity_error ?? "The local activity projection could not be read. Existing device and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry activity</button> : null}</section>
+            : <ActivityPage activity={activeData.activity} />
         ) : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>
