@@ -66,6 +66,9 @@ func TestControllerProcessGatewayPreviewNeverAuthorizesOrProbes(t *testing.T) {
 			!plan.ReviewExpiresAt.Equal(plan.CreatedAt.Add(30*time.Second)) || len(plan.Limitations) != 7 {
 			t.Fatalf("unexpected preview: %+v", plan)
 		}
+		if plan.Route.State != "unsupported" || plan.Route.Reason != "platform-unsupported" || plan.Route.SendBindingVerified || plan.Route.SourceAddress != "" || plan.Route.ObservedAt != nil || plan.Route.FreshUntil != nil {
+			t.Fatalf("Linux preview invented Darwin route evidence: %+v", plan.Route)
+		}
 	}
 	client := localapi.NewClient(stateDir)
 	_, err = client.CallWithParams(context.Background(), api.MethodNetworkQualityGatewayPlan, map[string]any{"target": target, "consent": true})
