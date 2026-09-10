@@ -1,7 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { App } from "../App";
 import { demoCoverageRaw } from "../demo/coverage";
 import { CoveragePanel } from "./CoveragePanel";
 import { parseCoverageReport } from "./parse";
@@ -50,12 +49,5 @@ describe("CoveragePanel", () => {
     expect(text).not.toContain("fully protected");
     expect(text).not.toContain("protection score");
     expect(text).not.toMatch(/\b100%\b/);
-  });
-
-  it("labels fixture mode so demo data cannot be mistaken for live monitoring", () => {
-    render(<App />);
-
-    const banner = screen.getByRole("status", { name: "Synthetic demo data" });
-    expect(banner.textContent).toContain("This screen is not connected to live monitoring.");
   });
 });

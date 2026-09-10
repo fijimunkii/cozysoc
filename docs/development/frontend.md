@@ -1,18 +1,74 @@
-# Shared frontend foundation
+# Shared frontend and local web surface
 
-Issue #13 owns the first user-facing Cozy SOC experience. ADR 0003 is **Accepted** for a shared TypeScript/React UI. ADR 0004 remains **Proposed** for Tauri v2, so the first frontend slice is deliberately browser-capable React code without a Rust/Tauri shell or native renderer privileges.
+Issue #13 owns the first user-facing Cozy SOC experience. ADR 0003 is **Accepted** for a shared TypeScript/React UI. ADR 0004 remains **Proposed** for Tauri v2, so the shared UI remains browser-capable and does not depend on native renderer privileges.
+
+The canonical roadmap now uses one user-facing **`cozysoc` executable with multiple explicit modes**. A single executable does not imply a single process lifetime: production service management owns `cozysoc serve`; closing `cozysoc web` or a future desktop window must not stop that controller process.
 
 ## Workspace
 
-The shared UI lives in `ui/` and uses pinned React, TypeScript, Vite, and Vitest dependencies with a committed npm lockfile. Normal CI runs type checking, component/unit tests, and a production build in addition to the Go/controller gates.
+The shared UI lives in `ui/` and uses pinned React, TypeScript, Vite, and Vitest dependencies with a committed npm lockfile. Normal CI runs type checking, component/unit tests, a production build, and a real-process web/controller E2E in addition to the existing Go/controller gates.
 
-The development server binds to `127.0.0.1` rather than all interfaces. This is a developer convenience only; it is not the future authenticated browser-management listener described by the architecture.
+The Vite development server still binds to `127.0.0.1`. It is a frontend developer convenience and is not a Cozy SOC management endpoint.
+
+## `cozysoc web`
+
+`cozysoc web` is a separate, unprivileged local UI process. In this v0.1 slice it:
+
+- binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
+- chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
+- serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
+- exposes only the one-time `POST /api/session` bootstrap and typed read-only `GET /api/coverage` endpoint;
+- uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
+- requires the exact local origin on the browser-session bootstrap;
+- rejects request bodies and query parameters on the parameterless coverage endpoint;
+- rejects unknown `/api/*` paths instead of proxying arbitrary controller method names;
+- applies bounded header/request-URI/body/time limits and local security headers; and
+- talks to `cozysoc serve` through the existing `localapi.Client` over the authenticated Unix-domain socket.
+
+### Separate browser session
+
+Loopback and Host/origin checks are not treated as authentication. Each `cozysoc web` process generates two independent 256-bit random values:
+
+1. a **one-time bootstrap value** printed only in the URL fragment (`#bootstrap=...`), which browsers do not send in HTTP requests; and
+2. a separate **web-session value** that never appears in the URL or React state.
+
+On first load, React reads the bootstrap value from the fragment, sends it once to the same-origin `POST /api/session`, and removes the fragment from browser history in a `finally` path. A valid, unused bootstrap is atomically consumed and replaced by an HttpOnly, Path `/`, SameSite=Strict session cookie. Reusing the bootstrap fails. `GET /api/coverage` requires that cookie and otherwise returns `401 web_session_required` without contacting the controller.
+
+This browser session is deliberately separate from the controller credential. The controller session secret is loaded only inside the native Go process by the existing local API client. It is never returned by the web API, stored in React/browser storage, placed in a URL, reused as the web cookie, or made available to frontend code. The real-process E2E checks that the controller secret, one-time bootstrap, and web-session cookie are all absent from the coverage response.
+
+The cookie is intentionally scoped to loopback HTTP for this local v0.1 surface, so it cannot use the `Secure` attribute without changing the transport. Remote/headless browser management remains separately gated by SEC-031 and must use authenticated encrypted transport; this local mechanism is not that future remote design.
+
+`cozysoc web` can run while the controller is unavailable. After an authenticated browser session is established, a controller read failure returns a bounded `503 controller_unavailable` response and the UI presents an actionable unavailable state. The web process does **not** spawn, supervise, restart, or stop the controller.
+
+State-changing browser endpoints are intentionally not part of this slice. Before any are added, they must carry the additional CSRF and controller-authorization protections owned by #8 rather than assuming the current read-only web session is sufficient for mutations.
+
+## Generic live coverage
+
+The controller's existing detailed `device-watch.coverage` method remains the authoritative live read for the current capability. Native code projects that response into a generic envelope:
+
+```json
+{
+  "as_of": "...",
+  "reports": [
+    {
+      "capability_id": "device-watch",
+      "configured": false,
+      "state": "unconfigured",
+      "reason": "...",
+      "observation_points": [],
+      "next_step": "..."
+    }
+  ]
+}
+```
+
+The same envelope is available through `cozysoc coverage` and authenticated `GET /api/coverage`. Device-Watch-only operational/storage/queue detail is deliberately not copied into this browser-facing contract. When a second capability has a real coverage producer, the envelope can add another validated shared report without widening the browser API into arbitrary RPC.
+
+The React loader accepts the envelope as `unknown`, validates the outer timestamp/report bounds, then passes each report through the existing strict shared coverage parser. Duplicate capability reports, malformed timestamps, unsupported shared fields, and oversized collections fail closed.
 
 ## Current product surface
 
-The first reusable product component is `CoveragePanel`. It consumes the capability-independent nested coverage contract added by #12 rather than Device-Watch-specific operational fields.
-
-It presents:
+`CoveragePanel` presents:
 
 - aggregate capability state using calm, bounded copy;
 - one or more explicit observation points;
@@ -26,30 +82,34 @@ It presents:
 
 There is no percentage, protection score, or green "safe" badge. `active-limited` is rendered as **Active, with limits**.
 
-## Trust boundary
+## Live, unavailable, and demo states
 
-The UI does not read SQLite, launch processes, manage services, access packet capture, or receive generic filesystem/network authority. The coverage parser accepts `unknown` input and reconstructs a bounded allowlisted object before presentation. Unknown fields are discarded; invalid state/dimension/direction/cadence values fail closed.
+The root UI establishes or reuses its local web session and then attempts the same-origin live coverage endpoint.
 
-React renders all report text as ordinary text nodes. This slice introduces no `dangerouslySetInnerHTML` path. A regression test passes markup-like hostile text through the component and verifies that no DOM element is created from it.
+- A successful response is labeled **Live controller data**.
+- Missing/invalid web session, failed bootstrap, or controller unavailability is labeled **Live monitoring unavailable** with actionable copy and retry plus an explicit demo choice.
+- Synthetic data is **never** substituted automatically.
+- Demo mode requires user action and remains labeled **Synthetic demo — This screen is not connected to live monitoring.**
+- Returning from demo to live coverage is explicit and retries the authenticated local endpoint.
 
-Frontend types improve correctness but do not replace controller-side validation or authorization.
+Demo data remains source code only; it is not written into controller storage or mixed with real observations/findings.
 
-## Synthetic demo boundary
+## Static asset boundary
 
-The workspace currently has **no renderer-to-controller transport**. The root app therefore uses a deterministic synthetic coverage fixture so component work can proceed without pretending the browser has live controller authority.
+This PR does not commit Vite build output and does not add a second bridge binary. `cozysoc web` serves a built UI directory so development and process E2E can exercise the real browser path now. #28 owns the release-packaging decision for whether final installers embed or co-install those static assets.
 
-A persistent banner says **Synthetic demo — This screen is not connected to live monitoring.** Tests require that labeling. Demo data is source code only; it is not written into controller storage or mixed with real observations/findings.
+Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root. A regression fixture creates a symlink from the UI tree to an outside file and requires a 404 without serving the target.
 
 ## Desktop shell boundary
 
-This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 proves packaging, service registration, UI-close/controller-survival, permission failure, sleep/reboot, resource, upgrade, and uninstall behavior. When a shell is added, it must remain a thin client to the independently managed controller and expose only narrow native commands.
+This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 proves packaging, service registration, UI-close/controller-survival, permission failure, sleep/reboot, resource, upgrade, and uninstall behavior. If Tauri is promoted, it should reuse the same `cozysoc` executable and web/shared-UI contract rather than create another controller or generic native bridge.
 
 ## Next steps
 
-Useful #13 follow-ons are:
+Useful #13/#84 follow-ons are:
 
-1. define the narrow authenticated renderer/controller read bridge without exposing the session secret through browser storage;
+1. add `cozysoc dev` as an explicitly development-only orchestration command for controller + web;
 2. add the first navigation/information architecture around Overview, Devices, Activity, Coverage, and Settings/Tools;
-3. replace the demo fixture with live coverage only after that bridge is proven, while retaining an explicitly selectable demo mode;
-4. build network-enrollment/onboarding and Device Watch controls on the existing capability-specific mutation APIs; and
-5. add browser-level accessibility/responsive tests once the first complete journey exists.
+3. build network-enrollment/onboarding and Device Watch controls only after the required browser mutation protections are in place;
+4. add browser-level accessibility/responsive tests around the first complete journey; and
+5. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
