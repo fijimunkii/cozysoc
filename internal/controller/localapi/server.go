@@ -371,6 +371,12 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodNetworkQualityLocal:
+		quality, ok := s.readLocalNetworkQuality(conn, request)
+		if !ok {
+			return
+		}
+		result = quality
 	case api.MethodNetworksList:
 		if s.rejectUnexpectedParams(conn, request) {
 			return
