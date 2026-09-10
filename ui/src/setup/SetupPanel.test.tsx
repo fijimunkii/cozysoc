@@ -29,6 +29,7 @@ function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: s
       reports: [enabled ? demoCoverageRaw : unconfiguredCoverage],
     }),
     activity: parseDeviceActivity(enabled ? { configured: true, scope_id: "scope.home", since: "2026-09-09T02:00:00Z", as_of: "2026-09-10T02:00:00Z", items: [], truncated: false } : { configured: false, since: "2026-09-09T02:00:00Z", as_of: "2026-09-10T02:00:00Z", items: [], truncated: false }),
+    tools: null,
     devices: parseDeviceList(enabled ? {
       configured: true,
       scope_id: "scope.home",

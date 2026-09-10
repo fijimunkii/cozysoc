@@ -45,6 +45,8 @@ type coverageLoader func(context.Context) (coverageEnvelope, error)
 type deviceLoader func(context.Context) (api.DeviceList, error)
 type deviceDetailLoader func(context.Context, string) (api.DeviceDetail, error)
 type deviceActivityLoader func(context.Context) (api.DeviceActivityList, error)
+type statusLoader func(context.Context) (api.Status, error)
+type capabilityLoader func(context.Context) (api.CapabilityList, error)
 
 type webHandler struct {
 	expectedHost       string
@@ -53,6 +55,8 @@ type webHandler struct {
 	loadDevices        deviceLoader
 	loadDeviceDetail   deviceDetailLoader
 	loadDeviceActivity deviceActivityLoader
+	loadStatus         statusLoader
+	loadCapabilities   capabilityLoader
 	labelDevice        deviceLabelMutator
 	loadNetworks       networkLoader
 	enrollNetwork      networkEnrollMutator
@@ -144,6 +148,12 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	handler.loadDeviceActivity = func(requestCtx context.Context) (api.DeviceActivityList, error) {
 		return loadDeviceActivityFromController(requestCtx, dir)
+	}
+	handler.loadStatus = func(requestCtx context.Context) (api.Status, error) {
+		return loadStatusFromController(requestCtx, dir)
+	}
+	handler.loadCapabilities = func(requestCtx context.Context) (api.CapabilityList, error) {
+		return loadCapabilitiesFromController(requestCtx, dir)
 	}
 	if err := configureWebMutationBridge(handler, dir); err != nil {
 		return err
@@ -271,6 +281,10 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/api/session":
 		h.handleSessionRoute(w, r)
+	case "/api/status":
+		h.handleStatus(w, r)
+	case "/api/capabilities":
+		h.handleCapabilities(w, r)
 	case "/api/coverage":
 		h.handleCoverage(w, r)
 	case "/api/devices":

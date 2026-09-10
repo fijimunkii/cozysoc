@@ -13,11 +13,14 @@ import { parseDeviceList } from "./devices/devices";
 import { demoCoverageRaw } from "./demo/coverage";
 import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
+import { demoCapabilitiesRaw, demoStatusRaw } from "./demo/tools";
 import { OverviewPage } from "./OverviewPage";
 import { SetupPanel } from "./setup/SetupPanel";
 import { createWebSetupClient, parseNetworkList, type DeviceLabelClient, type SetupClient } from "./setup/setup";
+import { ToolsPage } from "./tools/ToolsPage";
+import { parseToolsSnapshot } from "./tools/tools";
 
-type Page = "overview" | "devices" | "activity" | "coverage";
+type Page = "overview" | "devices" | "activity" | "coverage" | "tools";
 type DataView =
   | { mode: "loading" }
   | { mode: "live"; data: AppData }
@@ -28,6 +31,7 @@ const demoData: AppData = {
   coverage: { as_of: "2026-09-09T23:21:00Z", reports: [parseCoverageReport(demoCoverageRaw)] },
   devices: parseDeviceList(demoDevicesRaw),
   activity: parseDeviceActivity(demoActivityRaw),
+  tools: parseToolsSnapshot(demoStatusRaw, demoCapabilitiesRaw),
   networks: parseNetworkList({
     candidates: [],
     candidates_truncated: false,
@@ -54,6 +58,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   devices: { eyebrow: "Devices", title: "What Cozy SOC has actually seen", detail: "Positive presence evidence, labels, and uncertainty when a Device Watch scope is configured." },
   activity: { eyebrow: "Activity", title: "What changed on your visible network", detail: "A low-noise timeline of positive device evidence and proven identity changes—never inferred departures from silence." },
   coverage: { eyebrow: "Coverage", title: "Know what is visible. Know what is not.", detail: "Observation points, verified scope, expected gaps, and evidence freshness stay explicit." },
+  tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
 export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient }: AppProps) {
@@ -88,6 +93,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           <NavButton page="devices" current={page} onNavigate={setPage}>Devices</NavButton>
           <NavButton page="activity" current={page} onNavigate={setPage}>Activity</NavButton>
           <NavButton page="coverage" current={page} onNavigate={setPage}>Coverage</NavButton>
+          <NavButton page="tools" current={page} onNavigate={setPage}>Tools</NavButton>
         </nav>
         <p className="sidebar-note">Local-first. Evidence and limitations stay on this machine unless you explicitly add another integration.</p>
       </aside>
@@ -123,6 +129,11 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>
         ) : null}
         {activeData && page === "coverage" ? activeData.coverage.reports.map((report) => <CoveragePanel key={report.capability_id} report={report} />) : null}
+        {activeData && page === "tools" ? (
+          activeData.tools === null
+            ? <section className="product-card empty-product-state" aria-labelledby="tools-unavailable-title"><h2 id="tools-unavailable-title">Tool information is temporarily unavailable</h2><p>{activeData.tools_error ?? "The local capability catalog could not be read. Device, activity, and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry tools</button> : null}</section>
+            : <ToolsPage tools={activeData.tools} onNavigate={(target) => setPage(target)} />
+        ) : null}
       </main>
     </div>
   );

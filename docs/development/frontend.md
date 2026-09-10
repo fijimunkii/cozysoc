@@ -17,7 +17,7 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
 - chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
 - serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
-- exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for coverage/devices/networks, and narrowly typed network-enrollment / Device Watch control mutations;
+- exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for status/capabilities/coverage/devices/activity/networks, and narrowly typed network-enrollment / Device Watch control mutations;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
 - requires the exact local origin on the browser-session bootstrap;
 - rejects request bodies and query parameters on the parameterless coverage endpoint;
@@ -123,7 +123,7 @@ Current typed device read surfaces:
 - `GET /api/devices/detail?device_id=...` — bounded current-scope identity evidence and retained source provenance for one device; raw observation payloads are not exposed.
 - `GET /api/activity` — bounded low-noise Device Watch activity derived from retained normalized evidence; no raw payloads or inferred departures.
 
-The validated information architecture now exposes **Overview**, **Devices**, **Activity**, and **Coverage**. Settings/Tools remains deferred until there are real configuration choices, engine diagnostics, or validated advanced links to present.
+The validated information architecture now exposes **Overview**, **Devices**, **Activity**, **Coverage**, and **Tools**. Tools is backed by the real capability catalog rather than an empty navigation placeholder; broader Settings stays deferred until there are additional user-facing configuration choices.
 
 Authenticated `GET /api/devices` is parameterless and read-only. It is backed by the existing controller `devices.list` method and returns only the bounded device-presence read model: configured scope, stable device ID, optional user label, first/last seen timestamps, `visible`/`uncertain` presence, and truncation. It does not expose raw observations, identity claims, database access, controller credentials, or a device mutation surface.
 
@@ -140,7 +140,7 @@ This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 prove
 Useful #13 follow-ons are:
 
 1. add browser-level accessibility, keyboard, scaling, and responsive tests around the first complete journey;
-2. add Settings/Tools only when there are real configuration choices, engine diagnostics, or validated advanced links to present; and
+2. add validated external deep-link handling only when a capability actually declares a safe destination/context contract; and
 3. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
 
 
@@ -158,3 +158,16 @@ React validates the same 160 UTF-8 byte limit for immediate feedback, keeps the 
 Live device rows can open a read-only evidence detail view through `GET /api/devices/detail?device_id=...`. The browser supplies only a device ID; the controller resolves the current Device Watch scope and refuses devices without retained evidence in that scope. The response is bounded to the most recent 100 identity-evidence rows and exposes claim/link/source metadata needed for explanation, not raw observation payload JSON.
 
 Presence (`visible` / `uncertain`) and identity validity are intentionally separate. A retained MAC/IP association can be historical while the device remains listed, and a temporally current identity association is not itself proof of recent presence, trust, or safety. When a source observation has aged out before its longer-lived identity claim, the detail view says the raw source metadata expired instead of reconstructing it.
+
+
+## Tools and capability presentation
+
+The Tools page consumes two additional authenticated, parameterless read routes: `GET /api/status` and `GET /api/capabilities`. Both are browser-specific projections over existing typed UDS reads; they add no new controller method and no lifecycle mutation authority.
+
+`GET /api/status` deliberately excludes PID, uptime, controller API internals, and credentials. It exposes only the controller build/version string, start time, configuration schema version, and the fact that management transport is the protected local Unix socket.
+
+`GET /api/capabilities` deliberately does not serialize the full native manifest. The browser receives only the fields needed to explain a capability: display metadata, configured/ownership state, independent desired/process/verification state, declared target support level, privilege descriptions, resource-measurement status/budgets, provenance kind/license/version policy, verification contract, lifecycle action names, and a deep-link count. Native config schemas, dependency/input wiring, manifest evidence paths, provenance source URLs, and any configured values remain outside the browser contract.
+
+The page keeps lifecycle and coverage semantics separate. `verified` means the capability's declared verification signals passed; it is not rendered as a whole-home protection claim. A built-in capability with `process=not-applicable` is shown as **Built into Cozy SOC**, not as a fake running process. `candidate`, `planned`, `limited`, and `tested` target states remain explicit, and an `unmeasured` resource profile is rendered as **Not measured yet** rather than receiving invented CPU/RAM/disk numbers.
+
+Device Watch currently declares zero deep links. Tools therefore links back to Cozy SOC's own Devices, Activity, and Coverage views instead of presenting a broken upstream-engine link. Future external deep links remain separately gated on destination/context validation before the browser is allowed to navigate to them.
