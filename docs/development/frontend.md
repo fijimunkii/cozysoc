@@ -17,7 +17,7 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
 - chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
 - serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
-- exposes only the one-time `POST /api/session` bootstrap and typed read-only `GET /api/coverage` and `GET /api/devices` endpoints;
+- exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for coverage/devices/networks, and narrowly typed network-enrollment / Device Watch control mutations;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
 - requires the exact local origin on the browser-session bootstrap;
 - rejects request bodies and query parameters on the parameterless coverage endpoint;
@@ -27,10 +27,11 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 
 ### Separate browser session
 
-Loopback and Host/origin checks are not treated as authentication. Each `cozysoc web` process generates two independent 256-bit random values:
+Loopback and Host/origin checks are not treated as authentication. Each `cozysoc web` process generates three independent 256-bit random values:
 
 1. a **one-time bootstrap value** printed only in the URL fragment (`#bootstrap=...`), which browsers do not send in HTTP requests; and
-2. a separate **web-session value** that never appears in the URL or React state.
+2. a separate **web-session value** that never appears in the URL or React state; and
+3. a separate **CSRF value** that is returned only by authenticated same-origin session metadata and is not an authentication credential.
 
 On first load, React reads the bootstrap value from the fragment, sends it once to the same-origin `POST /api/session`, and removes the fragment from browser history in a `finally` path. A valid, unused bootstrap is atomically consumed and replaced by an HttpOnly, Path `/`, SameSite=Strict session cookie. Reusing the bootstrap fails. The typed read endpoints require that cookie and otherwise return `401 web_session_required` without contacting the controller.
 
@@ -40,7 +41,19 @@ The cookie is intentionally scoped to loopback HTTP for this local v0.1 surface,
 
 `cozysoc web` can run while the controller is unavailable. After an authenticated browser session is established, a controller read failure returns a bounded `503 controller_unavailable` response and the UI presents an actionable unavailable state. The web process does **not** spawn, supervise, restart, or stop the controller.
 
-State-changing browser endpoints are intentionally not part of this slice. Before any are added, they must carry the additional CSRF and controller-authorization protections owned by #8 rather than assuming the current read-only web session is sufficient for mutations.
+State-changing browser endpoints now use an additional mutation guard rather than treating the SameSite cookie as sufficient CSRF protection. `GET /api/session` requires the HttpOnly web-session cookie and returns only the process-local CSRF value. A mutation is accepted only when all of the following hold:
+
+- the HttpOnly web-session cookie authenticates;
+- the request method is `POST`;
+- `Origin` is present and exactly equals the current loopback origin;
+- `X-Cozy-CSRF` matches the independent process-local CSRF value using constant-time comparison; and
+- the endpoint-specific body/query/content-type contract validates before native controller access.
+
+The CSRF value is designed for in-memory frontend use only. It is not stored in a URL, localStorage, controller configuration, or the UDS credential file. Cross-origin requests cannot obtain it through a readable response, and unknown `/api/*` routes remain unavailable.
+
+The initial allowlisted mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to the pre-existing typed controller methods. No arbitrary method name, command, file path, or network destination enters the native bridge. The UI does not call these mutations yet; the next #13 slice can build onboarding on this already-tested boundary.
+
+Expected typed controller mutation errors are mapped to bounded HTTP outcomes (`400`, `404`, `409`, `412`, `501`); transport/internal failures remain a generic `503 controller_unavailable` without copying controller diagnostic strings into the browser.
 
 ## Generic live coverage
 
