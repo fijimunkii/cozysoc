@@ -43,12 +43,14 @@ type coverageEnvelope struct {
 
 type coverageLoader func(context.Context) (coverageEnvelope, error)
 type deviceLoader func(context.Context) (api.DeviceList, error)
+type deviceDetailLoader func(context.Context, string) (api.DeviceDetail, error)
 
 type webHandler struct {
 	expectedHost       string
 	uiDir              string
 	loadCoverage       coverageLoader
 	loadDevices        deviceLoader
+	loadDeviceDetail   deviceDetailLoader
 	labelDevice        deviceLabelMutator
 	loadNetworks       networkLoader
 	enrollNetwork      networkEnrollMutator
@@ -134,6 +136,9 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	})
 	handler.loadDevices = func(requestCtx context.Context) (api.DeviceList, error) {
 		return loadDevicesFromController(requestCtx, dir)
+	}
+	handler.loadDeviceDetail = func(requestCtx context.Context, deviceID string) (api.DeviceDetail, error) {
+		return loadDeviceDetailFromController(requestCtx, dir, deviceID)
 	}
 	if err := configureWebMutationBridge(handler, dir); err != nil {
 		return err
@@ -265,6 +270,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleCoverage(w, r)
 	case "/api/devices":
 		h.handleDevices(w, r)
+	case "/api/devices/detail":
+		h.handleDeviceDetail(w, r)
 	case "/api/devices/label":
 		h.handleDeviceLabel(w, r)
 	case "/api/networks":

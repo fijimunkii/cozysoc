@@ -1,11 +1,30 @@
 import { useState } from "react";
 
 import type { DeviceLabelClient } from "../setup/setup";
+import { DeviceLoadError } from "./devices";
+import { DeviceDetailPanel } from "./DeviceDetailPanel";
+import type { DeviceDetail } from "./detail";
 import { SetupRequestError, validateDeviceLabelInput } from "../setup/setup";
 import "./devices.css";
 import type { DeviceList, DevicePresence, DevicePresenceState } from "./devices";
 
-export function DevicesPage({ devices, labelClient, onChanged }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void }) {
+export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
+  const [detailView, setDetailView] = useState<{ deviceID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string } | null>(null);
+
+  async function openDetail(deviceID: string): Promise<void> {
+    if (loadDetail === undefined) return;
+    setDetailView({ deviceID, state: "loading" });
+    try {
+      const detail = await loadDetail(deviceID);
+      setDetailView({ deviceID, state: "ready", detail });
+    } catch (error: unknown) {
+      setDetailView({ deviceID, state: "error", message: error instanceof DeviceLoadError ? error.message : "Device evidence could not be loaded." });
+    }
+  }
+
+  if (detailView?.state === "ready" && detailView.detail !== undefined) return <DeviceDetailPanel detail={detailView.detail} onBack={() => setDetailView(null)} />;
+  if (detailView?.state === "loading") return <section className="product-card empty-product-state"><h2>Reading device evidence</h2><p>Loading retained observations and identity associations from the local controller.</p></section>;
+  if (detailView?.state === "error") return <section className="product-card empty-product-state"><h2>Device evidence is unavailable</h2><p>{detailView.message}</p><div className="device-detail-error-actions"><button type="button" className="secondary-action" onClick={() => void openDetail(detailView.deviceID)}>Retry evidence</button><button type="button" className="quiet-button" onClick={() => setDetailView(null)}>Back to devices</button></div></section>;
   if (!devices.configured) {
     return (
       <section className="product-card empty-product-state" aria-labelledby="devices-title">
@@ -20,6 +39,7 @@ export function DevicesPage({ devices, labelClient, onChanged }: { devices: Devi
   const visible = devices.devices.filter((device) => device.state === "visible").length;
   const uncertain = devices.devices.length - visible;
   const canEditLabels = labelClient !== undefined && onChanged !== undefined;
+  const canViewEvidence = loadDetail !== undefined;
   return (
     <section className="devices-page" aria-labelledby="devices-title">
       <div className="device-summary-grid" aria-label="Device visibility summary">
@@ -49,12 +69,10 @@ export function DevicesPage({ devices, labelClient, onChanged }: { devices: Devi
           <div className="device-table-wrap">
             <table className="device-table">
               <thead>
-                <tr><th>Device</th><th>Presence</th><th>Last seen</th><th>First seen</th>{canEditLabels ? <th>Label</th> : null}</tr>
+                <tr><th>Device</th><th>Presence</th><th>Last seen</th><th>First seen</th>{canViewEvidence ? <th>Evidence</th> : null}{canEditLabels ? <th>Label</th> : null}</tr>
               </thead>
               <tbody>
-                {devices.devices.map((device) => canEditLabels
-                  ? <DeviceRow key={device.id} device={device} labelClient={labelClient} onChanged={onChanged} />
-                  : <DeviceRow key={device.id} device={device} />)}
+                {devices.devices.map((device) => <DeviceRow key={device.id} device={device} labelClient={canEditLabels ? labelClient : undefined} onChanged={canEditLabels ? onChanged : undefined} onViewEvidence={canViewEvidence ? () => void openDetail(device.id) : undefined} />)}
               </tbody>
             </table>
           </div>
@@ -64,7 +82,7 @@ export function DevicesPage({ devices, labelClient, onChanged }: { devices: Devi
   );
 }
 
-function DeviceRow({ device, labelClient, onChanged }: { device: DevicePresence; labelClient?: DeviceLabelClient; onChanged?: () => void }) {
+function DeviceRow({ device, labelClient, onChanged, onViewEvidence }: { device: DevicePresence; labelClient?: DeviceLabelClient | undefined; onChanged?: (() => void) | undefined; onViewEvidence?: (() => void) | undefined }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(device.user_label ?? "");
   const [pending, setPending] = useState(false);
@@ -118,6 +136,7 @@ function DeviceRow({ device, labelClient, onChanged }: { device: DevicePresence;
       <td><span className={`presence-pill presence-pill--${device.state}`}>{presenceLabel(device.state)}</span></td>
       <td>{formatTimestamp(device.last_seen)}</td>
       <td>{formatTimestamp(device.first_seen)}</td>
+      {onViewEvidence ? <td><button type="button" className="quiet-button" onClick={onViewEvidence}>View evidence</button></td> : null}
       {canEdit ? (
         <td className="device-label-actions">
           {!editing ? <button type="button" className="quiet-button" onClick={() => { setDraft(current); setError(null); setEditing(true); }}>{current === "" ? `Name ${device.id}` : `Rename ${current}`}</button> : null}

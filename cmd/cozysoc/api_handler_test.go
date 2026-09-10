@@ -21,6 +21,9 @@ import (
 type fakeDeviceStore struct {
 	page           storage.DeviceEvidencePage
 	err            error
+	detail         storage.DeviceEvidenceDetail
+	detailErr      error
+	detailQuery    storage.DeviceEvidenceDetailQuery
 	setScope       string
 	setDevice      string
 	setLabel       string
@@ -36,6 +39,11 @@ type fakeDeviceStore struct {
 
 func (f *fakeDeviceStore) ListDeviceEvidence(context.Context, storage.DeviceEvidenceQuery) (storage.DeviceEvidencePage, error) {
 	return f.page, f.err
+}
+
+func (f *fakeDeviceStore) GetDeviceEvidenceDetail(_ context.Context, query storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error) {
+	f.detailQuery = query
+	return f.detail, f.detailErr
 }
 
 func (f *fakeDeviceStore) SetDeviceLabel(_ context.Context, scopeID, deviceID, label string) (bool, error) {
@@ -128,6 +136,61 @@ func TestControllerAPIHandlerListsConfiguredDevicePresence(t *testing.T) {
 	}
 	if list.Devices[1].State != "uncertain" {
 		t.Fatalf("stale device was not uncertain: %+v", list.Devices[1])
+	}
+}
+
+func TestControllerAPIHandlerReturnsScopedDeviceDetailWithTemporalEvidence(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	oldValidUntil := now.Add(-time.Minute)
+	currentValidUntil := now.Add(5 * time.Minute)
+	confidence := 0.8
+	store := &fakeDeviceStore{detail: storage.DeviceEvidenceDetail{
+		Summary: storage.DeviceEvidenceSummary{Device: domain.Device{ID: "device.one", UserLabel: "Speaker", CreatedAt: now.Add(-time.Hour)}, FirstSeen: now.Add(-time.Hour), LastSeen: now.Add(-time.Minute)},
+		Evidence: []storage.DeviceIdentityEvidence{
+			{Kind: domain.ClaimIPv4, Value: "192.168.1.20", ObservedAt: now.Add(-time.Minute), ClaimValidUntil: &currentValidUntil, ClaimConfidence: &confidence, LinkValidUntil: &currentValidUntil, LinkConfidence: &confidence, Authority: domain.LinkInferred, Reason: "device-watch:recent-mac-continuity:ip", SourceSensorID: "sensor.dw", Observation: &storage.DeviceEvidenceObservation{ID: "obs.one", SensorID: "sensor.dw", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: now.Add(-time.Minute), Attribution: "device-watch:arp-cache"}},
+			{Kind: domain.ClaimMAC, Value: "02:00:00:00:00:01", ObservedAt: now.Add(-10 * time.Minute), ClaimValidUntil: &oldValidUntil, LinkValidUntil: &oldValidUntil, Authority: domain.LinkInferred, Reason: "device-watch:new-mac-candidate:mac", SourceSensorID: "sensor.dw"},
+		},
+	}}
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.now = func() time.Time { return now }
+
+	detail, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "device.one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.ScopeID != "scope.home" || detail.Device.State != "visible" || len(detail.Evidence) != 2 || !detail.Evidence[0].Current || detail.Evidence[1].Current {
+		t.Fatalf("unexpected detail projection: %+v", detail)
+	}
+	if store.detailQuery.ScopeID != "scope.home" || store.detailQuery.DeviceID != "device.one" || store.detailQuery.Limit != storage.MaxDeviceDetailEvidence {
+		t.Fatalf("detail query escaped current scope: %+v", store.detailQuery)
+	}
+	if detail.Evidence[0].Source == nil || detail.Evidence[0].Source.Attribution != "device-watch:arp-cache" {
+		t.Fatalf("missing source projection: %+v", detail.Evidence[0])
+	}
+}
+
+func TestControllerAPIHandlerDeviceDetailFailsClosed(t *testing.T) {
+	store := &fakeDeviceStore{}
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "../bad"}); !errors.Is(err, localapi.ErrInvalidRead) {
+		t.Fatalf("invalid device detail error = %v", err)
+	}
+	store.detailErr = storage.ErrDeviceEvidenceNotFound
+	if _, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "device.one"}); !errors.Is(err, localapi.ErrReadTargetNotFound) {
+		t.Fatalf("out-of-scope detail error = %v", err)
+	}
+	control.configured = false
+	control.scopeID = ""
+	if _, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "device.one"}); !errors.Is(err, localapi.ErrReadTargetNotFound) {
+		t.Fatalf("unconfigured detail error = %v", err)
 	}
 }
 

@@ -6,6 +6,7 @@ import { type AppData, loadAppDataFromWeb } from "./app-data";
 import { CoveragePanel } from "./coverage/CoveragePanel";
 import { parseCoverageReport } from "./coverage/parse";
 import { DevicesPage } from "./devices/DevicesPage";
+import { loadDeviceDetailFromWeb } from "./devices/detail";
 import { parseDeviceList } from "./devices/devices";
 import { demoCoverageRaw } from "./demo/coverage";
 import { demoDevicesRaw } from "./demo/devices";
@@ -104,7 +105,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         ) : null}
         {activeData && page === "devices" ? (
           view.mode === "live"
-            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} />
+            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
         ) : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (

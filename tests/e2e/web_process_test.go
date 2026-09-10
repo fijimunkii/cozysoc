@@ -180,6 +180,24 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 		t.Fatalf("unexpected fresh-state web devices: %+v", devices)
 	}
 
+	detailResponse, err := client.Get(rootURL + "api/devices/detail?device_id=device.missing")
+	if err != nil {
+		t.Fatalf("read missing device detail: %v", err)
+	}
+	detailBody, err := io.ReadAll(detailResponse.Body)
+	_ = detailResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detailResponse.StatusCode != http.StatusNotFound || !strings.Contains(string(detailBody), `"error":"not_found"`) {
+		t.Fatalf("missing detail status=%d body=%s", detailResponse.StatusCode, detailBody)
+	}
+	for _, secret := range []string{controllerSecret, bootstrap, webSession} {
+		if strings.Contains(string(detailBody), secret) {
+			t.Fatal("device detail error exposed a controller or browser credential")
+		}
+	}
+
 	root, err := client.Get(rootURL)
 	if err != nil {
 		t.Fatalf("read web root: %v", err)

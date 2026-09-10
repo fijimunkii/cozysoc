@@ -21,6 +21,7 @@ var deviceIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
 type controllerStore interface {
 	devicewatch.DeviceEvidenceReader
 	devicewatch.CoverageSampleReader
+	GetDeviceEvidenceDetail(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error)
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
 	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
@@ -106,6 +107,57 @@ func (h *controllerAPIHandler) Devices(ctx context.Context) (api.DeviceList, err
 			LastSeen:  device.LastSeen,
 			State:     string(device.State),
 		})
+	}
+	return result, nil
+}
+
+func (h *controllerAPIHandler) DeviceDetail(ctx context.Context, params api.DeviceDetailParams) (api.DeviceDetail, error) {
+	if !deviceIDPattern.MatchString(params.DeviceID) {
+		return api.DeviceDetail{}, localapi.ErrInvalidRead
+	}
+	asOf := h.now().UTC()
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceDetail{}, err
+	}
+	if !configured || scopeID == "" {
+		return api.DeviceDetail{}, localapi.ErrReadTargetNotFound
+	}
+	detail, err := h.store.GetDeviceEvidenceDetail(ctx, storage.DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: params.DeviceID, AsOf: asOf, Limit: storage.MaxDeviceDetailEvidence})
+	if errors.Is(err, storage.ErrDeviceEvidenceNotFound) {
+		return api.DeviceDetail{}, localapi.ErrReadTargetNotFound
+	}
+	if err != nil {
+		return api.DeviceDetail{}, err
+	}
+	presence := devicewatch.PresenceFromEvidence(detail.Summary, asOf)
+	result := api.DeviceDetail{
+		ScopeID: scopeID,
+		AsOf:    asOf,
+		Device: api.DevicePresence{
+			ID: presence.ID, UserLabel: presence.UserLabel, FirstSeen: presence.FirstSeen,
+			LastSeen: presence.LastSeen, State: string(presence.State),
+		},
+		Evidence:  make([]api.DeviceIdentityEvidence, 0, len(detail.Evidence)),
+		Truncated: detail.Truncated,
+	}
+	for _, evidence := range detail.Evidence {
+		current := (evidence.ClaimValidUntil == nil || evidence.ClaimValidUntil.After(asOf)) &&
+			(evidence.LinkValidUntil == nil || evidence.LinkValidUntil.After(asOf))
+		item := api.DeviceIdentityEvidence{
+			Kind: string(evidence.Kind), Value: evidence.Value, ObservedAt: evidence.ObservedAt,
+			ValidUntil: evidence.ClaimValidUntil, LinkValidUntil: evidence.LinkValidUntil, Current: current, ClaimConfidence: evidence.ClaimConfidence,
+			LinkConfidence: evidence.LinkConfidence, Authority: string(evidence.Authority), Reason: evidence.Reason,
+			SourceSensorID: evidence.SourceSensorID,
+		}
+		if evidence.Observation != nil {
+			item.Source = &api.DeviceEvidenceSource{
+				ObservationID: evidence.Observation.ID, SensorID: evidence.Observation.SensorID,
+				Kind: evidence.Observation.Kind, SourceStream: evidence.Observation.SourceStream,
+				IngestedAt: evidence.Observation.IngestedAt, Attribution: evidence.Observation.Attribution,
+			}
+		}
+		result.Evidence = append(result.Evidence, item)
 	}
 	return result, nil
 }

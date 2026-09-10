@@ -31,6 +31,13 @@ func (testHandler) Capabilities() api.CapabilityList {
 	return api.CapabilityList{CatalogSchemaVersion: 1}
 }
 
+func (testHandler) DeviceDetail(_ context.Context, params api.DeviceDetailParams) (api.DeviceDetail, error) {
+	if params.DeviceID != "device.one" {
+		return api.DeviceDetail{}, ErrReadTargetNotFound
+	}
+	return api.DeviceDetail{ScopeID: "scope.home", AsOf: time.Unix(2, 0).UTC(), Device: api.DevicePresence{ID: "device.one", FirstSeen: time.Unix(1, 0).UTC(), LastSeen: time.Unix(2, 0).UTC(), State: "visible"}, Evidence: []api.DeviceIdentityEvidence{}}, nil
+}
+
 func (testHandler) Devices(context.Context) (api.DeviceList, error) {
 	return api.DeviceList{
 		Configured: true,
@@ -122,6 +129,27 @@ func TestDevicesListRoundTrip(t *testing.T) {
 	}
 	if !list.Configured || list.ScopeID != "scope.home" || len(list.Devices) != 1 || list.Devices[0].State != "visible" {
 		t.Fatalf("unexpected device list: %+v", list)
+	}
+}
+
+func TestDeviceDetailRoundTripAndTypedNotFound(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	client := NewClient(server.stateDir)
+	result, err := client.CallWithParams(context.Background(), api.MethodDeviceDetail, api.DeviceDetailParams{DeviceID: "device.one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail api.DeviceDetail
+	if err := json.Unmarshal(result, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.ScopeID != "scope.home" || detail.Device.ID != "device.one" {
+		t.Fatalf("unexpected device detail: %+v", detail)
+	}
+	_, err = client.CallWithParams(context.Background(), api.MethodDeviceDetail, api.DeviceDetailParams{DeviceID: "device.missing"})
+	var responseErr *ResponseError
+	if !errors.As(err, &responseErr) || responseErr.Code != "not_found" {
+		t.Fatalf("missing device detail error = %v", err)
 	}
 }
 
