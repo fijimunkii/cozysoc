@@ -22,6 +22,14 @@ type processCoverageEnvelope struct {
 	Reports []processCoverageReport `json:"reports"`
 }
 
+type processWebDeviceList struct {
+	Configured bool              `json:"configured"`
+	ScopeID    string            `json:"scope_id,omitempty"`
+	AsOf       time.Time         `json:"as_of"`
+	Devices    []json.RawMessage `json:"devices"`
+	Truncated  bool              `json:"truncated"`
+}
+
 func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("web process E2E currently targets the Linux CI reference runner")
@@ -145,6 +153,31 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	report := coverage.Reports[0]
 	if report.CapabilityID != "device-watch" || report.Configured || report.State != "unconfigured" || len(report.ObservationPoints) != 0 {
 		t.Fatalf("unexpected shared web coverage report: %+v", report)
+	}
+
+	devicesResponse, err := client.Get(rootURL + "api/devices")
+	if err != nil {
+		t.Fatalf("read live web devices: %v\n%s", err, web.logs())
+	}
+	devicesBody, err := io.ReadAll(devicesResponse.Body)
+	_ = devicesResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if devicesResponse.StatusCode != http.StatusOK {
+		t.Fatalf("devices HTTP status = %d body=%s", devicesResponse.StatusCode, devicesBody)
+	}
+	for _, secret := range []string{controllerSecret, bootstrap, webSession} {
+		if strings.Contains(string(devicesBody), secret) {
+			t.Fatal("web devices response exposed a controller or browser credential")
+		}
+	}
+	var devices processWebDeviceList
+	if err := json.Unmarshal(devicesBody, &devices); err != nil {
+		t.Fatalf("decode web devices: %v: %s", err, devicesBody)
+	}
+	if devices.AsOf.IsZero() || devices.Configured || devices.ScopeID != "" || len(devices.Devices) != 0 || devices.Truncated {
+		t.Fatalf("unexpected fresh-state web devices: %+v", devices)
 	}
 
 	root, err := client.Get(rootURL)

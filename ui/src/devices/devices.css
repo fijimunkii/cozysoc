@@ -1,0 +1,30 @@
+.devices-page { display: grid; gap: 18px; }
+.device-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.summary-tile { padding: 18px 20px; border: 1px solid #dedbd1; border-radius: 18px; background: rgba(255,255,252,.82); }
+.summary-tile span { display: block; color: #6c7166; font-size: .82rem; }
+.summary-tile strong { display: block; margin-top: 4px; font-size: 1.9rem; letter-spacing: -.03em; }
+.device-list-card { overflow: hidden; }
+.section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 26px 28px 18px; }
+.section-header h2 { margin: 5px 0 8px; font-size: clamp(1.45rem, 3vw, 2rem); letter-spacing: -.025em; }
+.section-header p:not(.eyebrow) { max-width: 720px; margin: 0; color: #62675e; line-height: 1.6; }
+.as-of-label { flex: none; color: #74796f; font-size: .78rem; white-space: nowrap; }
+.inline-notice { margin: 0 28px 16px; padding: 10px 12px; border-radius: 10px; background: #f3eee0; color: #5b5545; font-size: .85rem; }
+.device-table-wrap { overflow-x: auto; }
+.device-table { width: 100%; border-collapse: collapse; }
+.device-table th, .device-table td { padding: 15px 28px; border-top: 1px solid #ebe8df; text-align: left; vertical-align: middle; }
+.device-table th { color: #70756b; font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+.device-table td { color: #4f544c; font-size: .9rem; }
+.device-table td:first-child strong { display: block; color: #2b2f29; font-size: .96rem; }
+.device-table code { display: block; margin-top: 4px; color: #7a7f75; font-size: .73rem; }
+.presence-pill { display: inline-flex; padding: 5px 9px; border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.presence-pill--visible { background: #e6f0e5; color: #35553a; }
+.presence-pill--uncertain { background: #f3eee0; color: #6b5e38; }
+.empty-list-state { padding: 28px; border-top: 1px solid #ebe8df; }
+.empty-list-state p, .empty-product-state p { color: #62675e; line-height: 1.6; }
+.quiet-note { font-size: .88rem; }
+@media (max-width: 720px) {
+  .device-summary-grid { grid-template-columns: 1fr; }
+  .section-header { display: block; }
+  .as-of-label { display: block; margin-top: 12px; }
+  .device-table th, .device-table td { padding-left: 18px; padding-right: 18px; }
+}

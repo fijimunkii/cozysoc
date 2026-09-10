@@ -42,11 +42,13 @@ type coverageEnvelope struct {
 }
 
 type coverageLoader func(context.Context) (coverageEnvelope, error)
+type deviceLoader func(context.Context) (api.DeviceList, error)
 
 type webHandler struct {
 	expectedHost   string
 	uiDir          string
 	loadCoverage   coverageLoader
+	loadDevices    deviceLoader
 	bootstrapToken string
 	sessionToken   string
 	bootstrapMu    sync.Mutex
@@ -124,6 +126,9 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	handler := newWebHandler(expectedHost, assets, bootstrapToken, sessionToken, func(requestCtx context.Context) (coverageEnvelope, error) {
 		return loadCoverageFromController(requestCtx, dir)
 	})
+	handler.loadDevices = func(requestCtx context.Context) (api.DeviceList, error) {
+		return loadDevicesFromController(requestCtx, dir)
+	}
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -208,7 +213,21 @@ func loadCoverageFromController(ctx context.Context, stateDir string) (coverageE
 	}, nil
 }
 
-func newWebHandler(expectedHost, uiDir, bootstrapToken, sessionToken string, load coverageLoader) http.Handler {
+func loadDevicesFromController(ctx context.Context, stateDir string) (api.DeviceList, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, webRequestTimeout)
+	defer cancel()
+	result, err := localapi.NewClient(stateDir).Call(requestCtx, api.MethodDevicesList)
+	if err != nil {
+		return api.DeviceList{}, fmt.Errorf("load controller devices: %w", err)
+	}
+	var devices api.DeviceList
+	if err := json.Unmarshal(result, &devices); err != nil {
+		return api.DeviceList{}, fmt.Errorf("decode controller devices: %w", err)
+	}
+	return devices, nil
+}
+
+func newWebHandler(expectedHost, uiDir, bootstrapToken, sessionToken string, load coverageLoader) *webHandler {
 	return &webHandler{
 		expectedHost:   expectedHost,
 		uiDir:          uiDir,
@@ -234,6 +253,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleSession(w, r)
 	case "/api/coverage":
 		h.handleCoverage(w, r)
+	case "/api/devices":
+		h.handleDevices(w, r)
 	default:
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
@@ -367,6 +388,39 @@ func (h *webHandler) handleCoverage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeWebJSON(w, http.StatusOK, envelope)
+}
+
+func (h *webHandler) handleDevices(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.authenticated(r) {
+		writeWebError(w, http.StatusUnauthorized, "web_session_required", "open the authenticated local Cozy SOC web URL")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeWebError(w, http.StatusMethodNotAllowed, "method_not_allowed", "devices are read-only")
+		return
+	}
+	if r.URL.RawQuery != "" {
+		writeWebError(w, http.StatusBadRequest, "query_not_allowed", "device requests do not accept query parameters")
+		return
+	}
+	if r.ContentLength > 0 || len(r.TransferEncoding) > 0 {
+		writeWebError(w, http.StatusBadRequest, "request_body_not_allowed", "device requests do not accept a body")
+		return
+	}
+	if h.loadDevices == nil {
+		writeWebError(w, http.StatusServiceUnavailable, "controller_unavailable", "live devices are unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), webRequestTimeout)
+	defer cancel()
+	devices, err := h.loadDevices(ctx)
+	if err != nil {
+		writeWebError(w, http.StatusServiceUnavailable, "controller_unavailable", "live devices are unavailable")
+		return
+	}
+	writeWebJSON(w, http.StatusOK, devices)
 }
 
 func (h *webHandler) serveStatic(w http.ResponseWriter, r *http.Request) {
