@@ -45,14 +45,19 @@ type coverageLoader func(context.Context) (coverageEnvelope, error)
 type deviceLoader func(context.Context) (api.DeviceList, error)
 
 type webHandler struct {
-	expectedHost   string
-	uiDir          string
-	loadCoverage   coverageLoader
-	loadDevices    deviceLoader
-	bootstrapToken string
-	sessionToken   string
-	bootstrapMu    sync.Mutex
-	bootstrapUsed  bool
+	expectedHost       string
+	uiDir              string
+	loadCoverage       coverageLoader
+	loadDevices        deviceLoader
+	loadNetworks       networkLoader
+	enrollNetwork      networkEnrollMutator
+	enableDeviceWatch  deviceWatchMutator
+	disableDeviceWatch deviceWatchMutator
+	csrfToken          string
+	bootstrapToken     string
+	sessionToken       string
+	bootstrapMu        sync.Mutex
+	bootstrapUsed      bool
 }
 
 func runCoverageCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
@@ -129,6 +134,9 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	handler.loadDevices = func(requestCtx context.Context) (api.DeviceList, error) {
 		return loadDevicesFromController(requestCtx, dir)
 	}
+	if err := configureWebMutationBridge(handler, dir); err != nil {
+		return err
+	}
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -154,7 +162,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 func newWebToken() (string, error) {
 	raw := make([]byte, webTokenBytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generate local web session token: %w", err)
+		return "", fmt.Errorf("generate local web token: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
@@ -250,11 +258,19 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.URL.Path {
 	case "/api/session":
-		h.handleSession(w, r)
+		h.handleSessionRoute(w, r)
 	case "/api/coverage":
 		h.handleCoverage(w, r)
 	case "/api/devices":
 		h.handleDevices(w, r)
+	case "/api/networks":
+		h.handleNetworks(w, r)
+	case "/api/networks/enroll":
+		h.handleNetworkEnroll(w, r)
+	case "/api/device-watch/enable":
+		h.handleDeviceWatchEnable(w, r)
+	case "/api/device-watch/disable":
+		h.handleDeviceWatchDisable(w, r)
 	default:
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)

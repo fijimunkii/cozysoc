@@ -16,6 +16,20 @@ type Client struct {
 	socket   string
 }
 
+// ResponseError preserves a typed controller error code while keeping the
+// historical Error() string stable for existing callers.
+type ResponseError struct {
+	Code    string
+	Message string
+}
+
+func (e *ResponseError) Error() string {
+	if e == nil {
+		return "controller error"
+	}
+	return fmt.Sprintf("controller error %s: %s", e.Code, e.Message)
+}
+
 func NewClient(stateDir string) *Client {
 	return &Client{
 		stateDir: stateDir,
@@ -69,7 +83,7 @@ func (c *Client) call(ctx context.Context, method string, params json.RawMessage
 		return nil, fmt.Errorf("controller API version mismatch: got %d want %d", response.Version, api.Version)
 	}
 	if response.Error != nil {
-		return nil, fmt.Errorf("controller error %s: %s", response.Error.Code, response.Error.Message)
+		return nil, &ResponseError{Code: response.Error.Code, Message: response.Error.Message}
 	}
 	return response.Result, nil
 }
