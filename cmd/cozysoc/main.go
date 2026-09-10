@@ -43,6 +43,10 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	switch args[0] {
 	case "serve":
 		return runServe(ctx, args[1:], stdout, stderr)
+	case "web":
+		return runWeb(ctx, args[1:], stdout, stderr)
+	case "coverage":
+		return runCoverageCommand(ctx, args[1:], stdout, stderr)
 	case "status":
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
@@ -76,22 +80,26 @@ func usageError() error {
 }
 
 func usageText() string {
-	return `cozysoc-controller is the local Cozy SOC controller process.
+	return `cozysoc is the local Cozy SOC command-line entrypoint.
 
 Usage:
-  cozysoc-controller serve [--state-dir PATH]
-  cozysoc-controller status [--state-dir PATH]
-  cozysoc-controller health [--state-dir PATH]
-  cozysoc-controller capabilities [--state-dir PATH]
-  cozysoc-controller devices [--state-dir PATH]
-  cozysoc-controller networks [--state-dir PATH]
-  cozysoc-controller device-watch-coverage [--state-dir PATH]
-  cozysoc-controller device-watch-enable [--state-dir PATH]
-  cozysoc-controller device-watch-disable [--state-dir PATH]
-  cozysoc-controller device-label [--state-dir PATH] DEVICE_ID LABEL
-  cozysoc-controller network-enroll [--state-dir PATH] INTERFACE
+  cozysoc serve [--state-dir PATH]
+  cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
+  cozysoc coverage [--state-dir PATH]
+  cozysoc status [--state-dir PATH]
+  cozysoc health [--state-dir PATH]
+  cozysoc capabilities [--state-dir PATH]
+  cozysoc devices [--state-dir PATH]
+  cozysoc networks [--state-dir PATH]
+  cozysoc device-watch-coverage [--state-dir PATH]
+  cozysoc device-watch-enable [--state-dir PATH]
+  cozysoc device-watch-disable [--state-dir PATH]
+  cozysoc device-label [--state-dir PATH] DEVICE_ID LABEL
+  cozysoc network-enroll [--state-dir PATH] INTERFACE
 
-The v0.1 local management API uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.
+The controller mode uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.
+
+The web mode is a separate local UI process. It does not own controller lifetime and does not expose the controller session secret or a generic controller-RPC endpoint.
 `
 }
 
