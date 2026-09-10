@@ -59,6 +59,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "network-quality-plan":
+		return runGatewayPlanCommand(ctx, args[1:], stdout, stderr)
 	case "network-quality":
 		return runReadCommand(ctx, api.MethodNetworkQualityLocal, args[1:], stdout, stderr)
 	case "device-watch-coverage":
@@ -97,6 +99,7 @@ Usage:
   cozysoc devices [--state-dir PATH]
   cozysoc networks [--state-dir PATH]
   cozysoc network-quality [--state-dir PATH]
+  cozysoc network-quality-plan [--state-dir PATH] TARGET_IPV4
   cozysoc device-watch-coverage [--state-dir PATH]
   cozysoc device-watch-enable [--state-dir PATH]
   cozysoc device-watch-disable [--state-dir PATH]

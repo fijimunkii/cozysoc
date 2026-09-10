@@ -102,3 +102,10 @@ protocol success semantics and measurement provenance before UI claims expand.
 Do not infer permission to send traffic from Device Watch enrollment or from a
 fixture. Do not automatically tune network settings. Preserve the separation of
 network quality, operational health, security findings, and monitoring coverage.
+
+## Gateway review boundary
+
+The [native gateway-check preview](gateway-check-preview.md) now reviews one
+explicitly selected private IPv4 target and fixed proposed traffic limits. It
+sends no probes, grants no execution consent, and does not verify gateway role
+or routing. Active execution remains separately gated.

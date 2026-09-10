@@ -371,6 +371,12 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodNetworkQualityGatewayPlan:
+		plan, ok := s.readGatewayPlan(conn, request)
+		if !ok {
+			return
+		}
+		result = plan
 	case api.MethodNetworkQualityLocal:
 		quality, ok := s.readLocalNetworkQuality(conn, request)
 		if !ok {
