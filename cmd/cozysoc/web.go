@@ -49,6 +49,7 @@ type webHandler struct {
 	uiDir              string
 	loadCoverage       coverageLoader
 	loadDevices        deviceLoader
+	labelDevice        deviceLabelMutator
 	loadNetworks       networkLoader
 	enrollNetwork      networkEnrollMutator
 	enableDeviceWatch  deviceWatchMutator
@@ -137,6 +138,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	if err := configureWebMutationBridge(handler, dir); err != nil {
 		return err
 	}
+	configureWebDeviceLabel(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -263,6 +265,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleCoverage(w, r)
 	case "/api/devices":
 		h.handleDevices(w, r)
+	case "/api/devices/label":
+		h.handleDeviceLabel(w, r)
 	case "/api/networks":
 		h.handleNetworks(w, r)
 	case "/api/networks/enroll":

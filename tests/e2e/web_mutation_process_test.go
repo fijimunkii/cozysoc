@@ -172,6 +172,31 @@ func TestWebProcessMutationBoundaryRejectsCSRFAndAvoidsRealNetworkEnrollment(t *
 		t.Fatalf("invalid-interface enrollment status=%d body=%s", enrollResponse.StatusCode, enrollBody)
 	}
 
+	labelRequest, err := http.NewRequest(http.MethodPost, rootURL+"api/devices/label", strings.NewReader(`{"device_id":"device.missing","label":"Kitchen"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labelRequest.Header.Set("Origin", origin)
+	labelRequest.Header.Set("X-Cozy-CSRF", sessionInfo.CSRFToken)
+	labelRequest.Header.Set("Content-Type", "application/json")
+	labelResponse, err := client.Do(labelRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	labelBody, err := io.ReadAll(labelResponse.Body)
+	_ = labelResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if labelResponse.StatusCode != http.StatusNotFound || !strings.Contains(string(labelBody), `"error":"not_found"`) {
+		t.Fatalf("out-of-scope label status=%d body=%s", labelResponse.StatusCode, labelBody)
+	}
+	for _, secret := range []string{controllerSecret, bootstrap, sessionInfo.CSRFToken} {
+		if strings.Contains(string(labelBody), secret) {
+			t.Fatal("device label error exposed a controller/browser credential")
+		}
+	}
+
 	afterResponse, err := client.Get(rootURL + "api/networks")
 	if err != nil {
 		t.Fatal(err)

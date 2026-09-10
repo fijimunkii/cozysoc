@@ -137,3 +137,12 @@ Useful #13 follow-ons are:
 3. add Activity only when normalized observations/findings have a bounded user-facing read model;
 4. add Settings/Tools only when there are real configuration choices, engine diagnostics, or validated advanced links to present; and
 5. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
+
+
+## Live device labels
+
+The Devices view can update or clear a user label only in live mode. Browser writes use the same process-local session, exact-Origin, and CSRF boundary as guided setup and call only `POST /api/devices/label`. The request contains a parsed device id plus the user label; an empty label clears the display label without deleting device evidence.
+
+The controller remains authoritative for scope membership and label validation. It accepts only devices with retained evidence in the current authorized scope, applies the 160-byte trimmed/control-free label contract, and records real changes with the existing transactional audit event. A device that leaves the retained scope before save returns a bounded not-found result rather than being relabeled optimistically.
+
+React validates the same 160 UTF-8 byte limit for immediate feedback, keeps the CSRF value only in the shared in-memory mutation client, renders all label text as ordinary text nodes, and reloads live device data after a successful change. Synthetic demo devices remain read-only.
