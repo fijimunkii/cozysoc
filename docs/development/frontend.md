@@ -15,20 +15,32 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 `cozysoc web` is a separate, unprivileged local UI process. In this v0.1 slice it:
 
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
-- chooses an ephemeral loopback port by default and prints the resulting local URL;
+- chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
 - serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
-- exposes only the typed read-only `GET /api/coverage` endpoint;
+- exposes only the one-time `POST /api/session` bootstrap and typed read-only `GET /api/coverage` endpoint;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
+- requires the exact local origin on the browser-session bootstrap;
 - rejects request bodies and query parameters on the parameterless coverage endpoint;
 - rejects unknown `/api/*` paths instead of proxying arbitrary controller method names;
-- applies bounded header/request-URI/time limits and local security headers; and
+- applies bounded header/request-URI/body/time limits and local security headers; and
 - talks to `cozysoc serve` through the existing `localapi.Client` over the authenticated Unix-domain socket.
 
-The controller session secret is loaded only inside the native Go process by the existing local API client. It is never returned by `/api/coverage`, stored in React/browser storage, placed in a URL, or made available to frontend code.
+### Separate browser session
 
-`cozysoc web` can run while the controller is unavailable. In that case the API returns a bounded `503 controller_unavailable` response and the UI presents an actionable unavailable state. The web process does **not** spawn, supervise, restart, or stop the controller.
+Loopback and Host/origin checks are not treated as authentication. Each `cozysoc web` process generates two independent 256-bit random values:
 
-State-changing browser endpoints are intentionally not part of this slice. Before any are added, they must carry the authentication, Host/origin, CSRF, and authorization protections owned by #8 rather than treating loopback as sufficient authorization.
+1. a **one-time bootstrap value** printed only in the URL fragment (`#bootstrap=...`), which browsers do not send in HTTP requests; and
+2. a separate **web-session value** that never appears in the URL or React state.
+
+On first load, React reads the bootstrap value from the fragment, sends it once to the same-origin `POST /api/session`, and removes the fragment from browser history in a `finally` path. A valid, unused bootstrap is atomically consumed and replaced by an HttpOnly, Path `/`, SameSite=Strict session cookie. Reusing the bootstrap fails. `GET /api/coverage` requires that cookie and otherwise returns `401 web_session_required` without contacting the controller.
+
+This browser session is deliberately separate from the controller credential. The controller session secret is loaded only inside the native Go process by the existing local API client. It is never returned by the web API, stored in React/browser storage, placed in a URL, reused as the web cookie, or made available to frontend code. The real-process E2E checks that the controller secret, one-time bootstrap, and web-session cookie are all absent from the coverage response.
+
+The cookie is intentionally scoped to loopback HTTP for this local v0.1 surface, so it cannot use the `Secure` attribute without changing the transport. Remote/headless browser management remains separately gated by SEC-031 and must use authenticated encrypted transport; this local mechanism is not that future remote design.
+
+`cozysoc web` can run while the controller is unavailable. After an authenticated browser session is established, a controller read failure returns a bounded `503 controller_unavailable` response and the UI presents an actionable unavailable state. The web process does **not** spawn, supervise, restart, or stop the controller.
+
+State-changing browser endpoints are intentionally not part of this slice. Before any are added, they must carry the additional CSRF and controller-authorization protections owned by #8 rather than assuming the current read-only web session is sufficient for mutations.
 
 ## Generic live coverage
 
@@ -50,7 +62,7 @@ The controller's existing detailed `device-watch.coverage` method remains the au
 }
 ```
 
-The same envelope is available through `cozysoc coverage` and `GET /api/coverage`. Device-Watch-only operational/storage/queue detail is deliberately not copied into this browser-facing contract. When a second capability has a real coverage producer, the envelope can add another validated shared report without widening the browser API into arbitrary RPC.
+The same envelope is available through `cozysoc coverage` and authenticated `GET /api/coverage`. Device-Watch-only operational/storage/queue detail is deliberately not copied into this browser-facing contract. When a second capability has a real coverage producer, the envelope can add another validated shared report without widening the browser API into arbitrary RPC.
 
 The React loader accepts the envelope as `unknown`, validates the outer timestamp/report bounds, then passes each report through the existing strict shared coverage parser. Duplicate capability reports, malformed timestamps, unsupported shared fields, and oversized collections fail closed.
 
@@ -72,13 +84,13 @@ There is no percentage, protection score, or green "safe" badge. `active-limited
 
 ## Live, unavailable, and demo states
 
-The root UI now attempts the same-origin live coverage endpoint first.
+The root UI establishes or reuses its local web session and then attempts the same-origin live coverage endpoint.
 
 - A successful response is labeled **Live controller data**.
-- A failed/unavailable response is labeled **Live monitoring unavailable** and offers retry plus an explicit demo choice.
+- Missing/invalid web session, failed bootstrap, or controller unavailability is labeled **Live monitoring unavailable** with actionable copy and retry plus an explicit demo choice.
 - Synthetic data is **never** substituted automatically.
 - Demo mode requires user action and remains labeled **Synthetic demo — This screen is not connected to live monitoring.**
-- Returning from demo to live coverage is explicit and retries the local endpoint.
+- Returning from demo to live coverage is explicit and retries the authenticated local endpoint.
 
 Demo data remains source code only; it is not written into controller storage or mixed with real observations/findings.
 
@@ -86,7 +98,7 @@ Demo data remains source code only; it is not written into controller storage or
 
 This PR does not commit Vite build output and does not add a second bridge binary. `cozysoc web` serves a built UI directory so development and process E2E can exercise the real browser path now. #28 owns the release-packaging decision for whether final installers embed or co-install those static assets.
 
-Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root.
+Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root. A regression fixture creates a symlink from the UI tree to an outside file and requires a 404 without serving the target.
 
 ## Desktop shell boundary
 
