@@ -1,0 +1,78 @@
+name: Stage browser accessibility gate
+
+on:
+  push:
+    branches: [test/v0.1-browser-accessibility]
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    if: "${{ github.event.head_commit.message == 'chore(ui): validate browser accessibility gate' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: test/v0.1-browser-accessibility
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.1'
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Apply browser gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/stage-browser-accessibility.py
+          (
+            cd ui
+            npm install --save-dev --save-exact @playwright/test@1.63.0 @axe-core/playwright@4.13.0 --ignore-scripts --no-audit --no-fund
+          )
+          git diff --check
+
+      - name: Run repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l cmd internal tests)"
+          go vet ./...
+          go test ./...
+          (
+            cd ui
+            npm run check
+          )
+          go build -o "${RUNNER_TEMP}/cozysoc-e2e" ./cmd/cozysoc
+          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-e2e" \
+          COZYSOC_E2E_UI_DIR="${GITHUB_WORKSPACE}/ui/dist" \
+            go test -v -count=1 ./tests/e2e
+
+      - name: Install Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real-browser accessibility gate
+        working-directory: ui
+        run: npm run test:browser
+
+      - name: Commit validated browser gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .gitignore docs/development/frontend.md ui/package.json ui/package-lock.json ui/playwright.config.ts ui/browser/accessibility.spec.ts ui/src/app-shell.css
+          git commit -m 'test(ui): add browser accessibility gate'
+          git push origin HEAD:test/v0.1-browser-accessibility
