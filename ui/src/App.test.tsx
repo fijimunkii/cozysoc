@@ -15,14 +15,14 @@ describe("App live coverage boundary", () => {
     render(<App loadCoverage={async () => liveBundle} />);
     expect(await screen.findByRole("status", { name: "Live controller data" })).toBeTruthy();
     expect(screen.queryByRole("status", { name: "Synthetic demo data" })).toBeNull();
-    expect(screen.getByText("Device Watch")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Local device visibility" })).toBeTruthy();
   });
 
   it("does not silently replace an unavailable controller with demo data", async () => {
     render(<App loadCoverage={async () => Promise.reject(new Error("offline"))} />);
     expect(await screen.findByRole("alert", { name: "Live monitoring unavailable" })).toBeTruthy();
     expect(screen.queryByRole("status", { name: "Synthetic demo data" })).toBeNull();
-    expect(screen.queryByText("Device Watch")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Local device visibility" })).toBeNull();
   });
 
   it("requires explicit user action before showing synthetic demo data", async () => {
@@ -31,6 +31,6 @@ describe("App live coverage boundary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use synthetic demo" }));
     const banner = screen.getByRole("status", { name: "Synthetic demo data" });
     expect(banner.textContent).toContain("This screen is not connected to live monitoring.");
-    expect(screen.getByText("Device Watch")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Local device visibility" })).toBeTruthy();
   });
 });
