@@ -31,6 +31,39 @@ type processWebActivity struct {
 	Truncated  bool              `json:"truncated"`
 }
 
+type processWebStatus struct {
+	ControllerVersion   string    `json:"controller_version"`
+	StartedAt           time.Time `json:"started_at"`
+	ConfigSchemaVersion int       `json:"config_schema_version"`
+	Transport           string    `json:"transport"`
+}
+
+type processWebCapability struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Ownership   string `json:"ownership"`
+	State       struct {
+		Desired      string `json:"desired"`
+		Process      string `json:"process"`
+		Verification string `json:"verification"`
+	} `json:"state"`
+	Targets []struct {
+		OS      string `json:"os"`
+		Arch    string `json:"arch"`
+		Support string `json:"support"`
+	} `json:"targets"`
+	Resources struct {
+		Measurement string `json:"measurement"`
+		Profile     string `json:"profile"`
+	} `json:"resources"`
+	DeepLinkCount int `json:"deep_link_count"`
+}
+
+type processWebCapabilities struct {
+	CatalogSchemaVersion int                    `json:"catalog_schema_version"`
+	Capabilities         []processWebCapability `json:"capabilities"`
+}
+
 type processWebDeviceList struct {
 	Configured bool              `json:"configured"`
 	ScopeID    string            `json:"scope_id,omitempty"`
@@ -212,6 +245,63 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	}
 	if devices.AsOf.IsZero() || devices.Configured || devices.ScopeID != "" || len(devices.Devices) != 0 || devices.Truncated {
 		t.Fatalf("unexpected fresh-state web devices: %+v", devices)
+	}
+
+	statusResponse, err := client.Get(rootURL + "api/status")
+	if err != nil {
+		t.Fatalf("read web status: %v", err)
+	}
+	statusBody, err := io.ReadAll(statusResponse.Body)
+	_ = statusResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statusResponse.StatusCode != http.StatusOK {
+		t.Fatalf("status HTTP status = %d body=%s", statusResponse.StatusCode, statusBody)
+	}
+	for _, forbidden := range []string{controllerSecret, bootstrap, webSession, `"pid"`, `"uptime_ms"`, `"api_version"`} {
+		if strings.Contains(string(statusBody), forbidden) {
+			t.Fatalf("web status exposed forbidden detail %q: %s", forbidden, statusBody)
+		}
+	}
+	var webStatus processWebStatus
+	if err := json.Unmarshal(statusBody, &webStatus); err != nil {
+		t.Fatalf("decode web status: %v: %s", err, statusBody)
+	}
+	if webStatus.ControllerVersion == "" || webStatus.StartedAt.IsZero() || webStatus.ConfigSchemaVersion < 1 || webStatus.Transport != "unix" {
+		t.Fatalf("unexpected minimized web status: %+v", webStatus)
+	}
+
+	capabilitiesResponse, err := client.Get(rootURL + "api/capabilities")
+	if err != nil {
+		t.Fatalf("read web capabilities: %v", err)
+	}
+	capabilitiesBody, err := io.ReadAll(capabilitiesResponse.Body)
+	_ = capabilitiesResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capabilitiesResponse.StatusCode != http.StatusOK {
+		t.Fatalf("capabilities HTTP status = %d body=%s", capabilitiesResponse.StatusCode, capabilitiesBody)
+	}
+	for _, forbidden := range []string{controllerSecret, bootstrap, webSession, `"config"`, `"dependencies"`, `"inputs"`, `"source":`} {
+		if strings.Contains(string(capabilitiesBody), forbidden) {
+			t.Fatalf("web capabilities exposed forbidden detail %q: %s", forbidden, capabilitiesBody)
+		}
+	}
+	var webCapabilities processWebCapabilities
+	if err := json.Unmarshal(capabilitiesBody, &webCapabilities); err != nil {
+		t.Fatalf("decode web capabilities: %v: %s", err, capabilitiesBody)
+	}
+	if webCapabilities.CatalogSchemaVersion != 1 || len(webCapabilities.Capabilities) != 1 {
+		t.Fatalf("unexpected web capability list: %+v", webCapabilities)
+	}
+	deviceWatch := webCapabilities.Capabilities[0]
+	if deviceWatch.ID != "device-watch" || deviceWatch.DisplayName != "Device Watch" || deviceWatch.Ownership != "builtin" || deviceWatch.State.Desired != "disabled" || deviceWatch.State.Process != "not-applicable" || deviceWatch.Resources.Measurement != "unmeasured" || deviceWatch.DeepLinkCount != 0 {
+		t.Fatalf("unexpected Device Watch tool projection: %+v", deviceWatch)
+	}
+	if len(deviceWatch.Targets) != 1 || deviceWatch.Targets[0].OS != "darwin" || deviceWatch.Targets[0].Arch != "arm64" || deviceWatch.Targets[0].Support != "candidate" {
+		t.Fatalf("unexpected Device Watch support projection: %+v", deviceWatch.Targets)
 	}
 
 	detailResponse, err := client.Get(rootURL + "api/devices/detail?device_id=device.missing")
