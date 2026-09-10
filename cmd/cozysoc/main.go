@@ -43,6 +43,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	switch args[0] {
 	case "serve":
 		return runServe(ctx, args[1:], stdout, stderr)
+	case "dev":
+		return runDev(ctx, args[1:], stdout, stderr)
 	case "web":
 		return runWeb(ctx, args[1:], stdout, stderr)
 	case "coverage":
@@ -84,6 +86,7 @@ func usageText() string {
 
 Usage:
   cozysoc serve [--state-dir PATH]
+  cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc coverage [--state-dir PATH]
   cozysoc status [--state-dir PATH]
