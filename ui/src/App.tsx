@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import "./connection.css";
 import "./app-shell.css";
@@ -10,6 +10,8 @@ import { parseDeviceList } from "./devices/devices";
 import { demoCoverageRaw } from "./demo/coverage";
 import { demoDevicesRaw } from "./demo/devices";
 import { OverviewPage } from "./OverviewPage";
+import { SetupPanel } from "./setup/SetupPanel";
+import { createWebSetupClient, parseNetworkList, type SetupClient } from "./setup/setup";
 
 type Page = "overview" | "devices" | "coverage";
 type DataView =
@@ -21,10 +23,24 @@ type DataView =
 const demoData: AppData = {
   coverage: { as_of: "2026-09-09T23:21:00Z", reports: [parseCoverageReport(demoCoverageRaw)] },
   devices: parseDeviceList(demoDevicesRaw),
+  networks: parseNetworkList({
+    candidates: [],
+    candidates_truncated: false,
+    enrolled: {
+      scope_id: "scope.demo",
+      enrolled_at: "2026-09-09T22:30:00Z",
+      interface: {
+        interface_name: "demo0",
+        interface_index: 1,
+        prefixes: ["192.0.2.0/24"],
+      },
+    },
+  }),
 };
 
 export interface AppProps {
   loadData?: () => Promise<AppData>;
+  setupClient?: SetupClient;
 }
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
@@ -33,10 +49,11 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   coverage: { eyebrow: "Coverage", title: "Know what is visible. Know what is not.", detail: "Observation points, verified scope, expected gaps, and evidence freshness stay explicit." },
 };
 
-export function App({ loadData = loadAppDataFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
+  const liveSetupClient = useMemo(() => setupClient ?? createWebSetupClient(), [setupClient]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +93,12 @@ export function App({ loadData = loadAppDataFromWeb }: AppProps) {
         {view.mode === "loading" ? <section className="product-card empty-product-state"><h2>Reading local evidence</h2><p>Cozy SOC is connecting to the local controller.</p></section> : null}
         {view.mode === "unavailable" ? <section className="product-card empty-product-state"><h2>Live data is unavailable</h2><p>Retry the local connection or explicitly enter the synthetic demo. Demo data is never substituted automatically.</p></section> : null}
 
-        {activeData && page === "overview" ? <OverviewPage data={activeData} onNavigate={setPage} /> : null}
+        {activeData && page === "overview" ? (
+          <>
+            {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} /> : null}
+            <OverviewPage data={activeData} onNavigate={setPage} />
+          </>
+        ) : null}
         {activeData && page === "devices" ? <DevicesPage devices={activeData.devices} /> : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>

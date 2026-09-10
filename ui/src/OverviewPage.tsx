@@ -19,7 +19,7 @@ export function OverviewPage({ data, onNavigate }: { data: AppData; onNavigate: 
         <article className="overview-card">
           <span>Device visibility</span>
           <strong>{data.devices.configured ? `${visible} visible now` : "Not configured"}</strong>
-          <p>{data.devices.configured ? `${uncertain} uncertain · ${data.devices.devices.length} known` : "No home network has been authorized for Device Watch."}</p>
+          <p>{data.devices.configured ? `${uncertain} uncertain · ${data.devices.devices.length} known` : "No Device Watch presence evidence is expected until monitoring is enabled."}</p>
           <button type="button" onClick={() => onNavigate("devices")}>View devices</button>
         </article>
         <article className="overview-card">
@@ -42,7 +42,7 @@ export function OverviewPage({ data, onNavigate }: { data: AppData; onNavigate: 
           {data.devices.configured ? <button type="button" className="quiet-button" onClick={() => onNavigate("devices")}>All devices</button> : null}
         </div>
         {!data.devices.configured ? (
-          <p className="overview-empty">Start by enrolling the home network you want Cozy SOC to observe. No network is selected automatically.</p>
+          <p className="overview-empty">No device-presence evidence is available yet. Setup above shows whether a network is authorized and whether Device Watch is enabled.</p>
         ) : recent.length === 0 ? (
           <p className="overview-empty">No positive device-presence evidence has arrived yet.</p>
         ) : (
