@@ -1,0 +1,468 @@
+name: Implement development orchestration
+
+on:
+  push:
+    branches: [feat/v0.1-dev-orchestration]
+    paths:
+      - .github/workflows/implement-dev.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Add dev orchestration
+        run: |
+          cat > cmd/cozysoc/dev.go <<'EOF'
+          package main
+
+          import (
+          	"context"
+          	"encoding/json"
+          	"errors"
+          	"flag"
+          	"fmt"
+          	"os"
+          	"os/exec"
+          	"path/filepath"
+          	"time"
+
+          	"github.com/fijimunkii/cozysoc/internal/controller/api"
+          	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+          )
+
+          const (
+          	devControllerProbeTimeout = 500 * time.Millisecond
+          	devControllerStartTimeout = 10 * time.Second
+          	devControllerStopTimeout  = 10 * time.Second
+          	devControllerPollInterval = 50 * time.Millisecond
+          	devControllerExitGrace    = time.Second
+          )
+
+          type devOptions struct {
+          	stateDir   string
+          	listenAddr string
+          	uiDir      string
+          }
+
+          type devControllerProcess struct {
+          	cmd     *exec.Cmd
+          	done    chan struct{}
+          	waitErr error
+          }
+
+          func runDev(ctx context.Context, args []string, stdout, stderr *os.File) error {
+          	options, err := parseDevOptions(args, stderr)
+          	if err != nil {
+          		return err
+          	}
+          	_, _ = fmt.Fprintln(stdout, "cozysoc dev: development-only orchestration; production controller lifetime is unchanged")
+
+          	if status, statusErr := devControllerStatus(ctx, options.stateDir); statusErr == nil {
+          		_, _ = fmt.Fprintf(stdout, "cozysoc dev: reusing existing controller pid %d\n", status.PID)
+          		return runWeb(ctx, options.webArgs(), stdout, stderr)
+          	} else if ctx.Err() != nil {
+          		return ctx.Err()
+          	}
+
+          	controller, err := startDevController(options.stateDir, stdout, stderr)
+          	if err != nil {
+          		return err
+          	}
+          	status, owned, err := waitForDevController(ctx, options.stateDir, controller)
+          	if err != nil {
+          		_ = controller.stop()
+          		return err
+          	}
+          	if !owned {
+          		_, _ = fmt.Fprintf(stdout, "cozysoc dev: reusing controller pid %d that became ready during startup\n", status.PID)
+          		return runWeb(ctx, options.webArgs(), stdout, stderr)
+          	}
+
+          	_, _ = fmt.Fprintf(stdout, "cozysoc dev: started temporary controller pid %d\n", status.PID)
+          	webErr := runWeb(ctx, options.webArgs(), stdout, stderr)
+          	stopErr := controller.stop()
+          	if ctx.Err() != nil {
+          		return webErr
+          	}
+          	if webErr != nil {
+          		return webErr
+          	}
+          	if stopErr != nil {
+          		return stopErr
+          	}
+          	_, _ = fmt.Fprintln(stdout, "cozysoc dev: stopped temporary controller")
+          	return nil
+          }
+
+          func parseDevOptions(args []string, stderr *os.File) (devOptions, error) {
+          	fs := flag.NewFlagSet("dev", flag.ContinueOnError)
+          	fs.SetOutput(stderr)
+          	stateDir := fs.String("state-dir", "", "controller state directory")
+          	listenAddr := fs.String("listen", defaultWebListen, "loopback listen address")
+          	uiDir := fs.String("ui-dir", defaultWebUIDir, "built UI directory")
+          	if err := fs.Parse(args); err != nil {
+          		return devOptions{}, err
+          	}
+          	if fs.NArg() != 0 {
+          		return devOptions{}, fmt.Errorf("dev takes flags only")
+          	}
+          	if err := validateLoopbackListen(*listenAddr); err != nil {
+          		return devOptions{}, err
+          	}
+          	dir, err := resolveStateDir(*stateDir)
+          	if err != nil {
+          		return devOptions{}, err
+          	}
+          	assets, err := filepath.Abs(*uiDir)
+          	if err != nil {
+          		return devOptions{}, fmt.Errorf("resolve UI directory: %w", err)
+          	}
+          	assets, err = filepath.EvalSymlinks(assets)
+          	if err != nil {
+          		return devOptions{}, fmt.Errorf("resolve built UI directory symlinks: %w", err)
+          	}
+          	if err := validateUIDir(assets); err != nil {
+          		return devOptions{}, err
+          	}
+          	return devOptions{stateDir: dir, listenAddr: *listenAddr, uiDir: assets}, nil
+          }
+
+          func (o devOptions) webArgs() []string {
+          	return []string{"--state-dir", o.stateDir, "--listen", o.listenAddr, "--ui-dir", o.uiDir}
+          }
+
+          func devControllerStatus(ctx context.Context, stateDir string) (api.Status, error) {
+          	probeCtx, cancel := context.WithTimeout(ctx, devControllerProbeTimeout)
+          	defer cancel()
+          	result, err := localapi.NewClient(stateDir).Call(probeCtx, api.MethodStatus)
+          	if err != nil {
+          		return api.Status{}, err
+          	}
+          	var status api.Status
+          	if err := json.Unmarshal(result, &status); err != nil {
+          		return api.Status{}, fmt.Errorf("decode controller status: %w", err)
+          	}
+          	if status.PID <= 0 || status.Transport != "unix" {
+          		return api.Status{}, fmt.Errorf("controller status is not a valid local service")
+          	}
+          	return status, nil
+          }
+
+          func startDevController(stateDir string, stdout, stderr *os.File) (*devControllerProcess, error) {
+          	executable, err := os.Executable()
+          	if err != nil {
+          		return nil, fmt.Errorf("resolve Cozy SOC executable: %w", err)
+          	}
+          	cmd := exec.Command(executable, "serve", "--state-dir", stateDir)
+          	cmd.Stdout = stdout
+          	cmd.Stderr = stderr
+          	if err := cmd.Start(); err != nil {
+          		return nil, fmt.Errorf("start temporary dev controller: %w", err)
+          	}
+          	process := &devControllerProcess{cmd: cmd, done: make(chan struct{})}
+          	go func() {
+          		process.waitErr = cmd.Wait()
+          		close(process.done)
+          	}()
+          	return process, nil
+          }
+
+          func waitForDevController(ctx context.Context, stateDir string, process *devControllerProcess) (api.Status, bool, error) {
+          	timer := time.NewTimer(devControllerStartTimeout)
+          	defer timer.Stop()
+          	ticker := time.NewTicker(devControllerPollInterval)
+          	defer ticker.Stop()
+          	done := process.done
+          	var exitedAt time.Time
+          	var exitedErr error
+
+          	for {
+          		status, err := devControllerStatus(ctx, stateDir)
+          		if err == nil {
+          			owned := status.PID == process.cmd.Process.Pid
+          			if !owned {
+          				_ = process.stop()
+          			}
+          			return status, owned, nil
+          		}
+          		if !exitedAt.IsZero() && time.Since(exitedAt) >= devControllerExitGrace {
+          			if exitedErr != nil {
+          				return api.Status{}, false, fmt.Errorf("temporary dev controller exited before readiness: %w", exitedErr)
+          			}
+          			return api.Status{}, false, fmt.Errorf("temporary dev controller exited before readiness")
+          		}
+
+          		select {
+          		case <-ctx.Done():
+          			_ = process.stop()
+          			return api.Status{}, false, ctx.Err()
+          		case <-done:
+          			exitedAt = time.Now()
+          			exitedErr = process.waitErr
+          			done = nil
+          		case <-ticker.C:
+          		case <-timer.C:
+          			_ = process.stop()
+          			return api.Status{}, false, fmt.Errorf("temporary dev controller did not become ready within %s", devControllerStartTimeout)
+          		}
+          	}
+          }
+
+          func (p *devControllerProcess) stop() error {
+          	select {
+          	case <-p.done:
+          		if p.waitErr != nil {
+          			return fmt.Errorf("temporary dev controller exited: %w", p.waitErr)
+          		}
+          		return nil
+          	default:
+          	}
+
+          	if err := p.cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
+          		return fmt.Errorf("interrupt temporary dev controller: %w", err)
+          	}
+          	timer := time.NewTimer(devControllerStopTimeout)
+          	defer timer.Stop()
+          	select {
+          	case <-p.done:
+          		if p.waitErr != nil {
+          			return fmt.Errorf("temporary dev controller stop failed: %w", p.waitErr)
+          		}
+          		return nil
+          	case <-timer.C:
+          		_ = p.cmd.Process.Kill()
+          		<-p.done
+          		return fmt.Errorf("temporary dev controller did not stop within %s", devControllerStopTimeout)
+          	}
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('cmd/cozysoc/main.go')
+          text = path.read_text()
+          old = '\tcase "web":\n\t\treturn runWeb(ctx, args[1:], stdout, stderr)\n'
+          new = '\tcase "dev":\n\t\treturn runDev(ctx, args[1:], stdout, stderr)\n' + old
+          if old not in text:
+              raise SystemExit('web command switch anchor not found')
+          text = text.replace(old, new, 1)
+          old = '  cozysoc serve [--state-dir PATH]\n  cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]\n'
+          new = '  cozysoc serve [--state-dir PATH]\n  cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]\n  cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]\n'
+          if old not in text:
+              raise SystemExit('usage anchor not found')
+          text = text.replace(old, new, 1)
+          old = 'The web mode is a separate local UI process. It does not own controller lifetime and does not expose the controller session secret or a generic controller-RPC endpoint.\n'
+          new = old + '\nThe dev mode is development-only orchestration. It reuses an existing controller when available; otherwise it starts the same executable with the fixed `serve` subcommand and stops only that temporary controller when dev exits.\n'
+          if old not in text:
+              raise SystemExit('web boundary anchor not found')
+          path.write_text(text)
+          PY
+
+          cat > tests/e2e/dev_process_test.go <<'EOF'
+          package e2e
+
+          import (
+          	"context"
+          	"os"
+          	"os/exec"
+          	"path/filepath"
+          	"runtime"
+          	"strings"
+          	"testing"
+          	"time"
+          )
+
+          func TestDevProcessStartsAndStopsTemporaryController(t *testing.T) {
+          	if runtime.GOOS != "linux" {
+          		t.Skip("dev process E2E currently targets the Linux CI reference runner")
+          	}
+          	binary, uiDir := devE2EPaths(t)
+          	stateDir := filepath.Join(t.TempDir(), "state")
+
+          	dev := startDev(t, binary, stateDir, uiDir)
+          	waitForReady(t, binary, stateDir, dev)
+          	status := runCLIJSON[controllerStatus](t, binary, stateDir, "status")
+          	if status.PID == dev.cmd.Process.Pid {
+          		t.Fatalf("dev parent unexpectedly owns the controller process: %+v", status)
+          	}
+          	_ = waitForWebReady(t, dev)
+          	stdout, _ := os.ReadFile(dev.stdoutPath)
+          	if !strings.Contains(string(stdout), "cozysoc dev: development-only orchestration") || !strings.Contains(string(stdout), "cozysoc dev: started temporary controller pid") {
+          		t.Fatalf("dev did not clearly report temporary development ownership:\n%s", stdout)
+          	}
+
+          	stopWithInterrupt(t, dev)
+          	assertRemoved(t, filepath.Join(stateDir, "controller.sock"))
+          	assertRemoved(t, filepath.Join(stateDir, "controller.auth"))
+
+          	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+          	defer cancel()
+          	output, err := exec.CommandContext(ctx, binary, "status", "--state-dir", stateDir).CombinedOutput()
+          	if err == nil {
+          		t.Fatalf("temporary dev controller survived dev exit: %s", output)
+          	}
+          }
+
+          func TestDevProcessReusesExistingControllerWithoutStoppingIt(t *testing.T) {
+          	if runtime.GOOS != "linux" {
+          		t.Skip("dev process E2E currently targets the Linux CI reference runner")
+          	}
+          	binary, uiDir := devE2EPaths(t)
+          	stateDir := filepath.Join(t.TempDir(), "state")
+
+          	controller := startController(t, binary, stateDir)
+          	waitForReady(t, binary, stateDir, controller)
+          	secret := readSecret(t, stateDir)
+          	dev := startDev(t, binary, stateDir, uiDir)
+          	_ = waitForWebReady(t, dev)
+
+          	status := runCLIJSON[controllerStatus](t, binary, stateDir, "status")
+          	if status.PID != controller.cmd.Process.Pid {
+          		t.Fatalf("dev replaced the existing controller: status=%+v expected_pid=%d", status, controller.cmd.Process.Pid)
+          	}
+          	if got := readSecret(t, stateDir); got != secret {
+          		t.Fatal("dev rotated the existing controller session secret")
+          	}
+          	stdout, _ := os.ReadFile(dev.stdoutPath)
+          	if !strings.Contains(string(stdout), "cozysoc dev: reusing existing controller pid") {
+          		t.Fatalf("dev did not report existing-controller reuse:\n%s", stdout)
+          	}
+          	if strings.Contains(string(stdout), "cozysoc controller ready:") {
+          		t.Fatalf("dev appeared to start a duplicate controller while reuse was available:\n%s", stdout)
+          	}
+
+          	stopWithInterrupt(t, dev)
+          	status = runCLIJSON[controllerStatus](t, binary, stateDir, "status")
+          	if status.PID != controller.cmd.Process.Pid {
+          		t.Fatalf("stopping dev affected the reused controller: %+v", status)
+          	}
+          	if got := readSecret(t, stateDir); got != secret {
+          		t.Fatal("stopping dev changed the reused controller session secret")
+          	}
+          	stopWithInterrupt(t, controller)
+          }
+
+          func TestDevValidatesWebInputsBeforeStartingController(t *testing.T) {
+          	if runtime.GOOS != "linux" {
+          		t.Skip("dev process E2E currently targets the Linux CI reference runner")
+          	}
+          	binary, _ := devE2EPaths(t)
+          	stateDir := filepath.Join(t.TempDir(), "state")
+          	missingUI := filepath.Join(t.TempDir(), "missing-ui")
+
+          	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+          	defer cancel()
+          	output, err := exec.CommandContext(ctx, binary, "dev", "--state-dir", stateDir, "--ui-dir", missingUI).CombinedOutput()
+          	if err == nil {
+          		t.Fatalf("dev unexpectedly accepted a missing UI directory: %s", output)
+          	}
+          	if !strings.Contains(string(output), "built UI") {
+          		t.Fatalf("dev returned an unexpected preflight error: %s", output)
+          	}
+          	assertRemoved(t, stateDir)
+          }
+
+          func devE2EPaths(t *testing.T) (string, string) {
+          	t.Helper()
+          	binary := os.Getenv(e2eBinaryEnv)
+          	if binary == "" {
+          		t.Skipf("set %s to a built cozysoc binary to run process E2E", e2eBinaryEnv)
+          	}
+          	uiDir := os.Getenv(e2eUIDirEnv)
+          	if uiDir == "" {
+          		t.Skipf("set %s to a built UI directory to run dev process E2E", e2eUIDirEnv)
+          	}
+          	absoluteBinary, err := filepath.Abs(binary)
+          	if err != nil {
+          		t.Fatal(err)
+          	}
+          	absoluteUI, err := filepath.Abs(uiDir)
+          	if err != nil {
+          		t.Fatal(err)
+          	}
+          	return absoluteBinary, absoluteUI
+          }
+
+          func startDev(t *testing.T, binary, stateDir, uiDir string) *runningController {
+          	t.Helper()
+          	logDir := t.TempDir()
+          	stdoutPath := filepath.Join(logDir, "dev-stdout.log")
+          	stderrPath := filepath.Join(logDir, "dev-stderr.log")
+          	stdout, err := os.Create(stdoutPath)
+          	if err != nil {
+          		t.Fatal(err)
+          	}
+          	stderr, err := os.Create(stderrPath)
+          	if err != nil {
+          		_ = stdout.Close()
+          		t.Fatal(err)
+          	}
+          	cmd := exec.Command(binary, "dev", "--state-dir", stateDir, "--listen", "127.0.0.1:0", "--ui-dir", uiDir)
+          	cmd.Stdout = stdout
+          	cmd.Stderr = stderr
+          	if err := cmd.Start(); err != nil {
+          		_ = stdout.Close()
+          		_ = stderr.Close()
+          		t.Fatal(err)
+          	}
+          	wait := make(chan error, 1)
+          	go func() {
+          		err := cmd.Wait()
+          		_ = stdout.Close()
+          		_ = stderr.Close()
+          		wait <- err
+          		close(wait)
+          	}()
+          	dev := &runningController{cmd: cmd, wait: wait, stdoutPath: stdoutPath, stderrPath: stderrPath}
+          	t.Cleanup(func() { _ = cmd.Process.Kill() })
+          	return dev
+          }
+          EOF
+
+          cat > docs/development/unified-cli.md <<'EOF'
+          # Unified `cozysoc` command surface
+
+          Issue #84 tracks consolidation of Cozy SOC's user-facing command surface under one executable while preserving independent production process lifetimes.
+
+          Current modes:
+
+          - `cozysoc serve` — independently managed controller process;
+          - `cozysoc status`, `health`, `capabilities`, `devices`, `networks`, `coverage`, and capability-specific typed commands — local authenticated CLI access;
+          - `cozysoc web` — separate authenticated loopback UI process backed by the controller's protected UDS client; and
+          - `cozysoc dev` — **development-only** orchestration for the controller + web experience.
+
+          `cozysoc dev` first validates the same loopback/UI inputs required by `cozysoc web`. It then checks the configured state directory for a healthy authenticated controller. If one already exists, dev reuses it and never starts, stops, or rotates that controller. If none is available, dev starts the **same `cozysoc` executable with the fixed `serve --state-dir ...` subcommand**, waits for the authenticated UDS status to report the child PID, and treats only that child as temporary dev-owned state.
+
+          When dev exits, it stops only a temporary controller that it started itself. A pre-existing service continues with the same PID and controller session secret. Web startup failure also cleans up a dev-owned controller rather than leaving an accidental background service behind.
+
+          The self-spawn is a fixed internal orchestration path, not a generic process-execution API: users cannot supply another executable, subcommand, or arbitrary argv through `dev`. Nothing about this development helper grants process authority to React or the browser.
+
+          Production lifecycle evidence must continue to exercise the independently service-managed `cozysoc serve` path. A successful `cozysoc dev` run is intentionally **not** proof that monitoring survives UI exit, login-session exit, or reboot.
+
+          The single executable is a packaging and operator-experience choice, not a collapse of trust or lifecycle boundaries.
+          EOF
+
+          gofmt -w cmd/cozysoc/main.go cmd/cozysoc/dev.go tests/e2e/dev_process_test.go
+          test -z "$(gofmt -l cmd internal tests)"
+          go vet ./...
+          go test ./...
+          git diff --check
+
+      - name: Commit implementation and remove bootstrap workflow
+        run: |
+          git rm .github/workflows/implement-dev.yml
+          git add cmd/cozysoc tests/e2e docs/development/unified-cli.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(dev): orchestrate local controller and web'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
