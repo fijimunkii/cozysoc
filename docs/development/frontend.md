@@ -17,7 +17,7 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
 - chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
 - serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
-- exposes only the one-time `POST /api/session` bootstrap and typed read-only `GET /api/coverage` endpoint;
+- exposes only the one-time `POST /api/session` bootstrap and typed read-only `GET /api/coverage` and `GET /api/devices` endpoints;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
 - requires the exact local origin on the browser-session bootstrap;
 - rejects request bodies and query parameters on the parameterless coverage endpoint;
@@ -32,7 +32,7 @@ Loopback and Host/origin checks are not treated as authentication. Each `cozysoc
 1. a **one-time bootstrap value** printed only in the URL fragment (`#bootstrap=...`), which browsers do not send in HTTP requests; and
 2. a separate **web-session value** that never appears in the URL or React state.
 
-On first load, React reads the bootstrap value from the fragment, sends it once to the same-origin `POST /api/session`, and removes the fragment from browser history in a `finally` path. A valid, unused bootstrap is atomically consumed and replaced by an HttpOnly, Path `/`, SameSite=Strict session cookie. Reusing the bootstrap fails. `GET /api/coverage` requires that cookie and otherwise returns `401 web_session_required` without contacting the controller.
+On first load, React reads the bootstrap value from the fragment, sends it once to the same-origin `POST /api/session`, and removes the fragment from browser history in a `finally` path. A valid, unused bootstrap is atomically consumed and replaced by an HttpOnly, Path `/`, SameSite=Strict session cookie. Reusing the bootstrap fails. The typed read endpoints require that cookie and otherwise return `401 web_session_required` without contacting the controller.
 
 This browser session is deliberately separate from the controller credential. The controller session secret is loaded only inside the native Go process by the existing local API client. It is never returned by the web API, stored in React/browser storage, placed in a URL, reused as the web cookie, or made available to frontend code. The real-process E2E checks that the controller secret, one-time bootstrap, and web-session cookie are all absent from the coverage response.
 
@@ -100,16 +100,27 @@ This PR does not commit Vite build output and does not add a second bridge binar
 
 Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root. A regression fixture creates a symlink from the UI tree to an outside file and requires a 404 without serving the target.
 
+
+## Product navigation and live devices
+
+The first validated information architecture intentionally exposes only **Overview**, **Devices**, and **Coverage**. Empty Activity or Settings sections are not added just to fill navigation; they should appear when they have real product data or actions.
+
+Authenticated `GET /api/devices` is parameterless and read-only. It is backed by the existing controller `devices.list` method and returns only the bounded device-presence read model: configured scope, stable device ID, optional user label, first/last seen timestamps, `visible`/`uncertain` presence, and truncation. It does not expose raw observations, identity claims, database access, controller credentials, or a device mutation surface.
+
+The Overview page summarizes only the current device-presence and shared-coverage evidence. Known limits remain explicit counts and next steps rather than a protection percentage. The Devices page does not invent `offline`; absence of recent positive evidence remains `uncertain` as defined by #11.
+
+Synthetic demo data spans the same navigation but keeps the persistent synthetic-data banner on every section. Live and synthetic records are never mixed.
+
 ## Desktop shell boundary
 
 This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 proves packaging, service registration, UI-close/controller-survival, permission failure, sleep/reboot, resource, upgrade, and uninstall behavior. If Tauri is promoted, it should reuse the same `cozysoc` executable and web/shared-UI contract rather than create another controller or generic native bridge.
 
 ## Next steps
 
-Useful #13/#84 follow-ons are:
+Useful #13 follow-ons are:
 
-1. add `cozysoc dev` as an explicitly development-only orchestration command for controller + web;
-2. add the first navigation/information architecture around Overview, Devices, Activity, Coverage, and Settings/Tools;
-3. build network-enrollment/onboarding and Device Watch controls only after the required browser mutation protections are in place;
-4. add browser-level accessibility/responsive tests around the first complete journey; and
+1. build network-enrollment/onboarding and Device Watch controls only after the required browser mutation protections are in place;
+2. add browser-level accessibility, keyboard, scaling, and responsive tests around the first complete journey;
+3. add Activity only when normalized observations/findings have a bounded user-facing read model;
+4. add Settings/Tools only when there are real configuration choices, engine diagnostics, or validated advanced links to present; and
 5. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.

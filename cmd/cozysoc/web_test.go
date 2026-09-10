@@ -287,3 +287,77 @@ func testCoverageEnvelope() coverageEnvelope {
 		}},
 	}
 }
+
+func TestWebHandlerDevicesReadBoundary(t *testing.T) {
+	uiDir := testUIDir(t)
+	const host = "127.0.0.1:43821"
+	calls := 0
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
+		return testCoverageEnvelope(), nil
+	})
+	handler.loadDevices = func(context.Context) (api.DeviceList, error) {
+		calls++
+		return testDeviceList(), nil
+	}
+
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "http://"+host+"/api/devices", nil))
+	if unauthenticated.Code != http.StatusUnauthorized || calls != 0 {
+		t.Fatalf("unauthenticated devices response: status=%d calls=%d", unauthenticated.Code, calls)
+	}
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/devices", nil))
+	if response.Code != http.StatusOK || calls != 1 {
+		t.Fatalf("devices response: status=%d calls=%d body=%s", response.Code, calls, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, forbidden := range []string{testBootstrapToken, testSessionToken, "controller.auth", "session_secret"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("devices response exposed forbidden detail %q: %s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, `"user_label":"Living Room TV"`) || !strings.Contains(body, `"state":"visible"`) {
+		t.Fatalf("devices response did not expose bounded presence data: %s", body)
+	}
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
+		rejected := httptest.NewRecorder()
+		handler.ServeHTTP(rejected, authenticatedRequest(method, "http://"+host+"/api/devices", nil))
+		if rejected.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s devices status = %d, want 405", method, rejected.Code)
+		}
+	}
+}
+
+func TestWebHandlerDevicesControllerUnavailable(t *testing.T) {
+	uiDir := testUIDir(t)
+	const host = "127.0.0.1:43821"
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
+		return testCoverageEnvelope(), nil
+	})
+	handler.loadDevices = func(context.Context) (api.DeviceList, error) {
+		return api.DeviceList{}, errors.New("offline")
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/devices", nil))
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"error":"controller_unavailable"`) {
+		t.Fatalf("unexpected unavailable devices response: status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func testDeviceList() api.DeviceList {
+	return api.DeviceList{
+		Configured: true,
+		ScopeID:    "scope.home",
+		AsOf:       time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC),
+		Devices: []api.DevicePresence{{
+			ID:        "device.one",
+			UserLabel: "Living Room TV",
+			FirstSeen: time.Date(2026, 9, 9, 20, 0, 0, 0, time.UTC),
+			LastSeen:  time.Date(2026, 9, 10, 0, 59, 0, 0, time.UTC),
+			State:     "visible",
+		}},
+		Truncated: false,
+	}
+}
