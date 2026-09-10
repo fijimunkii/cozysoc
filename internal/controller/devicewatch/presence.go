@@ -61,18 +61,23 @@ func ListPresence(ctx context.Context, reader DeviceEvidenceReader, scopeID stri
 		NextID:  evidence.NextID,
 	}
 	for _, summary := range evidence.Devices {
-		state := PresenceUncertain
-		age := asOf.Sub(summary.LastSeen)
-		if age >= 0 && age <= presenceFreshWindow {
-			state = PresenceVisible
-		}
-		page.Devices = append(page.Devices, DevicePresence{
-			ID:        summary.Device.ID,
-			UserLabel: summary.Device.UserLabel,
-			FirstSeen: summary.FirstSeen,
-			LastSeen:  summary.LastSeen,
-			State:     state,
-		})
+		page.Devices = append(page.Devices, PresenceFromEvidence(summary, asOf))
 	}
 	return page, nil
+}
+
+func PresenceFromEvidence(summary storage.DeviceEvidenceSummary, asOf time.Time) DevicePresence {
+	asOf = asOf.UTC()
+	state := PresenceUncertain
+	age := asOf.Sub(summary.LastSeen)
+	if age >= 0 && age <= presenceFreshWindow {
+		state = PresenceVisible
+	}
+	return DevicePresence{
+		ID:        summary.Device.ID,
+		UserLabel: summary.Device.UserLabel,
+		FirstSeen: summary.FirstSeen,
+		LastSeen:  summary.LastSeen,
+		State:     state,
+	}
 }

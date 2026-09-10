@@ -43,7 +43,7 @@ export function parseDeviceList(input: unknown): DeviceList {
   if (value.configured && scopeID === undefined) throw new DeviceLoadError("configured device response is missing scope_id");
   if (!value.configured && scopeID !== undefined) throw new DeviceLoadError("unconfigured device response cannot carry scope_id");
 
-  const devices = value.devices.map(parseDevice);
+  const devices = value.devices.map(parseDevicePresence);
   if (!value.configured && devices.length !== 0) throw new DeviceLoadError("unconfigured device response cannot carry devices");
   const seen = new Set<string>();
   for (const device of devices) {
@@ -90,7 +90,7 @@ export async function loadDevicesFromWeb(): Promise<DeviceList> {
   return parseDeviceList(payload);
 }
 
-function parseDevice(input: unknown): DevicePresence {
+export function parseDevicePresence(input: unknown): DevicePresence {
   const value = objectValue(input, "device");
   const id = identifierValue(value.id, "device id");
   const firstSeen = timestampValue(value.first_seen, `device ${id} first_seen`);

@@ -40,3 +40,34 @@
 .device-label-validation { color: #8a4e45; }
 .device-label-form-actions { display: flex; gap: 8px; }
 .device-label-error { margin-top: 8px; color: #85483f; font-size: .78rem; line-height: 1.4; }
+
+.device-detail { display: grid; gap: 14px; }
+.device-detail-back { justify-self: start; }
+.device-detail-card, .device-evidence-card { overflow: hidden; }
+.device-detail-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding: 26px 28px 18px; }
+.device-detail-header h2 { margin: 5px 0 6px; font-size: clamp(1.55rem, 3vw, 2.15rem); }
+.device-detail-header code { color: #777c72; font-size: .76rem; }
+.device-detail-presence { padding: 0 28px 26px; }
+.device-detail-presence > p { max-width: 760px; color: #62675e; line-height: 1.6; }
+.device-detail-presence dl, .evidence-facts, .evidence-provenance dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 18px 0 0; }
+.device-detail-presence dl div, .evidence-facts div, .evidence-provenance dl div { display: grid; gap: 3px; }
+.device-detail-presence dt, .evidence-facts dt, .evidence-provenance dt { color: #777c72; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.device-detail-presence dd, .evidence-facts dd, .evidence-provenance dd { margin: 0; color: #343933; }
+.device-evidence-list { list-style: none; padding: 0; margin: 0; }
+.device-evidence-list > li { padding: 20px 28px; border-top: 1px solid #ebe8df; }
+.evidence-heading { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.evidence-heading h4 { margin: 6px 0 4px; font-size: 1rem; }
+.evidence-heading code { color: #555b52; }
+.evidence-heading > span { color: #777c72; font-size: .78rem; white-space: nowrap; }
+.evidence-age { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+.evidence-age--current { background: #e6f0e5; color: #35553a; }
+.evidence-age--historical { background: #f1eee7; color: #676157; }
+.evidence-facts dd span { color: #777c72; font-size: .78rem; }
+.evidence-provenance { margin-top: 16px; }
+.evidence-provenance summary { cursor: pointer; color: #64695f; font-size: .82rem; }
+.device-detail-error-actions { display: flex; gap: 10px; margin-top: 14px; }
+@media (max-width: 720px) {
+  .device-detail-header, .evidence-heading { display: block; }
+  .device-detail-header .presence-pill, .evidence-heading > span { display: inline-flex; margin-top: 10px; }
+  .device-detail-presence dl, .evidence-facts, .evidence-provenance dl { grid-template-columns: 1fr; }
+}

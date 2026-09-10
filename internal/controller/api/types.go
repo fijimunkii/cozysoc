@@ -14,6 +14,7 @@ const (
 	MethodHealth              = "health"
 	MethodCapabilitiesList    = "capabilities.list"
 	MethodDevicesList         = "devices.list"
+	MethodDeviceDetail        = "device.detail"
 	MethodDeviceLabel         = "device.label"
 	MethodNetworksList        = "networks.list"
 	MethodNetworkEnroll       = "network.enroll"
@@ -78,6 +79,42 @@ type DeviceList struct {
 	AsOf       time.Time        `json:"as_of"`
 	Devices    []DevicePresence `json:"devices"`
 	Truncated  bool             `json:"truncated"`
+}
+
+type DeviceDetailParams struct {
+	DeviceID string `json:"device_id"`
+}
+
+type DeviceEvidenceSource struct {
+	ObservationID string    `json:"observation_id"`
+	SensorID      string    `json:"sensor_id"`
+	Kind          string    `json:"kind"`
+	SourceStream  string    `json:"source_stream"`
+	IngestedAt    time.Time `json:"ingested_at"`
+	Attribution   string    `json:"attribution"`
+}
+
+type DeviceIdentityEvidence struct {
+	Kind            string                `json:"kind"`
+	Value           string                `json:"value"`
+	ObservedAt      time.Time             `json:"observed_at"`
+	ValidUntil      *time.Time            `json:"valid_until,omitempty"`
+	LinkValidUntil  *time.Time            `json:"link_valid_until,omitempty"`
+	Current         bool                  `json:"current"`
+	ClaimConfidence *float64              `json:"claim_confidence,omitempty"`
+	LinkConfidence  *float64              `json:"link_confidence,omitempty"`
+	Authority       string                `json:"authority"`
+	Reason          string                `json:"reason"`
+	SourceSensorID  string                `json:"source_sensor_id"`
+	Source          *DeviceEvidenceSource `json:"source,omitempty"`
+}
+
+type DeviceDetail struct {
+	ScopeID   string                   `json:"scope_id"`
+	AsOf      time.Time                `json:"as_of"`
+	Device    DevicePresence           `json:"device"`
+	Evidence  []DeviceIdentityEvidence `json:"evidence"`
+	Truncated bool                     `json:"truncated"`
 }
 
 type DeviceLabelParams struct {

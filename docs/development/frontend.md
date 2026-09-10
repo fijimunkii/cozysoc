@@ -146,3 +146,10 @@ The Devices view can update or clear a user label only in live mode. Browser wri
 The controller remains authoritative for scope membership and label validation. It accepts only devices with retained evidence in the current authorized scope, applies the 160-byte trimmed/control-free label contract, and records real changes with the existing transactional audit event. A device that leaves the retained scope before save returns a bounded not-found result rather than being relabeled optimistically.
 
 React validates the same 160 UTF-8 byte limit for immediate feedback, keeps the CSRF value only in the shared in-memory mutation client, renders all label text as ordinary text nodes, and reloads live device data after a successful change. Synthetic demo devices remain read-only.
+
+
+### Device evidence detail
+
+Live device rows can open a read-only evidence detail view through `GET /api/devices/detail?device_id=...`. The browser supplies only a device ID; the controller resolves the current Device Watch scope and refuses devices without retained evidence in that scope. The response is bounded to the most recent 100 identity-evidence rows and exposes claim/link/source metadata needed for explanation, not raw observation payload JSON.
+
+Presence (`visible` / `uncertain`) and identity validity are intentionally separate. A retained MAC/IP association can be historical while the device remains listed, and a temporally current identity association is not itself proof of recent presence, trust, or safety. When a source observation has aged out before its longer-lived identity claim, the detail view says the raw source metadata expired instead of reconstructing it.

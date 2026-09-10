@@ -26,6 +26,8 @@ const (
 
 var (
 	ErrAlreadyRunning         = errors.New("controller is already running")
+	ErrInvalidRead            = errors.New("invalid read request")
+	ErrReadTargetNotFound     = errors.New("read target is not available")
 	ErrInvalidMutation        = errors.New("invalid mutation request")
 	ErrMutationTargetNotFound = errors.New("mutation target is not available")
 	ErrMutationPrecondition   = errors.New("mutation precondition is not satisfied")
@@ -44,6 +46,10 @@ type DeviceHandler interface {
 
 type DeviceWatchCoverageHandler interface {
 	DeviceWatchCoverage(context.Context) (api.DeviceWatchCoverage, error)
+}
+
+type DeviceDetailHandler interface {
+	DeviceDetail(context.Context, api.DeviceDetailParams) (api.DeviceDetail, error)
 }
 
 type DeviceLabelHandler interface {
@@ -271,6 +277,33 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 		result = deviceList
+	case api.MethodDeviceDetail:
+		detailHandler, ok := s.handler.(DeviceDetailHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		var params api.DeviceDetailParams
+		if err := decodeRequiredParams(request.Params, &params); err != nil || params.DeviceID == "" {
+			s.writeError(conn, request.ID, "invalid_request", "invalid device detail parameters")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		detail, detailErr := detailHandler.DeviceDetail(requestCtx, params)
+		cancel()
+		if detailErr != nil {
+			switch {
+			case errors.Is(detailErr, ErrInvalidRead):
+				s.writeError(conn, request.ID, "invalid_request", "invalid device detail parameters")
+			case errors.Is(detailErr, ErrReadTargetNotFound):
+				s.writeError(conn, request.ID, "not_found", "device evidence is not available")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceDetail)
+				s.writeError(conn, request.ID, "internal_error", "unable to load device detail")
+			}
+			return
+		}
+		result = detail
 	case api.MethodDeviceWatchCoverage:
 		if s.rejectUnexpectedParams(conn, request) {
 			return
