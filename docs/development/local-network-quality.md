@@ -20,7 +20,8 @@ No enrollment returns `enrolled: false` with no observer or check. It does not
 inspect available interfaces to invent a default selection. Enrollment does not
 need Device Watch enabled: this is a read of local OS metadata, like the existing
 network setup reads, not authorization to collect neighbors or transmit traffic.
-There is no new browser route, UI section, lifecycle action, or API version bump.
+The [browser panel](browser-network-quality.md) now exposes this narrow read.
+There is no new lifecycle action or API version bump.
 
 ## Evidence source and binding
 
@@ -77,7 +78,7 @@ and after enrollment, confirms Device Watch stays off, and checks that reads do
 not create monitoring history. The normal Darwin build remains compilation
 coverage, not a macOS runtime, sleep/resume, carrier, or hardware certification.
 
-Next, expose this narrow projection to the shared frontend with clear source and
-freshness copy. Separately authorized active gateway/resolver/external checks,
+The [shared frontend panel](browser-network-quality.md) now presents this read
+with explicit source, freshness, and unknown-state copy. Separately authorized active gateway/resolver/external checks,
 bounded durable history, corroborated diagnosis, and their privacy/routing/rate
 controls remain future work. There is no automatic network configuration change.

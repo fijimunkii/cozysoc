@@ -15,6 +15,8 @@ import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
 import { demoCapabilitiesRaw, demoStatusRaw } from "./demo/tools";
 import { OverviewPage } from "./OverviewPage";
+import { LocalConnectionPanel } from "./quality/LocalConnectionPanel";
+import { loadLocalQualityFromWeb, type LocalQualityLoader } from "./quality/local-quality";
 import { SetupPanel } from "./setup/SetupPanel";
 import { createWebSetupClient, parseNetworkList, type DeviceLabelClient, type SetupClient } from "./setup/setup";
 import { ToolsPage } from "./tools/ToolsPage";
@@ -51,6 +53,7 @@ export interface AppProps {
   loadData?: () => Promise<AppData>;
   setupClient?: SetupClient;
   deviceLabelClient?: DeviceLabelClient;
+  loadLocalQuality?: LocalQualityLoader;
 }
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
@@ -61,7 +64,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -113,6 +116,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           <>
             {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} /> : null}
             <OverviewPage data={activeData} onNavigate={setPage} />
+            <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
           </>
         ) : null}
         {activeData && page === "devices" ? (

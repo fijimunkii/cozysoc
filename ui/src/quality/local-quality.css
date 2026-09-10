@@ -1,0 +1,6 @@
+.local-quality { margin-top: 1.25rem; }
+.local-quality-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.local-quality-facts div { min-width: 0; }
+.local-quality-facts dt { font-weight: 600; }
+.local-quality-facts dd { margin: .35rem 0 0; overflow-wrap: anywhere; }
+.local-quality-limits { margin-top: 1rem; line-height: 1.6; }

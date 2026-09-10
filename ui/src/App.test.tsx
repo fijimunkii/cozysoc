@@ -113,4 +113,28 @@ describe("App product navigation", () => {
     expect(screen.getByRole("heading", { name: "Device Watch" })).toBeTruthy();
     expect(screen.getByRole("status", { name: "Synthetic demo data" })).toBeTruthy();
   });
+  it("keeps core evidence live when only a requested local sample fails", async () => {
+    render(<App loadData={async () => liveData} loadLocalQuality={async () => { throw new Error("private-source-error"); }} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    fireEvent.click(screen.getByRole("button", { name: "Read local interface" }));
+    expect(await screen.findByText(/Local sample unavailable/)).toBeTruthy();
+    expect(screen.queryByText(/private-source-error/)).toBeNull();
+    expect(screen.getByRole("status", { name: "Live controller data" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    expect(screen.getByText("Living Room TV")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Coverage" }));
+    expect(screen.getByRole("heading", { name: "What Cozy SOC can see" })).toBeTruthy();
+  });
+
+  it("does not take a local sample while entering or navigating the synthetic demo", async () => {
+    let reads = 0;
+    render(<App loadData={async () => { throw new Error("offline"); }} loadLocalQuality={async () => { reads++; return { enrolled: false, as_of: "2026-09-10T12:00:00Z" }; }} />);
+    await screen.findByRole("alert", { name: "Live monitoring unavailable" });
+    fireEvent.click(screen.getByRole("button", { name: "Use synthetic demo" }));
+    expect(screen.getByText(/Synthetic demo: no local interface sample/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Read local interface" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tools" }));
+    expect(screen.getByRole("status", { name: "Synthetic demo data" })).toBeTruthy();
+    expect(reads).toBe(0);
+  });
 });

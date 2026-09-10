@@ -9,7 +9,7 @@ slice, not a completed connectivity-diagnosis feature.
 collected measurements. `Assess` is a pure function: it has no network, process,
 filesystem, controller, storage, coverage, or finding dependencies. The controller's
 separate [local-interface read](local-network-quality.md) now supplies real OS
-metadata through a typed UDS/CLI projection. It adds no browser route, background
+metadata through typed UDS/CLI and browser projections. It adds no background
 checks, DNS queries, external requests, or speed tests.
 
 The contract separates local interface state, a selected gateway's ICMP checks,
@@ -88,7 +88,7 @@ connections, or physical network quality. They do not complete #14 or #29.
 
 The narrow [local-interface evidence producer and native read projection](local-network-quality.md)
 now revalidates the enrolled interface/prefix binding before attributing local OS
-metadata. A shared frontend projection is next. Equality of the contract's
+metadata. A [shared frontend projection](browser-network-quality.md) is also available. Equality of the contract's
 observer fields alone remains neither authorization nor proof that the laptop
 stayed on the same network.
 
