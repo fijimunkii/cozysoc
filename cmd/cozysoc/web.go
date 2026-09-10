@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -21,11 +26,14 @@ import (
 )
 
 const (
-	defaultWebListen  = "127.0.0.1:0"
-	defaultWebUIDir   = "ui/dist"
-	maxWebHeaderBytes = 16 * 1024
-	maxWebRequestURI  = 2048
-	webRequestTimeout = 5 * time.Second
+	defaultWebListen       = "127.0.0.1:0"
+	defaultWebUIDir        = "ui/dist"
+	maxWebHeaderBytes      = 16 * 1024
+	maxWebRequestURI       = 2048
+	maxWebSessionBodyBytes = 1024
+	webRequestTimeout      = 5 * time.Second
+	webTokenBytes          = 32
+	webSessionCookie       = "cozysoc_session"
 )
 
 type coverageEnvelope struct {
@@ -36,9 +44,13 @@ type coverageEnvelope struct {
 type coverageLoader func(context.Context) (coverageEnvelope, error)
 
 type webHandler struct {
-	expectedHost string
-	uiDir        string
-	loadCoverage coverageLoader
+	expectedHost   string
+	uiDir          string
+	loadCoverage   coverageLoader
+	bootstrapToken string
+	sessionToken   string
+	bootstrapMu    sync.Mutex
+	bootstrapUsed  bool
 }
 
 func runCoverageCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
@@ -94,6 +106,14 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	if err := validateUIDir(assets); err != nil {
 		return err
 	}
+	bootstrapToken, err := newWebToken()
+	if err != nil {
+		return err
+	}
+	sessionToken, err := newWebToken()
+	if err != nil {
+		return err
+	}
 
 	listener, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
@@ -101,7 +121,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	defer listener.Close()
 	expectedHost := listener.Addr().String()
-	handler := newWebHandler(expectedHost, assets, func(requestCtx context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(expectedHost, assets, bootstrapToken, sessionToken, func(requestCtx context.Context) (coverageEnvelope, error) {
 		return loadCoverageFromController(requestCtx, dir)
 	})
 	server := &http.Server{
@@ -119,11 +139,19 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	_, _ = fmt.Fprintf(stdout, "cozysoc web ready: http://%s/\n", expectedHost)
+	_, _ = fmt.Fprintf(stdout, "cozysoc web ready: http://%s/#bootstrap=%s\n", expectedHost, bootstrapToken)
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("serve local web UI: %w", err)
 	}
 	return nil
+}
+
+func newWebToken() (string, error) {
+	raw := make([]byte, webTokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generate local web session token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func validateLoopbackListen(address string) error {
@@ -180,11 +208,13 @@ func loadCoverageFromController(ctx context.Context, stateDir string) (coverageE
 	}, nil
 }
 
-func newWebHandler(expectedHost, uiDir string, load coverageLoader) http.Handler {
+func newWebHandler(expectedHost, uiDir, bootstrapToken, sessionToken string, load coverageLoader) http.Handler {
 	return &webHandler{
-		expectedHost: expectedHost,
-		uiDir:        uiDir,
-		loadCoverage: load,
+		expectedHost:   expectedHost,
+		uiDir:          uiDir,
+		loadCoverage:   load,
+		bootstrapToken: bootstrapToken,
+		sessionToken:   sessionToken,
 	}
 }
 
@@ -199,15 +229,18 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/api/coverage" {
+	switch r.URL.Path {
+	case "/api/session":
+		h.handleSession(w, r)
+	case "/api/coverage":
 		h.handleCoverage(w, r)
-		return
+	default:
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		h.serveStatic(w, r)
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		http.NotFound(w, r)
-		return
-	}
-	h.serveStatic(w, r)
 }
 
 func (h *webHandler) requestAuthorityAllowed(r *http.Request) bool {
@@ -225,8 +258,94 @@ func (h *webHandler) requestAuthorityAllowed(r *http.Request) bool {
 	return parsed.Path == "" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
+func (h *webHandler) handleSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeWebError(w, http.StatusMethodNotAllowed, "method_not_allowed", "web session bootstrap requires POST")
+		return
+	}
+	if r.Header.Get("Origin") != "http://"+h.expectedHost {
+		writeWebError(w, http.StatusForbidden, "origin_required", "web session bootstrap requires the exact local origin")
+		return
+	}
+	if r.URL.RawQuery != "" {
+		writeWebError(w, http.StatusBadRequest, "query_not_allowed", "web session bootstrap does not accept query parameters")
+		return
+	}
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if !strings.HasPrefix(contentType, "application/json") {
+		writeWebError(w, http.StatusUnsupportedMediaType, "content_type_required", "web session bootstrap requires JSON")
+		return
+	}
+	limited := http.MaxBytesReader(w, r.Body, maxWebSessionBodyBytes)
+	defer limited.Close()
+	decoder := json.NewDecoder(limited)
+	decoder.DisallowUnknownFields()
+	var request struct {
+		Bootstrap string `json:"bootstrap"`
+	}
+	if err := decoder.Decode(&request); err != nil {
+		writeWebError(w, http.StatusBadRequest, "invalid_bootstrap", "web session bootstrap is invalid")
+		return
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		writeWebError(w, http.StatusBadRequest, "invalid_bootstrap", "web session bootstrap is invalid")
+		return
+	}
+	if !h.consumeBootstrap(request.Bootstrap) {
+		writeWebError(w, http.StatusUnauthorized, "invalid_bootstrap", "web session bootstrap is invalid or already used")
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     webSessionCookie,
+		Value:    h.sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func ensureJSONEOF(decoder *json.Decoder) error {
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func (h *webHandler) consumeBootstrap(candidate string) bool {
+	h.bootstrapMu.Lock()
+	defer h.bootstrapMu.Unlock()
+	if h.bootstrapUsed || len(candidate) != len(h.bootstrapToken) {
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(candidate), []byte(h.bootstrapToken)) != 1 {
+		return false
+	}
+	h.bootstrapUsed = true
+	h.bootstrapToken = ""
+	return true
+}
+
+func (h *webHandler) authenticated(r *http.Request) bool {
+	cookie, err := r.Cookie(webSessionCookie)
+	if err != nil || len(cookie.Value) != len(h.sessionToken) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(h.sessionToken)) == 1
+}
+
 func (h *webHandler) handleCoverage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	if !h.authenticated(r) {
+		writeWebError(w, http.StatusUnauthorized, "web_session_required", "open the authenticated local Cozy SOC web URL")
+		return
+	}
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		writeWebError(w, http.StatusMethodNotAllowed, "method_not_allowed", "coverage is read-only")

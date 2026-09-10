@@ -11,7 +11,7 @@ const demoCoverage = parseCoverageReport(demoCoverageRaw);
 type CoverageView =
   | { mode: "loading" }
   | { mode: "live"; bundle: CoverageBundle }
-  | { mode: "unavailable" }
+  | { mode: "unavailable"; message: string }
   | { mode: "demo" };
 
 export interface AppProps {
@@ -29,8 +29,13 @@ export function App({ loadCoverage = loadCoverageFromWeb }: AppProps) {
       .then((bundle) => {
         if (!cancelled) setView({ mode: "live", bundle });
       })
-      .catch(() => {
-        if (!cancelled) setView({ mode: "unavailable" });
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setView({
+            mode: "unavailable",
+            message: error instanceof Error ? error.message : "Live coverage is unavailable.",
+          });
+        }
       });
     return () => {
       cancelled = true;
@@ -59,7 +64,7 @@ export function App({ loadCoverage = loadCoverageFromWeb }: AppProps) {
         <div className="connection-banner connection-banner--unavailable" role="alert" aria-label="Live monitoring unavailable">
           <div>
             <strong>Live monitoring unavailable</strong>
-            <span>Start the local controller and web service, then retry. Synthetic data will never replace live data automatically.</span>
+            <span>{view.message} Synthetic data will never replace live data automatically.</span>
           </div>
           <div className="connection-actions">
             <button type="button" onClick={retryLive}>Retry live connection</button>

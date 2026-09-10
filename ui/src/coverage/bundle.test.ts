@@ -1,7 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { demoCoverageRaw } from "../demo/coverage";
 import { CoverageLoadError, loadCoverageFromWeb, parseCoverageBundle } from "./bundle";
+
+const bootstrapToken = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+function liveResponse() {
+  return new Response(JSON.stringify({ as_of: "2026-09-10T00:00:00Z", reports: [demoCoverageRaw] }), {
+    status: 200,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, document.title, "/");
+});
 
 describe("coverage bundle", () => {
   it("parses the bounded shared report envelope", () => {
@@ -31,20 +45,54 @@ describe("coverage bundle", () => {
     );
   });
 
-  it("requires a successful same-origin JSON response", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ as_of: "2026-09-10T00:00:00Z", reports: [demoCoverageRaw] }), {
-        status: 200,
-        headers: { "content-type": "application/json; charset=utf-8" },
-      }),
-    );
+  it("uses an existing web session for a same-origin JSON coverage read", async () => {
+    const fetchMock = vi.fn(async () => liveResponse());
     vi.stubGlobal("fetch", fetchMock);
     const bundle = await loadCoverageFromWeb();
     expect(bundle.reports[0]?.capability_id).toBe("device-watch");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/coverage",
       expect.objectContaining({ method: "GET", credentials: "same-origin", cache: "no-store" }),
     );
-    vi.unstubAllGlobals();
+  });
+
+  it("exchanges the one-time fragment bootstrap before reading coverage and scrubs it from history", async () => {
+    window.history.replaceState(null, document.title, `/#bootstrap=${bootstrapToken}`);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(liveResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const bundle = await loadCoverageFromWeb();
+    expect(bundle.reports[0]?.capability_id).toBe("device-watch");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session");
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ bootstrap: bootstrapToken }),
+      }),
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/coverage");
+    expect(window.location.hash).toBe("");
+  });
+
+  it("fails closed on a malformed bootstrap and still scrubs it from history", async () => {
+    window.history.replaceState(null, document.title, "/#bootstrap=short");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadCoverageFromWeb()).rejects.toThrow(CoverageLoadError);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("gives an actionable error when the browser session is missing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 401 })));
+    await expect(loadCoverageFromWeb()).rejects.toThrow(/authenticated local URL/);
   });
 });

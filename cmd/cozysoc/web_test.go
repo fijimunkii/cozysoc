@@ -15,6 +15,11 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 )
 
+const (
+	testBootstrapToken = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	testSessionToken   = "sssssssssssssssssssssssssssssssssssssssssss"
+)
+
 func TestValidateLoopbackListen(t *testing.T) {
 	for _, address := range []string{"127.0.0.1:0", "127.0.0.1:43821", "[::1]:0"} {
 		if err := validateLoopbackListen(address); err != nil {
@@ -28,16 +33,85 @@ func TestValidateLoopbackListen(t *testing.T) {
 	}
 }
 
+func TestWebHandlerSessionBootstrapIsOneTimeAndHttpOnly(t *testing.T) {
+	uiDir := testUIDir(t)
+	const host = "127.0.0.1:43821"
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
+		return testCoverageEnvelope(), nil
+	})
+
+	exchange := func(token, origin string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/session", strings.NewReader(`{"bootstrap":"`+token+`"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	wrongOrigin := exchange(testBootstrapToken, "https://attacker.invalid")
+	if wrongOrigin.Code != http.StatusForbidden {
+		t.Fatalf("wrong-origin bootstrap status = %d, want 403", wrongOrigin.Code)
+	}
+	wrongToken := exchange(strings.Repeat("x", len(testBootstrapToken)), "http://"+host)
+	if wrongToken.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong-token bootstrap status = %d, want 401", wrongToken.Code)
+	}
+
+	first := exchange(testBootstrapToken, "http://"+host)
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("bootstrap status = %d, body=%s", first.Code, first.Body.String())
+	}
+	cookies := first.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("bootstrap cookies = %d, want 1", len(cookies))
+	}
+	cookie := cookies[0]
+	if cookie.Name != webSessionCookie || cookie.Value != testSessionToken || cookie.Value == testBootstrapToken {
+		t.Fatalf("unexpected browser session cookie: %+v", cookie)
+	}
+	if !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" {
+		t.Fatalf("browser session cookie flags are too weak: %+v", cookie)
+	}
+	if got := first.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("bootstrap Cache-Control = %q, want no-store", got)
+	}
+
+	second := exchange(testBootstrapToken, "http://"+host)
+	if second.Code != http.StatusUnauthorized {
+		t.Fatalf("reused bootstrap status = %d, want 401", second.Code)
+	}
+}
+
+func TestWebHandlerCoverageRequiresWebSession(t *testing.T) {
+	uiDir := testUIDir(t)
+	const host = "127.0.0.1:43821"
+	calls := 0
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
+		calls++
+		return testCoverageEnvelope(), nil
+	})
+	req := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/coverage", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusUnauthorized || !strings.Contains(res.Body.String(), `"error":"web_session_required"`) {
+		t.Fatalf("unauthenticated coverage response: status=%d body=%s", res.Code, res.Body.String())
+	}
+	if calls != 0 {
+		t.Fatalf("unauthenticated coverage reached loader %d times", calls)
+	}
+}
+
 func TestWebHandlerCoverageSecurityBoundary(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"
 	calls := 0
-	handler := newWebHandler(host, uiDir, func(context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
 		calls++
 		return testCoverageEnvelope(), nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/coverage", nil)
+	req := authenticatedRequest(http.MethodGet, "http://"+host+"/api/coverage", nil)
 	req.Header.Set("Origin", "http://"+host)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
@@ -49,7 +123,7 @@ func TestWebHandlerCoverageSecurityBoundary(t *testing.T) {
 		t.Fatalf("coverage loader calls = %d, want 1", calls)
 	}
 	body := res.Body.String()
-	for _, forbidden := range []string{"controller.auth", "session_secret", "operational", "neighbors_in_scope", "blind_spots"} {
+	for _, forbidden := range []string{"controller.auth", "session_secret", "operational", "neighbors_in_scope", "blind_spots", testBootstrapToken, testSessionToken} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("coverage response exposed forbidden detail %q: %s", forbidden, body)
 		}
@@ -71,30 +145,36 @@ func TestWebHandlerRejectsInvalidBrowserRequests(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"
 	calls := 0
-	handler := newWebHandler(host, uiDir, func(context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
 		calls++
 		return testCoverageEnvelope(), nil
 	})
 
 	tests := []struct {
-		name   string
-		method string
-		url    string
-		host   string
-		origin string
-		body   io.Reader
-		want   int
+		name          string
+		method        string
+		url           string
+		host          string
+		origin        string
+		body          io.Reader
+		authenticated bool
+		want          int
 	}{
-		{name: "wrong host", method: http.MethodGet, url: "http://" + host + "/api/coverage", host: "attacker.invalid", want: http.StatusForbidden},
-		{name: "wrong origin", method: http.MethodGet, url: "http://" + host + "/api/coverage", origin: "https://attacker.invalid", want: http.StatusForbidden},
-		{name: "mutation method", method: http.MethodPost, url: "http://" + host + "/api/coverage", want: http.StatusMethodNotAllowed},
-		{name: "query parameters", method: http.MethodGet, url: "http://" + host + "/api/coverage?scope=other", want: http.StatusBadRequest},
-		{name: "get body", method: http.MethodGet, url: "http://" + host + "/api/coverage", body: strings.NewReader("unexpected"), want: http.StatusBadRequest},
+		{name: "wrong host", method: http.MethodGet, url: "http://" + host + "/api/coverage", host: "attacker.invalid", authenticated: true, want: http.StatusForbidden},
+		{name: "wrong origin", method: http.MethodGet, url: "http://" + host + "/api/coverage", origin: "https://attacker.invalid", authenticated: true, want: http.StatusForbidden},
+		{name: "mutation method", method: http.MethodPost, url: "http://" + host + "/api/coverage", authenticated: true, want: http.StatusMethodNotAllowed},
+		{name: "query parameters", method: http.MethodGet, url: "http://" + host + "/api/coverage?scope=other", authenticated: true, want: http.StatusBadRequest},
+		{name: "get body", method: http.MethodGet, url: "http://" + host + "/api/coverage", body: strings.NewReader("unexpected"), authenticated: true, want: http.StatusBadRequest},
 		{name: "generic rpc absent", method: http.MethodPost, url: "http://" + host + "/api/call", want: http.StatusNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.url, tt.body)
+			var req *http.Request
+			if tt.authenticated {
+				req = authenticatedRequest(tt.method, tt.url, tt.body)
+			} else {
+				req = httptest.NewRequest(tt.method, tt.url, tt.body)
+			}
 			if tt.host != "" {
 				req.Host = tt.host
 			}
@@ -116,10 +196,10 @@ func TestWebHandlerRejectsInvalidBrowserRequests(t *testing.T) {
 func TestWebHandlerControllerUnavailable(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"
-	handler := newWebHandler(host, uiDir, func(context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
 		return coverageEnvelope{}, errors.New("offline")
 	})
-	req := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/coverage", nil)
+	req := authenticatedRequest(http.MethodGet, "http://"+host+"/api/coverage", nil)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	if res.Code != http.StatusServiceUnavailable || !strings.Contains(res.Body.String(), `"error":"controller_unavailable"`) {
@@ -127,10 +207,10 @@ func TestWebHandlerControllerUnavailable(t *testing.T) {
 	}
 }
 
-func TestWebHandlerServesOnlyRegularStaticFiles(t *testing.T) {
+func TestWebHandlerServesOnlyRegularStaticFilesInsideRoot(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"
-	handler := newWebHandler(host, uiDir, func(context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
 		return testCoverageEnvelope(), nil
 	})
 
@@ -145,12 +225,27 @@ func TestWebHandlerServesOnlyRegularStaticFiles(t *testing.T) {
 	if directory.Code != http.StatusNotFound {
 		t.Fatalf("directory listing status = %d, want 404", directory.Code)
 	}
+
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(uiDir, "escape.txt")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink test unavailable: %v", err)
+	}
+	escape := httptest.NewRecorder()
+	handler.ServeHTTP(escape, httptest.NewRequest(http.MethodGet, "http://"+host+"/escape.txt", nil))
+	if escape.Code != http.StatusNotFound || strings.Contains(escape.Body.String(), "outside") {
+		t.Fatalf("static server escaped UI root: status=%d body=%s", escape.Code, escape.Body.String())
+	}
 }
 
 func TestWebHandlerRejectsOversizedRequestURI(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"
-	handler := newWebHandler(host, uiDir, func(context.Context) (coverageEnvelope, error) {
+	handler := newWebHandler(host, uiDir, testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) {
 		return testCoverageEnvelope(), nil
 	})
 	req := httptest.NewRequest(http.MethodGet, "http://"+host+"/"+strings.Repeat("a", maxWebRequestURI+1), nil)
@@ -159,6 +254,12 @@ func TestWebHandlerRejectsOversizedRequestURI(t *testing.T) {
 	if res.Code != http.StatusRequestURITooLong {
 		t.Fatalf("oversized URI status = %d, want %d", res.Code, http.StatusRequestURITooLong)
 	}
+}
+
+func authenticatedRequest(method, target string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, target, body)
+	req.AddCookie(&http.Cookie{Name: webSessionCookie, Value: testSessionToken})
+	return req
 }
 
 func testUIDir(t *testing.T) string {

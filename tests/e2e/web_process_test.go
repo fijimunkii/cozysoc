@@ -1,11 +1,11 @@
 package e2e
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +46,7 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 
 	controller := startController(t, absoluteBinary, stateDir)
 	waitForReady(t, absoluteBinary, stateDir, controller)
-	secret := readSecret(t, stateDir)
+	controllerSecret := readSecret(t, stateDir)
 
 	cliCoverage := runCLIJSON[processCoverageEnvelope](t, absoluteBinary, stateDir, "coverage")
 	if cliCoverage.AsOf.IsZero() || len(cliCoverage.Reports) != 1 || cliCoverage.Reports[0].CapabilityID != "device-watch" {
@@ -54,10 +54,66 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	}
 
 	web := startWeb(t, absoluteBinary, stateDir, absoluteUI)
-	baseURL := waitForWebReady(t, web)
-	client := &http.Client{Timeout: 3 * time.Second}
+	readyURL := waitForWebReady(t, web)
+	rootURL, origin, bootstrap := parseWebReadyURL(t, readyURL)
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Timeout: 3 * time.Second, Jar: jar}
 
-	response, err := client.Get(baseURL + "api/coverage")
+	unauthenticated, err := client.Get(rootURL + "api/coverage")
+	if err != nil {
+		t.Fatalf("read unauthenticated web coverage: %v\n%s", err, web.logs())
+	}
+	_, _ = io.Copy(io.Discard, unauthenticated.Body)
+	_ = unauthenticated.Body.Close()
+	if unauthenticated.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated coverage status = %d, want 401", unauthenticated.StatusCode)
+	}
+
+	sessionRequest, err := http.NewRequest(http.MethodPost, rootURL+"api/session", strings.NewReader(`{"bootstrap":"`+bootstrap+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionRequest.Header.Set("Content-Type", "application/json")
+	sessionRequest.Header.Set("Origin", origin)
+	sessionResponse, err := client.Do(sessionRequest)
+	if err != nil {
+		t.Fatalf("establish web session: %v\n%s", err, web.logs())
+	}
+	_, _ = io.Copy(io.Discard, sessionResponse.Body)
+	_ = sessionResponse.Body.Close()
+	if sessionResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf("web session status = %d, want 204", sessionResponse.StatusCode)
+	}
+	parsedRoot, err := url.Parse(rootURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookies := jar.Cookies(parsedRoot)
+	if len(cookies) != 1 || cookies[0].Name != "cozysoc_session" || cookies[0].Value == "" || cookies[0].Value == bootstrap {
+		t.Fatalf("unexpected browser session cookies: %+v", cookies)
+	}
+	webSession := cookies[0].Value
+
+	reusedRequest, err := http.NewRequest(http.MethodPost, rootURL+"api/session", strings.NewReader(`{"bootstrap":"`+bootstrap+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reusedRequest.Header.Set("Content-Type", "application/json")
+	reusedRequest.Header.Set("Origin", origin)
+	reusedResponse, err := client.Do(reusedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, reusedResponse.Body)
+	_ = reusedResponse.Body.Close()
+	if reusedResponse.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("reused bootstrap status = %d, want 401", reusedResponse.StatusCode)
+	}
+
+	response, err := client.Get(rootURL + "api/coverage")
 	if err != nil {
 		t.Fatalf("read live web coverage: %v\n%s", err, web.logs())
 	}
@@ -69,8 +125,10 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("coverage HTTP status = %d body=%s", response.StatusCode, body)
 	}
-	if strings.Contains(string(body), secret) {
-		t.Fatal("web coverage response exposed the controller session secret")
+	for _, secret := range []string{controllerSecret, bootstrap, webSession} {
+		if strings.Contains(string(body), secret) {
+			t.Fatal("web coverage response exposed a controller or browser credential")
+		}
 	}
 	for _, forbidden := range []string{"operational", "neighbors_in_scope", "blind_spots", "filesystem_available_bytes"} {
 		if strings.Contains(string(body), forbidden) {
@@ -89,7 +147,7 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 		t.Fatalf("unexpected shared web coverage report: %+v", report)
 	}
 
-	root, err := client.Get(baseURL)
+	root, err := client.Get(rootURL)
 	if err != nil {
 		t.Fatalf("read web root: %v", err)
 	}
@@ -102,7 +160,7 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 		t.Fatalf("unexpected web root: status=%d body=%s", root.StatusCode, rootBody)
 	}
 
-	wrongHostRequest, err := http.NewRequest(http.MethodGet, baseURL+"api/coverage", nil)
+	wrongHostRequest, err := http.NewRequest(http.MethodGet, rootURL+"api/coverage", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,30 +231,41 @@ func waitForWebReady(t *testing.T, web *runningController) string {
 		stdout, _ := os.ReadFile(web.stdoutPath)
 		for _, line := range strings.Split(string(stdout), "\n") {
 			if strings.HasPrefix(line, prefix) {
-				url := strings.TrimSpace(strings.TrimPrefix(line, prefix))
-				if !strings.HasPrefix(url, "http://127.0.0.1:") || !strings.HasSuffix(url, "/") {
-					t.Fatalf("unexpected web readiness URL %q", url)
+				readyURL := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+				if !strings.HasPrefix(readyURL, "http://127.0.0.1:") || !strings.Contains(readyURL, "/#bootstrap=") {
+					t.Fatalf("unexpected web readiness URL %q", readyURL)
 				}
-				return url
+				return readyURL
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("web process did not become ready\n%s", web.logs())
-	return fmt.Sprintf("http://127.0.0.1:%d/", 0)
+	return ""
 }
 
-func runCommandJSON[T any](t *testing.T, binary string, args ...string) T {
+func parseWebReadyURL(t *testing.T, readyURL string) (rootURL, origin, bootstrap string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
+	parsed, err := url.Parse(readyURL)
 	if err != nil {
-		t.Fatalf("command %v failed: %v: %s", args, err, output)
+		t.Fatal(err)
 	}
-	var value T
-	if err := json.Unmarshal(output, &value); err != nil {
-		t.Fatalf("decode command %v: %v: %s", args, err, output)
+	if parsed.Scheme != "http" || parsed.Hostname() != "127.0.0.1" || parsed.Port() == "" {
+		t.Fatalf("unexpected web URL authority: %s", readyURL)
 	}
-	return value
+	params, err := url.ParseQuery(parsed.Fragment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrap = params.Get("bootstrap")
+	if len(bootstrap) != 43 {
+		t.Fatalf("unexpected bootstrap token length %d", len(bootstrap))
+	}
+	parsed.Fragment = ""
+	rootURL = parsed.String()
+	if !strings.HasSuffix(rootURL, "/") {
+		rootURL += "/"
+	}
+	origin = parsed.Scheme + "://" + parsed.Host
+	return rootURL, origin, bootstrap
 }

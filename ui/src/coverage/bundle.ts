@@ -2,6 +2,7 @@ import { parseCoverageReport } from "./parse";
 import type { CoverageReport } from "./types";
 
 const maxCoverageReports = 32;
+const bootstrapPattern = /^[A-Za-z0-9_-]{43}$/;
 
 export interface CoverageBundle {
   as_of: string;
@@ -39,6 +40,8 @@ export function parseCoverageBundle(input: unknown): CoverageBundle {
 }
 
 export async function loadCoverageFromWeb(): Promise<CoverageBundle> {
+  await establishWebSessionFromFragment();
+
   let response: Response;
   try {
     response = await fetch("/api/coverage", {
@@ -48,20 +51,58 @@ export async function loadCoverageFromWeb(): Promise<CoverageBundle> {
       cache: "no-store",
     });
   } catch {
-    throw new CoverageLoadError("unable to reach the local Cozy SOC web service");
+    throw new CoverageLoadError("Unable to reach the local Cozy SOC web service.");
+  }
+  if (response.status === 401) {
+    throw new CoverageLoadError("Open the authenticated local URL printed by `cozysoc web`, then retry.");
   }
   if (!response.ok) {
-    throw new CoverageLoadError(`live coverage request failed with status ${response.status}`);
+    throw new CoverageLoadError(`Live coverage request failed with status ${response.status}.`);
   }
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().startsWith("application/json")) {
-    throw new CoverageLoadError("live coverage response was not JSON");
+    throw new CoverageLoadError("Live coverage response was not JSON.");
   }
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    throw new CoverageLoadError("live coverage response was not valid JSON");
+    throw new CoverageLoadError("Live coverage response was not valid JSON.");
   }
   return parseCoverageBundle(payload);
+}
+
+async function establishWebSessionFromFragment(): Promise<void> {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  if (hash === "") return;
+
+  const params = new URLSearchParams(hash);
+  const bootstrap = params.get("bootstrap");
+  if (bootstrap === null) return;
+
+  try {
+    if (!bootstrapPattern.test(bootstrap)) {
+      throw new CoverageLoadError("The local web bootstrap value is malformed. Restart `cozysoc web` and use its new URL.");
+    }
+    let response: Response;
+    try {
+      response = await fetch("/api/session", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ bootstrap }),
+      });
+    } catch {
+      throw new CoverageLoadError("Unable to establish the local Cozy SOC web session.");
+    }
+    if (!response.ok) {
+      throw new CoverageLoadError("The local Cozy SOC web session could not be established. Restart `cozysoc web` and use its new URL.");
+    }
+  } finally {
+    window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+  }
 }
