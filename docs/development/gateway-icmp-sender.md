@@ -2,7 +2,8 @@
 
 Related to #14 and #29. This adds `internal/controller/gatewayicmp` after the
 [one-shot run coordinator](gateway-run-control.md). It supplies a small candidate
-macOS ICMPv4 transport and packet-free tests, **not a live product capability**.
+macOS ICMPv4 transport and packet-free unit tests, **not a live product capability**.
+A separate [native macOS lab](macos-network-lab.md) exercises real isolated packets.
 No production caller, coordinator adapter, run API, CLI command, browser control,
 scheduler, permission escalation, or new dependency is installed. Existing gateway
 previews still report execution unavailable and consent not granted.
@@ -74,7 +75,7 @@ data buffer and 256-byte ancillary buffer. Truncated, malformed, duplicated,
 stale-sequence and foreign datagrams consume the receive budget. Effective socket
 send/receive buffers must each be no more than 64 KiB. These are application and
 socket-buffer limits, not a claim to bound all inbound link traffic or kernel
-memory accounting under a flood. Exhaustion stops with an incomplete sample.
+memory accounting under a flood.
 
 The 120-byte request ceiling counts ICMP headers and data only. IP/link headers,
 neighbor resolution, replies, and link retransmissions are not included. A kernel
@@ -108,24 +109,28 @@ credentials, execution tickets or fabricated throughput values.
 
 ## Evidence and remaining gates
 
-All tests are synthetic and packet-free. They cover the exact request profile,
-per-send route/source/socket checks, no-burst pacing, deadline and cancellation
-boundaries, partial results, errors without resend, timeout/unknown latency,
-receive exhaustion across attempts, stale/foreign/duplicate replies, malformed
-checksums/ancillary metadata, clock changes, entropy failure, input isolation,
-concurrent-use rejection, and cleanup. Portable fuzz tests cover packet/control
-parsing. Darwin-only tests check ABI/error mappings and canceled/invalid inputs
-without opening sockets. Normal CI compiles those tests for Darwin arm64.
+In-package tests are synthetic and packet-free. They cover the exact request
+profile, per-send route/source/socket checks, no-burst pacing, deadline and
+cancellation boundaries, partial results, errors without resend, timeout/unknown
+latency, receive exhaustion across attempts, stale/foreign/duplicate replies,
+malformed checksums/ancillary metadata, clock changes, entropy failure, input
+isolation, concurrent-use rejection, and cleanup. Portable fuzz tests cover
+packet/control parsing. In-package Darwin-only tests check ABI/error mappings and
+canceled/invalid inputs without opening sockets. CI also retains Darwin compilation.
 
-No test in this slice transmits a probe. Compilation and fake transport tests do
-not certify Mac socket permissions, real replies, bind behavior or network policy.
-Before production wiring, validate the reference Mac on an explicitly owned lab:
-route consistency, local bind/option readback, real correlated replies/timeouts,
-VPN/route changes, exact-source loss, interface recycling, denied permissions,
-receive overload, cancellation, sleep/resume, and observed egress/bandwidth.
+The separate [native macOS isolated-network lab](macos-network-lab.md) now runs
+the actual route inspector and sender against a bounded virtual Ethernet peer.
+It checks real replies, timeouts, mismatched replies, cancellation and source
+loss. Passing evidence is explicitly scoped to the runner version and normal-user
+Terminal launch context; it is not proof of a packaged app's permissions or of
+physical egress. The sender requires no test-only verification bypass.
+
+Before production wiring, validate the packaged execution context and remaining
+owned-lab scenarios: VPN/route changes, interface recycling, denied-permission
+recovery, receive overload, physical sleep/resume and observed hardware egress.
 Then install the single controller coordinator, authenticated one-shot consent,
-measurement projection and lifecycle/process tests. Do not promote a fixture to
-a hardware support claim or silently start probing after enrollment.
+measurement projection and lifecycle/process tests. Do not promote a virtual
+fixture to hardware certification or silently start probing after enrollment.
 
 Primary references (protocol/API behavior, not copied implementations):
 [RFC 792 echo format](https://www.rfc-editor.org/rfc/rfc792),

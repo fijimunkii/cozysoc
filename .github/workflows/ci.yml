@@ -14,12 +14,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  macos-network:
+    name: Native macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    env:
+      # Canonical and short: Darwin UDS paths are bounded, and /tmp is a symlink.
+      TMPDIR: /private/tmp
+      GOTOOLCHAIN: local
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.1'
+          cache: false
+
+      - name: Run native Go and lab-harness regression checks
+        run: |
+          test "$(id -u)" -ne 0
+          sw_vers
+          uname -m
+          test -z "$(gofmt -l cmd internal tests)"
+          go vet ./...
+          go test -count=1 ./...
+          go test -race -count=1 ./internal/controller/gatewayroute ./internal/controller/gatewayicmp ./internal/controller/gatewayrun ./internal/controller/localapi
+          python3 scripts/test-check-macos-lab.py
+          python3 scripts/test-macos-lab-runner.py
+
+      - name: Run real isolated networking in normal-user Terminal context
+        env:
+          COZYSOC_MACOS_LAB: '1'
+        run: bash scripts/test-macos-network.sh
+
   repository:
     name: Repository checks
+    needs: macos-network
+    # Keep the established aggregate check red when a dependency fails or skips.
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
+      - name: Require all native macOS matrix jobs
+        env:
+          NATIVE_RESULT: ${{ needs.macos-network.result }}
+        run: test "$NATIVE_RESULT" = success
+
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,7 +76,10 @@ jobs:
           persist-credentials: false
 
       - name: Run repository checks
-        run: bash scripts/check-repo.sh
+        run: |
+          bash scripts/check-repo.sh
+          python3 scripts/test-check-macos-lab.py
+          python3 scripts/test-macos-lab-runner.py
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

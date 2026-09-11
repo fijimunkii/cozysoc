@@ -117,13 +117,16 @@ active execution remain separately gated.
 The [internal gateway run control](gateway-run-control.md) now provides bounded,
 one-shot review consumption and durable execution-state audits. It is not wired
 to production commands, IPC, or a sender; no active probes or real consent flow
-are enabled. Actual socket binding, owned-lab Mac validation, and authenticated
-run integration remain required before execution can be exposed.
+are enabled. Packaged-context validation and authenticated run integration remain
+required before execution can be exposed.
 
 ## Disconnected ICMP candidate
 
 The [bounded macOS ICMP sender candidate](gateway-icmp-sender.md) now implements
 a small internal sample with per-send route/socket checks and strict reply
-matching. It has packet-free test and compilation evidence only. It is not
-connected to the coordinator or any production command/API, and does not enable
-probes, grant consent, or certify actual Mac socket/egress behavior.
+matching. In addition to packet-free unit tests, the separate
+[native macOS lab](macos-network-lab.md) now exercises real kernel networking on
+an isolated virtual Ethernet pair. Its evidence is scoped to the tested runner
+and Terminal launch context, not physical hardware or a packaged permission flow.
+The candidate is not connected to the coordinator or any production command/API;
+merging lab work does not enable probes or grant consent.
