@@ -19,8 +19,10 @@ traffic limits, and privacy/interpretation limitations. Review expires after
 thirty seconds; the preview is neither a capability token nor a signed approval.
 Reissuing a preview never accumulates consent or schedules work.
 
-There is no default address, route discovery, automatic gateway guess, browser
-route, execution command, or approve/run API. Existing Overview reads are
+There is no default address, automatic gateway guess, browser route, execution
+command, or approve/run API. A [macOS route/source preflight](gateway-route-preflight.md)
+now inspects local routing metadata for the selected target; other platforms
+explicitly report unsupported route inspection. Existing Overview reads are
 unchanged. The destination is user-selected; prefix membership does not verify
 that it is a gateway, reachable, or even another machine rather than this host.
 
@@ -48,9 +50,9 @@ remain in the full binding; they do not authorize IPv6 probes. The pure builder
 bounds and copies its input and canonicalizes prefix order without mutation.
 
 Matching metadata cannot identify networks that reuse the same prefixes and
-interface. It does not validate the routing table, selected source address,
-actual egress interface, VPN bypass, gateway role, or ICMP permissions. No sender
-exists in this slice, so this preview cannot exploit that missing verification.
+interface. The new route review can establish sampled routing-table/interface
+address consistency, not a future socket's source or egress binding, gateway role,
+ICMP permission, or application-specific routing policy. No sender exists.
 
 ## Proposed executor limits, not implemented enforcement
 

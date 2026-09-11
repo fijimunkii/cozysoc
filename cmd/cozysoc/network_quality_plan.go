@@ -16,7 +16,7 @@ import (
 )
 
 // PreviewGatewayCheck reviews ONE selected address without transmitting traffic,
-// resolving names, reading routes/neighbors, enabling monitoring, or storing a
+// resolving names, reading neighbor caches, enabling monitoring, or storing a
 // grant. Only the controller chooses the enrolled scope and interface.
 func (h *controllerAPIHandler) PreviewGatewayCheck(ctx context.Context, params api.GatewayPlanParams) (api.GatewayCheckPlan, error) {
 	if err := ctx.Err(); err != nil {
@@ -81,7 +81,16 @@ func (h *controllerAPIHandler) PreviewGatewayCheck(ctx context.Context, params a
 	if err != nil {
 		return api.GatewayCheckPlan{}, err
 	}
-	return projectGatewayCheckPlan(plan), nil
+	result := projectGatewayCheckPlan(plan)
+	result.Route, err = h.reviewGatewayRoute(ctx, plan)
+	if err != nil {
+		return api.GatewayCheckPlan{}, err
+	}
+	finished := h.now().UTC()
+	if finished.Before(now) || finished.Sub(startedAt) > 5*time.Second {
+		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview sample time is invalid")
+	}
+	return result, nil
 }
 
 func projectGatewayCheckPlan(plan networkquality.GatewayCheckPlan) api.GatewayCheckPlan {
@@ -102,7 +111,7 @@ func projectGatewayCheckPlan(plan networkquality.GatewayCheckPlan) api.GatewayCh
 		},
 		Limitations: []string{
 			"Preview only: no traffic was sent, no execution consent was recorded, and no executor is available.",
-			"The selected address matches enrolled prefixes; gateway role, actual route, source address, and send-interface binding remain unverified.",
+			"Route metadata is a point-in-time consistency check only; a route-associated interface address does not prove a future socket's source or egress binding. Gateway role remains unverified.",
 			"These fixed limits are requirements for a future one-shot executor, not evidence that traffic limits are currently enforced.",
 			"The byte ceiling counts ICMP request headers and payload only, excluding IP/link overhead, neighbor resolution, replies, and link retransmissions.",
 			"Future probes may be visible to the selected destination and network infrastructure. No DNS lookup or external target is planned.",

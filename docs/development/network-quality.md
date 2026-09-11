@@ -108,4 +108,6 @@ network quality, operational health, security findings, and monitoring coverage.
 The [native gateway-check preview](gateway-check-preview.md) now reviews one
 explicitly selected private IPv4 target and fixed proposed traffic limits. It
 sends no probes, grants no execution consent, and does not verify gateway role
-or routing. Active execution remains separately gated.
+or grant send authority. A [macOS route/source preflight](gateway-route-preflight.md)
+now checks sampled route/interface-address consistency; actual socket binding and
+active execution remain separately gated.

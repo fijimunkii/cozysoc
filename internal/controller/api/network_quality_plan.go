@@ -20,6 +20,7 @@ type GatewayCheckPlan struct {
 	Binding            GatewayPlanBinding `json:"binding"`
 	Target             GatewayPlanTarget  `json:"target"`
 	Method             string             `json:"method"`
+	Route              GatewayRouteReview `json:"route"`
 	ProposedBudget     GatewayPlanBudget  `json:"proposed_budget"`
 	Limitations        []string           `json:"limitations"`
 }
