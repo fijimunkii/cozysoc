@@ -1,9 +1,10 @@
-# Gateway run measurement integration (not enabled in the product)
+# Gateway run measurement integration
 
 Related to #14 and #29. This joins the existing one-shot coordinator to the
 bounded ICMP candidate. A later [controller lifecycle](gateway-controller-lifecycle.md)
-now owns a dormant instance, without a run API, CLI command, browser consent
-flow, scheduler, or any automatic active check.
+owns a dormant-by-default instance. The [native consent session](gateway-consent-session.md)
+requires explicit experimental macOS startup opt-in plus one-shot approval. There
+is no browser consent flow, scheduler or automatic active check.
 Enrollment and Device Watch enablement still do not authorize probe traffic.
 
 ## Narrow internal adapter
@@ -100,6 +101,7 @@ independent virtual-link peer still checking packet counts/spacing. Its evidence
 remains scoped to the tested runner/Terminal context, not a packaged permission
 flow or physical Wi-Fi/NIC certification.
 
-Next: the authenticated one-shot consent/result path,
-then the bounded historical read/assessment projection. Packaged permission
-recovery and remaining owned-hardware tests remain required before live controls.
+The [experimental native consent/result path](gateway-consent-session.md) now
+uses this model. Next: deliberate client presentation and bounded historical
+reads/assessment. Packaged permission recovery and remaining hardware tests still
+precede broad user-facing controls.

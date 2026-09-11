@@ -1,7 +1,7 @@
 # Native macOS isolated network lab
 
 Related to #14 and #29. This is native runtime and virtual-network evidence,
-not a live product control or a hardware support certification.
+not hardware certification or proof of packaged permission behavior.
 
 ## What runs
 
@@ -15,7 +15,7 @@ settings are not changed by this workflow.
 
 Normal `go test ./...` remains packet-free unless the isolated lab is explicitly
 selected. In the live job, `check-macos-lab.py` requires the parent test and all
-seven named cases to pass, rejects skips/failures/unexpected packages, and requires
+eight named cases to pass, rejects skips/failures/unexpected packages, and requires
 a successful package result. An empty or partially executed suite cannot pass.
 Portable regression tests exercise this checker and the child-owning launcher.
 The six packet cases now pass through the real coordinator and adapter as well:
@@ -51,6 +51,7 @@ DNS resolver, external endpoint or arbitrary discovered host is probed.
 | Wrong nonce | Peer sends checksum-valid but mismatched replies; none becomes a matched reply. |
 | Cancel | Cancel after the peer observes the first request; incomplete result and no second request. |
 | Shutdown | Close the coordinator after the first observed request; require terminal audit drain and no second request. |
+| Native session | Actual opted-in controller process, full startup quiet minute, authenticated decline/approval, real replies and SQLite terminal evidence. |
 | Source loss | Remove the exact source while retaining another address in the same prefix; no second request or complete result. |
 
 The observer checks sequence, count, ICMP size and capture-time spacing
@@ -130,10 +131,22 @@ Native local-API tests are not a claim that the full installed service/UI consen
 journey has been exercised on macOS. Existing process E2E remains a separate job.
 
 Measurements now pass through the audited one-shot coordinator in the lab.
-The [controller-owned lifecycle](gateway-controller-lifecycle.md) now exists, dormant.
-Before exposing live controls, exercise the
-actual authenticated consent/result path. Validate the packaged product's
+The [controller-owned lifecycle](gateway-controller-lifecycle.md) remains dormant
+by default. The new [experimental native consent case](gateway-consent-session.md)
+exercises the actual controller, authenticated exchange and real SQLite audit.
+There is still no browser or interactive-command control. Validate the packaged product's
 permission-denied/recovery behavior and the remaining hardware scenarios without
 turning fixture success into a broad support claim. Enrollment still does not
 enable Device Watch or grant one-shot probe consent. Neither #14 nor #29 is closed
 by this lab.
+
+## Real controller process in the native consent case
+
+The `native-session` case waits the real one-minute startup quiet interval rather
+than aging the construction clock used by the smaller coordinator fixtures. A
+private controller monitor owns the actual child; stdin EOF revokes its lifetime
+even if the Go test dies. The outer monitor waits for child-drain confirmation,
+without signaling a PID read from a file. The dedicated lab test timeout is 150
+seconds and its monitor ceiling is 160 seconds; these changes do not alter any
+production probe or consent budget. See the native consent document for claims
+and remaining packaged/hardware limits.

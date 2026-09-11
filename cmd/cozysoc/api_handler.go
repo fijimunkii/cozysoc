@@ -44,6 +44,7 @@ type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) 
 type controllerAPIHandler struct {
 	controller            *core.Controller
 	gatewayRuns           gatewayRunLifecycle
+	gatewayChecksEnabled  bool // Immutable after server startup; experimental native opt-in only.
 	store                 controllerStore
 	deviceWatch           deviceWatchAPIControl
 	gatewayRouteInspector gatewayroute.Inspector

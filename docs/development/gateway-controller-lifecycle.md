@@ -1,9 +1,10 @@
-# Controller-owned gateway run lifecycle (execution still unavailable)
+# Controller-owned gateway run lifecycle
 
 Related to #14 and #29. Following the measured-run integration, `cozysoc serve`
 now owns one dormant gateway coordinator and concrete ICMP adapter for its
-lifetime. This adds no run/approval UDS method, CLI command, browser route, Run
-button, automatic retry or scheduling. Opening the app, enrolling a network,
+lifetime. The later [native consent session](gateway-consent-session.md) reuses
+this owner only behind explicit experimental macOS startup opt-in. There is no
+browser route, Run button, automatic retry or scheduling. Opening the app, enrolling a network,
 enabling Device Watch and reading gateway previews still do not send probes.
 
 ## Ownership and startup
@@ -20,10 +21,11 @@ interface/route readers. Constructors perform no scope lookup, route query,
 socket creation or audit write. Other platforms retain the concrete adapters'
 unsupported behavior; ownership is not a platform-support claim.
 
-The internal `prepare` and `run` entrypoints have no protocol adapter. They accept
+The internal `prepare` and `run` entrypoints share their owner with the gated
+connection-bound native protocol adapter. They accept
 only the already-typed target or process-local ticket plus explicit consent, and
-forward to the same coordinator. A later authenticated consent flow must reuse
-this owner, never allocate a coordinator per request or target. The owner is
+forward to the same coordinator. Authenticated consent must reuse this owner, never allocate a coordinator per
+request or target. The owner is
 per controller process, not a machine-wide limiter across arbitrary state dirs.
 
 ## Trusted preflight, not preview-derived authority
@@ -88,7 +90,7 @@ it does not prove the installed controller service's packaged permissions.
 The process smoke also verifies SIGTERM cleanup, successful exit, secret rotation
 and restart with SQLite preserved. Its fresh controller has no active probe.
 
-Still next: the narrow authenticated one-shot consent/result path, bounded
-history/assessment reads, and explicit validation of the packaged permission
-flow. Physical Wi-Fi/NIC behavior, sleep/resume and other hardware gates remain
+The [experimental native consent path](gateway-consent-session.md) now has a
+real-process isolated-lab case. Still next: deliberate client presentation, bounded
+history/assessment reads, and validation of the packaged permission flow. Physical Wi-Fi/NIC behavior, sleep/resume and other hardware gates remain
 separate. Neither #14 nor #29 is completed by this ownership slice.

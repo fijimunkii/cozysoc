@@ -164,10 +164,10 @@ func (s *Server) SocketPath() string {
 }
 
 func (s *Server) Serve(ctx context.Context) error {
-	go func() {
-		<-ctx.Done()
-		_ = s.listener.Close()
-	}()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { _ = s.listener.Close() })
+	defer stop()
 
 	for {
 		conn, err := s.listener.Accept()
@@ -182,7 +182,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		case s.sem <- struct{}{}:
 			go func() {
 				defer func() { <-s.sem }()
-				s.handleConn(conn)
+				s.handleConnContext(ctx, conn)
 			}()
 		default:
 			_ = conn.Close()
@@ -204,7 +204,13 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) handleConn(conn net.Conn) {
+	s.handleConnContext(context.Background(), conn)
+}
+
+func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	_ = conn.SetDeadline(time.Now().Add(requestTimeout))
 
 	identity, err := s.verifyPeer(conn)
@@ -248,6 +254,13 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	var result any
 	switch request.Method {
+	case api.MethodGatewayCheck:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		s.gatewayCheck(ctx, conn, reader, payload, request)
+		return
 	case api.MethodStatus:
 		if s.rejectUnexpectedParams(conn, request) {
 			return

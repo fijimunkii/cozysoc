@@ -118,3 +118,10 @@ func validateSample(s gatewayicmp.Sample, executionErr error, selection Selectio
 	}
 	return copySample(&s), nil
 }
+
+// ValidateMeasurement checks the bounded measurement representation at a supplied
+// observation time. It proves neither provenance nor consent. Control.Run still
+// performs the separate admitted-selection and original-review validation.
+func ValidateMeasurement(m Measurement, at time.Time) error {
+	return validateMeasurement(m, at)
+}

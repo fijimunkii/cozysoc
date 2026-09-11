@@ -13,6 +13,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
 )
 
 const e2eBinaryEnv = "COZYSOC_E2E_BINARY"
@@ -72,6 +75,7 @@ func TestControllerProcessSmoke(t *testing.T) {
 	waitForReady(t, absoluteBinary, stateDir, first)
 	assertRunningSurface(t, absoluteBinary, stateDir, first.cmd.Process.Pid)
 	assertPrivateState(t, stateDir)
+	assertGatewayExecutionDisabled(t, stateDir)
 	secret1 := readSecret(t, stateDir)
 	assertSecondInstanceRejected(t, absoluteBinary, stateDir, secret1)
 
@@ -315,4 +319,20 @@ func (c *runningController) logs() string {
 	stdout, _ := os.ReadFile(c.stdoutPath)
 	stderr, _ := os.ReadFile(c.stderrPath)
 	return fmt.Sprintf("stdout:\n%s\nstderr:\n%s", stdout, stderr)
+}
+
+// An ordinary built controller must not expose the opt-in operation, even to an
+// authenticated native client. This check performs no preflight or packet work.
+func assertGatewayExecutionDisabled(t *testing.T, stateDir string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := localapi.NewClient(stateDir).CheckGateway(ctx, "192.168.50.1", func(context.Context, api.GatewayCheckReview) (bool, error) {
+		t.Error("default controller offered an active-check review")
+		return false, nil
+	})
+	var response *localapi.ResponseError
+	if !errors.As(err, &response) || response.Code != "unavailable" || result.RunID != "" || result.Measurement != nil {
+		t.Fatalf("default controller exposed gateway execution: %+v %v", result, err)
+	}
 }
