@@ -111,3 +111,11 @@ sends no probes, grants no execution consent, and does not verify gateway role
 or grant send authority. A [macOS route/source preflight](gateway-route-preflight.md)
 now checks sampled route/interface-address consistency; actual socket binding and
 active execution remain separately gated.
+
+## One-shot run control
+
+The [internal gateway run control](gateway-run-control.md) now provides bounded,
+one-shot review consumption and durable execution-state audits. It is not wired
+to production commands, IPC, or a sender; no active probes or real consent flow
+are enabled. Actual socket binding, owned-lab Mac validation, and authenticated
+run integration remain required before execution can be exposed.
