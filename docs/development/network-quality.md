@@ -119,3 +119,11 @@ one-shot review consumption and durable execution-state audits. It is not wired
 to production commands, IPC, or a sender; no active probes or real consent flow
 are enabled. Actual socket binding, owned-lab Mac validation, and authenticated
 run integration remain required before execution can be exposed.
+
+## Disconnected ICMP candidate
+
+The [bounded macOS ICMP sender candidate](gateway-icmp-sender.md) now implements
+a small internal sample with per-send route/socket checks and strict reply
+matching. It has packet-free test and compilation evidence only. It is not
+connected to the coordinator or any production command/API, and does not enable
+probes, grant consent, or certify actual Mac socket/egress behavior.
