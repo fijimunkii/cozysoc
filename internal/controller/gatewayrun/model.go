@@ -1,5 +1,5 @@
 // Package gatewayrun controls one reviewed gateway run. It contains no packet
-// sender, production executor, IPC endpoint, background worker, or persisted
+// sender, installed executor, IPC endpoint, background worker, or persisted
 // approval. Its collaborators are trusted controller code, never browser input.
 package gatewayrun
 
@@ -14,6 +14,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 )
 
@@ -30,14 +31,15 @@ var (
 )
 
 const (
-	Profile          = "gateway-icmp-v1"
-	RunInterval      = time.Minute
-	OperationTimeout = 5 * time.Second
-	AuditTimeout     = time.Second
+	Profile            = "gateway-icmp-v1"
+	EventSchemaVersion = 2
+	RunInterval        = time.Minute
+	OperationTimeout   = 5 * time.Second
+	AuditTimeout       = time.Second
 )
 
 // Selection is produced by a trusted preflight, not decoded from a review DTO.
-// Route consistency alone is insufficient: a future executor must independently
+// Route consistency alone is insufficient: an executor must independently
 // revalidate and enforce its actual socket binding before EVERY packet send.
 type Selection struct {
 	Plan            networkquality.GatewayCheckPlan
@@ -49,11 +51,11 @@ type Selection struct {
 type Preflight func(context.Context, netip.Addr) (Selection, error)
 
 // Executor is an internal, narrowly scoped one-shot collaborator. There is no
-// production implementation yet. Implementations must honor cancellation and the
-// fixed per-attempt/byte/receive budgets, with no hidden retries or detached work.
+// installed production implementation yet. Implementations must honor cancellation
+// and fixed per-attempt/byte/receive budgets, without retries or detached work.
 // nil means unavailable, not permission to use a fallback executable or sender.
 type Executor interface {
-	ExecuteGateway(context.Context, Selection) error
+	ExecuteGateway(context.Context, Selection) (gatewayicmp.Sample, error)
 }
 type Auditor interface {
 	InsertGatewayRunAudit(context.Context, Event) error
@@ -74,27 +76,30 @@ type Review struct {
 }
 
 // Result describes controlled execution, never connectivity or a security finding.
-// Completed only means the executor returned normally and its terminal audit
-// committed. Any underlying measured ICMP outcome needs its own evidence model.
+// Completed means a complete, validated sample and its terminal audit committed,
+// not that any reply arrived. Sample is absent before measurement or when evidence
+// is invalid/indeterminate. No result is returned on unconfirmed terminal audit.
 type Result struct {
 	RunID   string
 	Outcome string
+	Sample  *gatewayicmp.Sample
 }
 
 type Event struct {
-	SchemaVersion   int       `json:"schema_version"`
-	RunID           string    `json:"run_id"`
-	State           string    `json:"state"`
-	Outcome         string    `json:"outcome,omitempty"`
-	Reason          string    `json:"reason,omitempty"`
-	At              time.Time `json:"at"`
-	Profile         string    `json:"profile"`
-	SelectionDigest string    `json:"selection_digest"`
-	ScopeID         string    `json:"scope_id"`
-	InterfaceName   string    `json:"interface_name"`
-	InterfaceIndex  int       `json:"interface_index"`
-	Target          string    `json:"target"`
-	Source          string    `json:"source"`
+	SchemaVersion   int          `json:"schema_version"`
+	Measurement     *Measurement `json:"measurement,omitempty"`
+	RunID           string       `json:"run_id"`
+	State           string       `json:"state"`
+	Outcome         string       `json:"outcome,omitempty"`
+	Reason          string       `json:"reason,omitempty"`
+	At              time.Time    `json:"at"`
+	Profile         string       `json:"profile"`
+	SelectionDigest string       `json:"selection_digest"`
+	ScopeID         string       `json:"scope_id"`
+	InterfaceName   string       `json:"interface_name"`
+	InterfaceIndex  int          `json:"interface_index"`
+	Target          string       `json:"target"`
+	Source          string       `json:"source"`
 }
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
@@ -110,10 +115,24 @@ func validTime(t time.Time) bool {
 // ValidateEvent bounds the persistent payload and excludes arbitrary diagnostics,
 // credentials, review tickets, raw packets, and network-wide success claims.
 func ValidateEvent(e Event) error {
-	if e.SchemaVersion != 1 || !hexID.MatchString(e.RunID) || !hexDigest.MatchString(e.SelectionDigest) ||
+	if (e.SchemaVersion != 1 && e.SchemaVersion != EventSchemaVersion) || !hexID.MatchString(e.RunID) || !hexDigest.MatchString(e.SelectionDigest) ||
 		e.Profile != Profile || !validTime(e.At) || !idPattern.MatchString(e.ScopeID) ||
 		!interfacePattern.MatchString(e.InterfaceName) || e.InterfaceIndex < 1 || e.InterfaceIndex > 2147483647 ||
 		networkquality.ValidateGatewayPreviewTarget(e.Target) != nil || networkquality.ValidateGatewayPreviewTarget(e.Source) != nil || e.Source == e.Target {
+		return ErrAudit
+	}
+	// Version 1 describes legacy execution-only audits, never measured success.
+	if e.SchemaVersion == 1 && e.Measurement != nil {
+		return ErrAudit
+	}
+	if e.Measurement != nil {
+		if e.State != "finished" || (e.Outcome != "completed" && e.Outcome != "failed" && e.Outcome != "canceled") ||
+			validateMeasurement(*e.Measurement, e.At) != nil || (e.Outcome == "failed" && e.Measurement.Complete) {
+			return ErrAudit
+		}
+	}
+	if e.SchemaVersion == EventSchemaVersion && e.State == "finished" && e.Outcome == "completed" &&
+		(e.Measurement == nil || !e.Measurement.Complete) {
 		return ErrAudit
 	}
 	switch e.State {
@@ -136,7 +155,7 @@ func ValidateEvent(e Event) error {
 				return nil
 			}
 		case "failed":
-			if e.Reason == "execution-error" {
+			if e.Reason == "execution-error" || (e.SchemaVersion == EventSchemaVersion && e.Reason == "measurement-invalid" && e.Measurement == nil) {
 				return nil
 			}
 		case "indeterminate":

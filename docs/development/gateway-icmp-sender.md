@@ -4,7 +4,7 @@ Related to #14 and #29. This adds `internal/controller/gatewayicmp` after the
 [one-shot run coordinator](gateway-run-control.md). It supplies a small candidate
 macOS ICMPv4 transport and packet-free unit tests, **not a live product capability**.
 A separate [native macOS lab](macos-network-lab.md) exercises real isolated packets.
-No production caller, coordinator adapter, run API, CLI command, browser control,
+No production caller, run API, CLI command, browser control,
 scheduler, permission escalation, or new dependency is installed. Existing gateway
 previews still report execution unavailable and consent not granted.
 
@@ -17,10 +17,9 @@ original consumed review deadline in its context even when preflight is newer.
 The sender independently validates the selected private IPv4 target/source,
 complete enrolled binding, evidence deadline, and exact fixed profile.
 
-The sender is deliberately not a `gatewayrun.Executor`: that interface currently
-returns only an error. Connecting it now would discard measurements or conflate
-run completion with connectivity. A later integration must preserve both the
-coordinator's audit outcome and the separately validated measurement result.
+The [gatewayrun adapter](gateway-run-measurements.md) now carries samples through
+one-shot admission, validation and a versioned terminal audit. It is not installed
+in production. Execution completion remains separate from the measured outcome.
 The controller-wide one-minute cooldown, one-shot consent and single coordinator
 ownership remain `gatewayrun` responsibilities. A sender instance rejects a
 concurrent sample but is not a cross-instance, process-wide or persistent limiter.

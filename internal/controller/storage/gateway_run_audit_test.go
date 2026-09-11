@@ -9,22 +9,35 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 )
 
-type gatewayAuditExecutor func(context.Context, gatewayrun.Selection) error
+type gatewayAuditExecutor func(context.Context, gatewayrun.Selection) (gatewayicmp.Sample, error)
 
-func (f gatewayAuditExecutor) ExecuteGateway(ctx context.Context, s gatewayrun.Selection) error {
+func (f gatewayAuditExecutor) ExecuteGateway(ctx context.Context, s gatewayrun.Selection) (gatewayicmp.Sample, error) {
 	return f(ctx, s)
 }
 
 // All targets and preflight results are synthetic. The real SQLite store is the
 // only external collaborator: these tests contain no route, ICMP or network I/O.
-func gatewayAuditControl(t *testing.T, store *Store, now *time.Time, execute gatewayAuditExecutor) *gatewayrun.Control {
+func gatewayAuditControl(t *testing.T, store *Store, now *time.Time, execute func(context.Context, gatewayrun.Selection) error) *gatewayrun.Control {
 	t.Helper()
 	c, err := gatewayrun.New(gatewayrun.Dependencies{
-		Now: func() time.Time { return *now }, Auditor: store, Executor: execute,
+		Now: func() time.Time { return *now }, Auditor: store, Executor: gatewayAuditExecutor(func(ctx context.Context, s gatewayrun.Selection) (gatewayicmp.Sample, error) {
+			if err := execute(ctx, s); err != nil {
+				return gatewayicmp.Sample{}, err
+			}
+			if ctx.Err() != nil {
+				return gatewayicmp.Sample{}, ctx.Err()
+			}
+			start := *now
+			*now = now.Add(3 * time.Second)
+			return gatewayicmp.Sample{ScopeID: s.Plan.Binding.ScopeID, InterfaceName: s.Plan.Binding.InterfaceName,
+				InterfaceIndex: s.Plan.Binding.InterfaceIndex, Target: s.Plan.Target, Source: s.Source, StartedAt: start,
+				CompletedAt: *now, SendCalls: 3, AcceptedRequests: 3, Timeouts: 3, Complete: true}, nil
+		}),
 		Preflight: func(_ context.Context, target netip.Addr) (gatewayrun.Selection, error) {
 			p, err := networkquality.PreviewGatewayCheck(networkquality.GatewayPlanBinding{ScopeID: "scope.fixture", InterfaceName: "fixture0", InterfaceIndex: 7, Prefixes: []string{"192.168.50.0/24"}}, target.String(), *now)
 			return gatewayrun.Selection{Plan: p, Source: netip.MustParseAddr("192.168.50.23"), RouteObservedAt: *now, RouteFreshUntil: now.Add(30 * time.Second)}, err
@@ -207,5 +220,84 @@ func TestGatewayAuditRejectsMalformedEventsBeforeStorage(t *testing.T) {
 	var missing *Store
 	if err := missing.InsertGatewayRunAudit(context.Background(), gatewayrun.Event{}); !errors.Is(err, gatewayrun.ErrAudit) {
 		t.Fatal(err)
+	}
+}
+
+func TestGatewayMeasurementsRoundTripDurablyWithoutNewAuthority(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		t.Run(map[bool]string{false: "partial", true: "complete"}[complete], func(t *testing.T) {
+			store, dir := gatewayAuditStore(t)
+			now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+			store.now = func() time.Time { return now }
+			ctx := context.Background()
+			c, err := gatewayrun.New(gatewayrun.Dependencies{Now: func() time.Time { return now }, Auditor: store,
+				Preflight: func(_ context.Context, target netip.Addr) (gatewayrun.Selection, error) {
+					plan, err := networkquality.PreviewGatewayCheck(networkquality.GatewayPlanBinding{ScopeID: "scope.fixture", InterfaceName: "fixture0", InterfaceIndex: 7, Prefixes: []string{"192.168.50.0/24"}}, target.String(), now)
+					return gatewayrun.Selection{Plan: plan, Source: netip.MustParseAddr("192.168.50.23"), RouteObservedAt: now, RouteFreshUntil: now.Add(30 * time.Second)}, err
+				}, Executor: gatewayAuditExecutor(func(_ context.Context, s gatewayrun.Selection) (gatewayicmp.Sample, error) {
+					sample := gatewayicmp.Sample{ScopeID: s.Plan.Binding.ScopeID, InterfaceName: s.Plan.Binding.InterfaceName, InterfaceIndex: s.Plan.Binding.InterfaceIndex,
+						Target: s.Plan.Target, Source: s.Source, StartedAt: now, SendCalls: 1, AcceptedRequests: 1, Replies: 1}
+					if !complete {
+						return sample, gatewayicmp.ErrBinding
+					}
+					now = now.Add(3 * time.Second)
+					sample.SendCalls = 3
+					sample.AcceptedRequests = 3
+					sample.Replies = 2
+					sample.Timeouts = 1
+					sample.Complete = true
+					sample.CompletedAt = now
+					zero := time.Duration(0)
+					sample.MeanRTT = &zero
+					return sample, nil
+				})})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			now = now.Add(gatewayrun.RunInterval)
+			review, err := c.Prepare(ctx, netip.MustParseAddr("192.168.50.1"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := c.Run(ctx, review.Ticket, true)
+			if (err == nil) != complete || result.Sample == nil {
+				t.Fatalf("missing measured result: %+v %v", result, err)
+			}
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(dir, DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reopened.Close()
+			var payload string
+			var version int
+			if err := reopened.conn.QueryRowContext(ctx, `SELECT payload,schema_version FROM audit_events WHERE id=?`, "audit.gateway-run."+result.RunID+".finished").Scan(&payload, &version); err != nil {
+				t.Fatal(err)
+			}
+			var event gatewayrun.Event
+			if err := json.Unmarshal([]byte(payload), &event); err != nil {
+				t.Fatal(err)
+			}
+			if version != gatewayrun.EventSchemaVersion || event.SchemaVersion != version || gatewayrun.ValidateEvent(event) != nil || event.Measurement == nil || event.Measurement.Complete != complete || event.Measurement.Replies != result.Sample.Replies {
+				t.Fatalf("measurement or payload version did not survive reopening: %+v", event)
+			}
+			if complete {
+				if event.Measurement.MeanRTTNanoseconds == nil || *event.Measurement.MeanRTTNanoseconds != 0 {
+					t.Fatal("lost measured zero")
+				}
+			} else if event.Measurement.MeanRTTNanoseconds != nil || event.Measurement.CompletedAt != nil {
+				t.Fatal("partial gained completed metrics")
+			}
+			if event.ScopeID != result.Sample.ScopeID || event.Target != result.Sample.Target.String() || event.Source != result.Sample.Source.String() {
+				t.Fatal("lost measurement provenance")
+			}
+			// There is still one terminal row, not a parallel unaudited measurement write.
+			if gatewayAuditCount(t, reopened) != 3 {
+				t.Fatal("unexpected audit write count")
+			}
+		})
 	}
 }

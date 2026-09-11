@@ -68,7 +68,7 @@ func TestRevalidationFailurePanicAndCancellationConsumeConsent(t *testing.T) {
 func TestClockFailureAfterAdmissionDoesNotInventTerminalTime(t *testing.T) {
 	c, clock, log, _ := fixture(t)
 	r := prepare(t, c)
-	c.deps.Executor = executorFunc(func(context.Context, Selection) error { clock.add(-time.Second); return nil })
+	c.deps.Executor = errorExecutor(clock, func(context.Context, Selection) error { clock.add(-time.Second); return nil })
 	result, err := c.Run(context.Background(), r.Ticket, true)
 	if !errors.Is(err, ErrClock) || result != (Result{}) || len(log.copy()) != 2 {
 		t.Fatalf("invented trustworthy terminal event: %+v %v", result, err)

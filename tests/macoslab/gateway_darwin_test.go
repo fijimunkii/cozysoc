@@ -19,6 +19,7 @@ import (
 
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
+	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 )
 
@@ -239,7 +240,7 @@ func TestMACOSGatewayLab(t *testing.T) {
 	for _, mode := range []string{"reply", "silent", "wrong-nonce"} {
 		t.Run(mode, func(t *testing.T) {
 			p := startPeer(t, mode)
-			sample, err := gatewayicmp.NewCandidate().Measure(context.Background(), labRequest(t))
+			sample, err := coordinatedSample(t, context.Background(), labRequest(t))
 			p.assertEchoes(t, 3)
 			if err != nil || !sample.Complete || sample.SendCalls != 3 || sample.AcceptedRequests != 3 {
 				t.Fatalf("real sample: %+v %v", sample, err)
@@ -262,16 +263,20 @@ func TestMACOSGatewayLab(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			r := labRequest(t)
+			run := prepareCoordinatedRun(t, ctx, r)
 			type result struct {
-				sample gatewayicmp.Sample
-				err    error
+				run gatewayrun.Result
+				err error
 			}
 			done := make(chan result, 1)
-			go func() { s, err := gatewayicmp.NewCandidate().Measure(ctx, r); done <- result{s, err} }()
+			go func() {
+				resultRun, err := run.control.Run(ctx, run.review.Ticket, true)
+				done <- result{resultRun, err}
+			}()
 			select {
 			case <-p.first:
 			case got := <-done:
-				t.Fatalf("no first echo: %+v %v", got.sample, got.err)
+				t.Fatalf("no first echo: %+v %v", got.run, got.err)
 			case <-time.After(6 * time.Second):
 				t.Fatal("no first echo observed")
 			}
@@ -287,8 +292,9 @@ func TestMACOSGatewayLab(t *testing.T) {
 			}
 			select {
 			case got := <-done:
-				if got.err == nil || got.sample.Complete || got.sample.MeanRTT != nil || got.sample.SendCalls != 1 {
-					t.Fatalf("continued after change: %+v %v", got.sample, got.err)
+				sample := run.sample(t, got.run, got.err)
+				if got.err == nil || sample.Complete || sample.MeanRTT != nil || sample.SendCalls != 1 {
+					t.Fatalf("continued after change: %+v %v", sample, got.err)
 				}
 				if mode == "cancel" && !errors.Is(got.err, context.Canceled) {
 					t.Fatal(got.err)
