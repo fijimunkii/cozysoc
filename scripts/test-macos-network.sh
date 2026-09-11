@@ -45,6 +45,7 @@ fi
 go test -c -o "$work/lab.test" ./tests/macoslab
 go build -o "$work/cozysoc" ./cmd/cozysoc
 cp scripts/macos-lab-runner.py "$work/run.py"
+cp tests/macoslab/testdata/cli_driver.py "$work/cli-driver.py"
 printf '#!/bin/bash\nexec %q %q\n' "$(command -v python3)" "$work/run.py" > "$work/run.command"
 chmod 700 "$work/run.command"
 sudo -n /sbin/ifconfig feth42 create

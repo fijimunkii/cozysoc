@@ -51,7 +51,7 @@ DNS resolver, external endpoint or arbitrary discovered host is probed.
 | Wrong nonce | Peer sends checksum-valid but mismatched replies; none becomes a matched reply. |
 | Cancel | Cancel after the peer observes the first request; incomplete result and no second request. |
 | Shutdown | Close the coordinator after the first observed request; require terminal audit drain and no second request. |
-| Native session | Actual opted-in controller process, full startup quiet minute, authenticated decline/approval, real replies and SQLite terminal evidence. |
+| Native session | Actual opted-in controller and interactive CLI/PTY, full startup quiet minute, decline/expiry/interruption/redirection, explicit approval, real replies and SQLite terminal evidence. |
 | Source loss | Remove the exact source while retaining another address in the same prefix; no second request or complete result. |
 
 The observer checks sequence, count, ICMP size and capture-time spacing
@@ -134,7 +134,10 @@ Measurements now pass through the audited one-shot coordinator in the lab.
 The [controller-owned lifecycle](gateway-controller-lifecycle.md) remains dormant
 by default. The new [experimental native consent case](gateway-consent-session.md)
 exercises the actual controller, authenticated exchange and real SQLite audit.
-There is still no browser or interactive-command control. Validate the packaged product's
+The [interactive command](interactive-gateway-check.md) is now exercised through
+real pseudo-terminals within that same session, including decline, type-ahead,
+expiry, interruption, redirection and one explicit approved sample. There is
+still no browser execution control. Validate the packaged product's
 permission-denied/recovery behavior and the remaining hardware scenarios without
 turning fixture success into a broad support claim. Enrollment still does not
 enable Device Watch or grant one-shot probe consent. Neither #14 nor #29 is closed

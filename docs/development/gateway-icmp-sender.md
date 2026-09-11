@@ -6,8 +6,9 @@ macOS ICMPv4 transport and packet-free unit tests. It remains off by default.
 A separate [native macOS lab](macos-network-lab.md) exercises real isolated packets.
 The [native consent session](gateway-consent-session.md) can reach it only with
 explicit experimental macOS controller opt-in and connection-bound approval. No
-interactive command, browser control, scheduler, privilege escalation or new
-dependency is installed. Existing gateway
+browser control, scheduler, privilege escalation or new dependency is installed.
+The [interactive command](interactive-gateway-check.md) requires an explicit
+terminal decision through this same gated native path. Existing gateway
 previews still report execution unavailable and consent not granted.
 
 ## Authority and integration boundary
@@ -131,7 +132,7 @@ Before broad user-facing exposure, validate the packaged execution context and r
 owned-lab scenarios: VPN/route changes, interface recycling, denied-permission
 recovery, receive overload, physical sleep/resume and observed hardware egress.
 The experimental native path now exercises authenticated consent and durable
-results through the real controller; deliberate client presentation is still pending. Do not promote a virtual
+results through the real controller and interactive terminal command. Do not promote a virtual
 fixture to hardware certification or silently start probing after enrollment.
 
 Primary references (protocol/API behavior, not copied implementations):

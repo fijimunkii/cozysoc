@@ -134,7 +134,8 @@ opted-in real controller process.
 The [controller lifecycle](gateway-controller-lifecycle.md) now owns one dormant
 control and joins active work before storage cleanup using `Shutdown`.
 Before broad user-facing controls: validate packaged permissions and remaining
-hardware gates; add deliberate client presentation; preserve unsupported-platform behavior; and project actual
+hardware gates; preserve the experimental terminal command
+and unsupported-platform behavior; and project actual
 measurements separately from audited execution state. Enrollment remains distinct
 from Device Watch enablement and from permission for an individual active check.
 

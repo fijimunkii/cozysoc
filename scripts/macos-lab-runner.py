@@ -42,9 +42,10 @@ def run_lab(work: Path, timeout: float = 160.0) -> int:
             # The controller has a separate child-owning monitor. EOF from the
             # reaped lab process revokes its lifetime; never kill a PID from a file.
             until = time.monotonic() + 12
-            while (work / "controller-started").exists() and not (work / "controller-done").exists():
+            while any((work / (name + "-started")).exists() and not (work / (name + "-done")).exists()
+                      for name in ("controller", "cli")):
                 if time.monotonic() >= until:
-                    raise RuntimeError("controller monitor did not drain")
+                    raise RuntimeError("controller or CLI monitor did not drain")
                 time.sleep(0.05)
 
 

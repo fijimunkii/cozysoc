@@ -94,7 +94,8 @@ func startPeer(t *testing.T, mode string) *peer {
 	if !filepath.IsAbs(path) {
 		t.Fatal("absolute lab peer path required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// Includes the real 30-second interactive review-expiry case; packet limits stay fixed.
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	p := &peer{cancel: cancel, ready: make(chan peerEvent, 1), first: make(chan struct{}), done: make(chan struct{})}
 	cmd := exec.CommandContext(ctx, "/usr/bin/sudo", "-n", path, mode)
 	cmd.Stderr = &p.stderr
