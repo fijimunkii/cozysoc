@@ -257,7 +257,7 @@ func TestMACOSGatewayLab(t *testing.T) {
 			}
 		})
 	}
-	for _, mode := range []string{"cancel", "source-loss"} {
+	for _, mode := range []string{"cancel", "source-loss", "shutdown"} {
 		t.Run(mode, func(t *testing.T) {
 			p := startPeer(t, "reply")
 			ctx, cancel := context.WithCancel(context.Background())
@@ -282,6 +282,13 @@ func TestMACOSGatewayLab(t *testing.T) {
 			}
 			if mode == "cancel" {
 				cancel()
+			} else if mode == "shutdown" {
+				if err := run.control.Shutdown(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				if len(run.audit.events) != 3 || run.audit.events[2].Outcome != "canceled" {
+					t.Fatal("shutdown returned before the terminal audit")
+				}
 			} else {
 				fixtureIfconfig(t, "inet", "192.168.250.3/24", "alias")
 				t.Cleanup(func() {
@@ -296,7 +303,7 @@ func TestMACOSGatewayLab(t *testing.T) {
 				if got.err == nil || sample.Complete || sample.MeanRTT != nil || sample.SendCalls != 1 {
 					t.Fatalf("continued after change: %+v %v", sample, got.err)
 				}
-				if mode == "cancel" && !errors.Is(got.err, context.Canceled) {
+				if (mode == "cancel" || mode == "shutdown") && !errors.Is(got.err, context.Canceled) {
 					t.Fatal(got.err)
 				}
 			case <-time.After(6 * time.Second):

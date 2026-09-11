@@ -1,8 +1,9 @@
 # Gateway run measurement integration (not enabled in the product)
 
 Related to #14 and #29. This joins the existing one-shot coordinator to the
-bounded ICMP candidate without installing a controller singleton, run API,
-CLI command, browser consent flow, scheduler, or any automatic active check.
+bounded ICMP candidate. A later [controller lifecycle](gateway-controller-lifecycle.md)
+now owns a dormant instance, without a run API, CLI command, browser consent
+flow, scheduler, or any automatic active check.
 Enrollment and Device Watch enablement still do not authorize probe traffic.
 
 ## Narrow internal adapter
@@ -17,8 +18,8 @@ transport, extend deadlines, or accept a client-supplied execution configuration
 The coordinator retains its existing explicit one-shot ticket, fresh preflight,
 durable authorized/admitted audits, one active operation, one-minute global
 cooldown, startup quiet interval, panic handling and fail-closed audit/clock locks.
-Exactly one control must eventually be installed per controller lifetime; an
-internal adapter alone does not establish that product-level ownership.
+The [controller-owned lifecycle](gateway-controller-lifecycle.md) now installs one
+dormant control per serve lifetime and joins its work before storage cleanup.
 
 ## Three evidence states
 
@@ -99,6 +100,6 @@ independent virtual-link peer still checking packet counts/spacing. Its evidence
 remains scoped to the tested runner/Terminal context, not a packaged permission
 flow or physical Wi-Fi/NIC certification.
 
-Next: controller-owned lifecycle and authenticated one-shot consent/result path,
+Next: the authenticated one-shot consent/result path,
 then the bounded historical read/assessment projection. Packaged permission
 recovery and remaining owned-hardware tests remain required before live controls.

@@ -1,9 +1,9 @@
-# One-shot gateway run control (internal, not installed)
+# One-shot gateway run control (internal, not enabled)
 
 Related to #14 and #29. This follows the
 [route/source metadata preflight](gateway-route-preflight.md) with internal
 one-shot orchestration and a real SQLite audit adapter. It is not a live gateway
-check: **no production executor or run/approval API is installed**. Existing
+check: **no production run/approval API is installed**. Existing
 `network-quality-plan` responses still report execution unavailable and consent
 not granted. No new CLI command, browser control, UDS method, migration, scheduler,
 automatic packet sending, or capability lifecycle mutation is introduced.
@@ -31,7 +31,7 @@ or an assertion that a real user has consented in the current product.
 Missing preflight, executor, or audit collaborators leave the control unavailable.
 There is no fallback shell, ping executable, URL, or generic callback supplied by
 clients. A concrete ICMP adapter now exists for the candidate sender, but it is
-not installed in the production controller. Portable tests use packet-free fakes.
+owned dormant by the controller lifecycle. Portable tests use packet-free fakes.
 The real route inspector is not promoted to send-binding evidence by this work.
 
 ## One-shot state transitions
@@ -86,7 +86,8 @@ Terminal audit cleanup is synchronous and has an independent one-second context,
 so caller cancellation does not automatically erase the outcome. There is no
 detached worker. A collaborator that ignores cancellation keeps the active
 reservation until it returns; no second run is admitted alongside an orphan.
-Controller shutdown must close the control and join its active caller.
+Controller shutdown uses `Shutdown` to close admission and join active
+collaborators before closing storage.
 
 ## Time and resource bounds
 
@@ -101,7 +102,8 @@ sixty seconds between consumed run admissions across **all** targets, including
 blocked attempts. A new control begins with a full sixty-second quiet interval,
 so restarting cannot reset the limiter to immediate eligibility. Exactly one
 control instance must be owned per controller lifetime; this is not a cross-process
-or distributed rate limiter, and this slice has not yet installed that singleton.
+or distributed rate limiter. The controller lifecycle now owns that dormant
+instance; no public execution endpoint is exposed.
 
 Prepare and Run each receive a five-second operation context. Run is additionally
 capped by the original review's remaining wall/monotonic lifetime, including the
@@ -126,9 +128,10 @@ probe traffic, and not macOS runtime/hardware evidence.
 
 The [isolated macOS lab](macos-network-lab.md) now drives the real sender through
 this coordinator and its adapter, without installing production controls.
+The [controller lifecycle](gateway-controller-lifecycle.md) now owns one dormant
+control and joins active work before storage cleanup using `Shutdown`.
 Before exposing run controls: validate packaged permissions and remaining
-hardware gates; install one controller-owned
-control with safe shutdown; add the narrow authenticated one-shot review/consent
+hardware gates; add the narrow authenticated one-shot review/consent
 flow and process tests; preserve unsupported-platform behavior; and project actual
 measurements separately from audited execution state. Enrollment remains distinct
 from Device Watch enablement and from permission for an individual active check.

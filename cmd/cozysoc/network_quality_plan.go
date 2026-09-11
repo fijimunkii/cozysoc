@@ -19,65 +19,7 @@ import (
 // resolving names, reading neighbor caches, enabling monitoring, or storing a
 // grant. Only the controller chooses the enrolled scope and interface.
 func (h *controllerAPIHandler) PreviewGatewayCheck(ctx context.Context, params api.GatewayPlanParams) (api.GatewayCheckPlan, error) {
-	if err := ctx.Err(); err != nil {
-		return api.GatewayCheckPlan{}, err
-	}
-	if networkquality.ValidateGatewayPreviewTarget(params.Target) != nil {
-		return api.GatewayCheckPlan{}, localapi.ErrInvalidRead
-	}
-	if h.store == nil || h.networkInspector == nil || h.now == nil {
-		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview service is unavailable")
-	}
-	scopes, err := h.store.ListActiveDeviceWatchScopes(ctx)
-	if err != nil {
-		return api.GatewayCheckPlan{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return api.GatewayCheckPlan{}, err
-	}
-	if len(scopes) == 0 {
-		return api.GatewayCheckPlan{}, localapi.ErrReadTargetNotFound
-	}
-	if len(scopes) != 1 {
-		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview requires one enrolled scope")
-	}
-	binding, err := devicewatch.ParseScopeBinding(scopes[0])
-	if err != nil {
-		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview enrollment is invalid")
-	}
-	selected := networkquality.GatewayPlanBinding{
-		ScopeID: scopes[0].ID, InterfaceName: binding.InterfaceName,
-		InterfaceIndex: binding.InterfaceIndex, Prefixes: binding.Prefixes,
-	}
-	startedAt := h.now().UTC()
-	// Reject ineligible target/context before touching OS metadata.
-	if _, err := networkquality.PreviewGatewayCheck(selected, params.Target, startedAt); err != nil {
-		if errors.Is(err, networkquality.ErrGatewayPlanTarget) {
-			return api.GatewayCheckPlan{}, localapi.ErrInvalidRead
-		}
-		return api.GatewayCheckPlan{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return api.GatewayCheckPlan{}, err
-	}
-	state, inspectErr := h.networkInspector.Inspect(ctx, binding.InterfaceName)
-	if err := ctx.Err(); err != nil {
-		return api.GatewayCheckPlan{}, err
-	}
-	if errors.Is(inspectErr, context.Canceled) || errors.Is(inspectErr, context.DeadlineExceeded) {
-		return api.GatewayCheckPlan{}, inspectErr
-	}
-	// Share #100's complete-prefix and interface-identity comparison. Do not use
-	// discovery's any-prefix-match preflight as authority for an active check.
-	outcome, gap := localInterfaceOutcome(binding, state, inspectErr)
-	if outcome != networkquality.OutcomeSucceeded || gap != networkquality.GapNone {
-		return api.GatewayCheckPlan{}, localapi.ErrGatewayPlanPrecondition
-	}
-	now := h.now().UTC()
-	if now.Before(startedAt) || now.Sub(startedAt) > 5*time.Second {
-		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview sample time is invalid")
-	}
-	plan, err := networkquality.PreviewGatewayCheck(selected, params.Target, now)
+	plan, startedAt, err := h.collectGatewayCheckPlan(ctx, params)
 	if err != nil {
 		return api.GatewayCheckPlan{}, err
 	}
@@ -87,10 +29,88 @@ func (h *controllerAPIHandler) PreviewGatewayCheck(ctx context.Context, params a
 		return api.GatewayCheckPlan{}, err
 	}
 	finished := h.now().UTC()
-	if finished.Before(now) || finished.Sub(startedAt) > 5*time.Second {
+	if finished.Before(plan.CreatedAt) || finished.Sub(startedAt) > 5*time.Second {
 		return api.GatewayCheckPlan{}, fmt.Errorf("gateway preview sample time is invalid")
 	}
 	return result, nil
+}
+
+// collectGatewayCheckPlan is internal evidence, never decoded from a client DTO.
+func (h *controllerAPIHandler) collectGatewayCheckPlan(ctx context.Context, params api.GatewayPlanParams) (networkquality.GatewayCheckPlan, time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	if networkquality.ValidateGatewayPreviewTarget(params.Target) != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, localapi.ErrInvalidRead
+	}
+	if h.store == nil || h.networkInspector == nil || h.now == nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, fmt.Errorf("gateway preview service is unavailable")
+	}
+	selected, binding, err := h.enrolledGatewayBinding(ctx)
+	if err != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	startedAt := h.now().UTC()
+	// Reject ineligible target/context before touching OS metadata.
+	if _, err := networkquality.PreviewGatewayCheck(selected, params.Target, startedAt); err != nil {
+		if errors.Is(err, networkquality.ErrGatewayPlanTarget) {
+			return networkquality.GatewayCheckPlan{}, time.Time{}, localapi.ErrInvalidRead
+		}
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	state, inspectErr := h.networkInspector.Inspect(ctx, binding.InterfaceName)
+	if err := ctx.Err(); err != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	if errors.Is(inspectErr, context.Canceled) || errors.Is(inspectErr, context.DeadlineExceeded) {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, inspectErr
+	}
+	// Share #100's complete-prefix and interface-identity comparison. Do not use
+	// discovery's any-prefix-match preflight as authority for an active check.
+	outcome, gap := localInterfaceOutcome(binding, state, inspectErr)
+	if outcome != networkquality.OutcomeSucceeded || gap != networkquality.GapNone {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, localapi.ErrGatewayPlanPrecondition
+	}
+	now := h.now().UTC()
+	if now.Before(startedAt) || now.Sub(startedAt) > 5*time.Second {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, fmt.Errorf("gateway preview sample time is invalid")
+	}
+	plan, err := networkquality.PreviewGatewayCheck(selected, params.Target, now)
+	if err != nil {
+		return networkquality.GatewayCheckPlan{}, time.Time{}, err
+	}
+	return plan, startedAt, nil
+}
+
+func (h *controllerAPIHandler) enrolledGatewayBinding(ctx context.Context) (networkquality.GatewayPlanBinding, devicewatch.ScopeBinding, error) {
+	var selected networkquality.GatewayPlanBinding
+	var binding devicewatch.ScopeBinding
+	if err := ctx.Err(); err != nil {
+		return selected, binding, err
+	}
+	scopes, err := h.store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil {
+		return selected, binding, err
+	}
+	if err := ctx.Err(); err != nil {
+		return selected, binding, err
+	}
+	if len(scopes) == 0 {
+		return selected, binding, localapi.ErrReadTargetNotFound
+	}
+	if len(scopes) != 1 {
+		return selected, binding, fmt.Errorf("gateway preview requires one enrolled scope")
+	}
+	binding, err = devicewatch.ParseScopeBinding(scopes[0])
+	if err != nil {
+		return selected, binding, fmt.Errorf("gateway preview enrollment is invalid")
+	}
+	selected = networkquality.GatewayPlanBinding{ScopeID: scopes[0].ID,
+		InterfaceName: binding.InterfaceName, InterfaceIndex: binding.InterfaceIndex, Prefixes: binding.Prefixes}
+	return selected, binding, nil
 }
 
 func projectGatewayCheckPlan(plan networkquality.GatewayCheckPlan) api.GatewayCheckPlan {

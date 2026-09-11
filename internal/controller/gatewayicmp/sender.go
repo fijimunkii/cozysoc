@@ -1,5 +1,5 @@
 // Package gatewayicmp contains a disconnected candidate for one bounded ICMPv4
-// sample. It is not an authorization API and is not installed in the controller.
+// sample. The controller owns a dormant instance, not an execution/consent API.
 package gatewayicmp
 
 import (
@@ -38,7 +38,7 @@ const (
 // Request comes from trusted controller code AFTER one-shot audited admission.
 // It must never be decoded from the client-visible preview. The caller's context
 // must retain the original consumed approval deadline, even with newer preflight.
-// The gatewayrun adapter preserves samples; no production call site is installed.
+// The gatewayrun adapter preserves samples; no production execution entrypoint exists.
 type Request struct {
 	Plan   networkquality.GatewayCheckPlan
 	Source netip.Addr
@@ -94,7 +94,7 @@ type Sender struct {
 }
 
 // NewCandidate constructs no socket and sends nothing. The Darwin implementation
-// remains disconnected until owned-lab runtime validation and consent integration.
+// remains inaccessible to product callers pending context validation and consent integration.
 // Other platforms fail explicitly; there is no raw-socket or executable fallback.
 func NewCandidate() *Sender {
 	lookup, open := platform()

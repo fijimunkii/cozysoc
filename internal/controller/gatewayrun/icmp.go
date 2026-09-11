@@ -7,7 +7,7 @@ import (
 )
 
 // NewICMPExecutor adapts the concrete candidate without opening a socket or
-// installing it in the controller. Only Control.Run may call it after audited
+// enabling it. The controller may own it dormant. Only Control.Run calls it after audited
 // one-shot admission. A nil sender stays unavailable; there is no fallback.
 func NewICMPExecutor(sender *gatewayicmp.Sender) Executor {
 	if sender == nil {

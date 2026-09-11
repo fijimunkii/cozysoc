@@ -1,5 +1,5 @@
 // Package gatewayrun controls one reviewed gateway run. It contains no packet
-// sender, installed executor, IPC endpoint, background worker, or persisted
+// sender, IPC endpoint, background worker, or persisted
 // approval. Its collaborators are trusted controller code, never browser input.
 package gatewayrun
 
@@ -50,8 +50,8 @@ type Selection struct {
 
 type Preflight func(context.Context, netip.Addr) (Selection, error)
 
-// Executor is an internal, narrowly scoped one-shot collaborator. There is no
-// installed production implementation yet. Implementations must honor cancellation
+// Executor is an internal, narrowly scoped one-shot collaborator, not a wire
+// endpoint. The controller owns a dormant adapter. Implementations honor cancellation
 // and fixed per-attempt/byte/receive budgets, without retries or detached work.
 // nil means unavailable, not permission to use a fallback executable or sender.
 type Executor interface {

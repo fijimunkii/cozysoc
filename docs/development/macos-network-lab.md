@@ -15,10 +15,10 @@ settings are not changed by this workflow.
 
 Normal `go test ./...` remains packet-free unless the isolated lab is explicitly
 selected. In the live job, `check-macos-lab.py` requires the parent test and all
-six named cases to pass, rejects skips/failures/unexpected packages, and requires
+seven named cases to pass, rejects skips/failures/unexpected packages, and requires
 a successful package result. An empty or partially executed suite cannot pass.
 Portable regression tests exercise this checker and the child-owning launcher.
-The five packet cases now pass through the real coordinator and adapter as well:
+The six packet cases now pass through the real coordinator and adapter as well:
 review creates no audit, admission precedes the sender, terminal sample counts
 match the result, and consumed-ticket replay is refused. The lab auditor is
 in-memory; separate real-SQLite tests prove durable measurement round-trips and
@@ -50,6 +50,7 @@ DNS resolver, external endpoint or arbitrary discovered host is probed.
 | Silent | Peer sees three requests but sends no ICMP replies; three timeouts with unknown RTT. |
 | Wrong nonce | Peer sends checksum-valid but mismatched replies; none becomes a matched reply. |
 | Cancel | Cancel after the peer observes the first request; incomplete result and no second request. |
+| Shutdown | Close the coordinator after the first observed request; require terminal audit drain and no second request. |
 | Source loss | Remove the exact source while retaining another address in the same prefix; no second request or complete result. |
 
 The observer checks sequence, count, ICMP size and capture-time spacing
@@ -129,7 +130,8 @@ Native local-API tests are not a claim that the full installed service/UI consen
 journey has been exercised on macOS. Existing process E2E remains a separate job.
 
 Measurements now pass through the audited one-shot coordinator in the lab.
-Before exposing live controls, install its single controller-owned lifecycle and exercise the
+The [controller-owned lifecycle](gateway-controller-lifecycle.md) now exists, dormant.
+Before exposing live controls, exercise the
 actual authenticated consent/result path. Validate the packaged product's
 permission-denied/recovery behavior and the remaining hardware scenarios without
 turning fixture success into a broad support claim. Enrollment still does not

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -26,7 +27,7 @@ import (
 const defaultTickInterval = 2 * time.Second
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -214,6 +215,21 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	}
 	defer server.Close()
 
+	// Only initialize run ownership AFTER acquiring the controller socket. A
+	// rejected duplicate must not construct a second coordinator or reset limits.
+	if err := apiHandler.startGatewayRuns(store); err != nil {
+		return err
+	}
+	defer func() {
+		// Cancellation is a request, not a join. Keep the audit store alive until
+		// every admitted collaborator has returned. A broken collaborator must
+		// leave shutdown pending, not write into storage that has already closed.
+		if err := apiHandler.gatewayRuns.shutdown(context.Background()); err != nil {
+			logger.Warn("gateway_runs_shutdown_failed")
+		}
+		logger.Info("gateway_runs_drained")
+	}()
+
 	logger.Info("controller_started",
 		"version", controller.Version(),
 		"api_version", api.Version,
@@ -226,7 +242,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	if err := server.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
-	logger.Info("controller_stopped")
+	logger.Info("controller_stopping")
 	return nil
 }
 
