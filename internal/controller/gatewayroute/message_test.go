@@ -128,7 +128,7 @@ func TestReplyRejectsMalformedDatagrams(t *testing.T) {
 	if _, _, err := parseReply(make([]byte, 4097), 123, 456); err == nil {
 		t.Fatal("oversized accepted")
 	}
-	for _, mask := range [][]byte{{6, 0, 0, 0, 255, 127}, {16, 30, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0}} {
+	for _, mask := range [][]byte{{6, 0, 0, 0, 255, 127}, {16, 30, 0, 0, 255, 255, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0}} {
 		if _, _, err := parseReply(reply(flagUp|flagDone, mask), 123, 456); err == nil {
 			t.Fatal("invalid mask accepted")
 		}

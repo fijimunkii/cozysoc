@@ -175,11 +175,13 @@ func ipv4Sockaddr(raw []byte) (netip.Addr, bool) {
 }
 func ipv4Mask(raw []byte) (int, bool) {
 	// Routing netmasks may have sa_len=0 or omit trailing zero bytes, and use
-	// AF_UNSPEC. The IPv4 address bytes still start at offset four.
+	// arbitrary radix-mask bytes in the family/port positions. The already
+	// validated IPv4 destination determines the mask family, not raw[1].
+	// IPv4 address mask bytes still start at offset four.
 	if len(raw) == 0 {
 		return 0, true
 	}
-	if len(raw) < 2 || len(raw) > 16 || (raw[1] != 0 && raw[1] != afInet) {
+	if len(raw) < 2 || len(raw) > 16 {
 		return 0, false
 	}
 	var mask [4]byte
