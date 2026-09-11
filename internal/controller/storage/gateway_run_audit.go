@@ -32,7 +32,7 @@ func (s *Store) InsertGatewayRunAudit(ctx context.Context, event gatewayrun.Even
 	}
 	return s.InsertAuditEvent(ctx, domain.AuditEvent{
 		ID:   "audit.gateway-run." + event.RunID + "." + event.State,
-		Kind: GatewayRunAuditKind, Actor: actor, OccurredAt: event.At.UTC(), SchemaVersion: 1,
+		Kind: GatewayRunAuditKind, Actor: actor, OccurredAt: event.At.UTC(), SchemaVersion: event.SchemaVersion,
 		Payload: payload, Retention: domain.RetentionAudit,
 	})
 }

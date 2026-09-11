@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 )
 
@@ -24,9 +25,42 @@ type fakeClock struct {
 func (c *fakeClock) now() time.Time      { c.mu.Lock(); defer c.mu.Unlock(); return c.value }
 func (c *fakeClock) add(d time.Duration) { c.mu.Lock(); defer c.mu.Unlock(); c.value = c.value.Add(d) }
 
-type executorFunc func(context.Context, Selection) error
+type executorFunc func(context.Context, Selection) (gatewayicmp.Sample, error)
 
-func (f executorFunc) ExecuteGateway(ctx context.Context, s Selection) error { return f(ctx, s) }
+func (f executorFunc) ExecuteGateway(ctx context.Context, s Selection) (gatewayicmp.Sample, error) {
+	return f(ctx, s)
+}
+
+func completeSample(s Selection, at time.Time, replies int) gatewayicmp.Sample {
+	sample := gatewayicmp.Sample{ScopeID: s.Plan.Binding.ScopeID, InterfaceName: s.Plan.Binding.InterfaceName,
+		InterfaceIndex: s.Plan.Binding.InterfaceIndex, Target: s.Plan.Target, Source: s.Source, StartedAt: at,
+		CompletedAt: at.Add(3 * time.Second), SendCalls: 3, AcceptedRequests: 3, Replies: replies, Timeouts: 3 - replies, Complete: true}
+	if replies > 0 {
+		mean := time.Millisecond
+		sample.MeanRTT = &mean
+	}
+	return sample
+}
+
+// Adapt the older control-flow fixtures to a truthful, clock-advanced sample.
+func errorExecutor(clock *fakeClock, f func(context.Context, Selection) error) Executor {
+	return executorFunc(func(ctx context.Context, s Selection) (gatewayicmp.Sample, error) {
+		start := clock.now()
+		err := f(ctx, copySelection(s))
+		if err != nil {
+			return gatewayicmp.Sample{}, err
+		}
+		if ctx.Err() != nil {
+			return gatewayicmp.Sample{}, ctx.Err()
+		}
+		if clock.now().Before(start) {
+			return gatewayicmp.Sample{}, ErrExecution
+		}
+		sample := completeSample(s, start, 3)
+		clock.add(3 * time.Second)
+		return sample, nil
+	})
+}
 
 type auditLog struct {
 	mu     sync.Mutex
@@ -80,7 +114,7 @@ func fixture(t *testing.T) (*Control, *fakeClock, *auditLog, *atomic.Int32) {
 			t.Error("unbounded preflight")
 		}
 		return selectionAt(clock.now(), target), nil
-	}, Executor: executorFunc(func(ctx context.Context, _ Selection) error {
+	}, Executor: errorExecutor(clock, func(ctx context.Context, _ Selection) error {
 		if d, ok := ctx.Deadline(); !ok || time.Until(d) > OperationTimeout {
 			t.Error("unbounded executor")
 		}
@@ -104,7 +138,7 @@ func prepare(t *testing.T, c *Control) Review {
 }
 
 func TestReviewIsNotConsentAndReturnedFieldsCannotChangeRun(t *testing.T) {
-	c, _, audit, calls := fixture(t)
+	c, clock, audit, calls := fixture(t)
 	r := prepare(t, c)
 	approved := copySelection(r.Selection)
 	if calls.Load() != 0 || len(audit.copy()) != 0 {
@@ -123,7 +157,7 @@ func TestReviewIsNotConsentAndReturnedFieldsCannotChangeRun(t *testing.T) {
 	r.Selection.Plan.Budget.MaxAttempts = 1000
 	r.Selection.Source = netip.MustParseAddr("8.8.8.8")
 	r.Selection.Plan.Target = netip.MustParseAddr("8.8.8.8")
-	c.deps.Executor = executorFunc(func(_ context.Context, s Selection) error {
+	c.deps.Executor = errorExecutor(clock, func(_ context.Context, s Selection) error {
 		if !sameSelection(s, approved) {
 			t.Fatal("caller changed stored authority")
 		}
@@ -283,11 +317,11 @@ func TestAuditFailureAtEveryBoundaryLocksWithoutRetry(t *testing.T) {
 func TestCanceledFailedAndPanickingExecutorsHaveAuditedOutcomes(t *testing.T) {
 	for _, mode := range []string{"canceled", "error", "panic"} {
 		t.Run(mode, func(t *testing.T) {
-			c, _, audit, calls := fixture(t)
+			c, clock, audit, calls := fixture(t)
 			r := prepare(t, c)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			c.deps.Executor = executorFunc(func(context.Context, Selection) error {
+			c.deps.Executor = errorExecutor(clock, func(context.Context, Selection) error {
 				calls.Add(1)
 				if mode == "canceled" {
 					cancel()
@@ -339,10 +373,10 @@ func TestExpiryDuringAuditAndPreflightBlocksExecution(t *testing.T) {
 }
 
 func TestConcurrentReplayAndCanceledWorkerDoNotReleaseReservationEarly(t *testing.T) {
-	c, _, audit, calls := fixture(t)
+	c, clock, audit, calls := fixture(t)
 	r := prepare(t, c)
 	entered, release := make(chan struct{}), make(chan struct{})
-	c.deps.Executor = executorFunc(func(context.Context, Selection) error { calls.Add(1); close(entered); <-release; return nil })
+	c.deps.Executor = errorExecutor(clock, func(context.Context, Selection) error { calls.Add(1); close(entered); <-release; return nil })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
@@ -379,7 +413,7 @@ func TestCooldownIsControllerWideAndRestartCannotRestoreTickets(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := netip.MustParseAddr("192.168.50.2")
-	for _, delta := range []time.Duration{0, RunInterval - time.Nanosecond} {
+	for _, delta := range []time.Duration{0, RunInterval - 3*time.Second - time.Nanosecond} {
 		clock.add(delta)
 		if _, err := c.Prepare(context.Background(), other); !errors.Is(err, ErrCooldown) {
 			t.Fatal("per-target cooldown bypass", err)
@@ -475,11 +509,11 @@ func TestPrepareCancellationErrorsAndLateEvidenceNeverIssueTicket(t *testing.T) 
 }
 
 func TestCloseCancelsActiveRunAndKeepsTerminalAudit(t *testing.T) {
-	c, _, audit, _ := fixture(t)
+	c, clock, audit, _ := fixture(t)
 	r := prepare(t, c)
 	entered := make(chan struct{})
 	done := make(chan error, 1)
-	c.deps.Executor = executorFunc(func(ctx context.Context, _ Selection) error { close(entered); <-ctx.Done(); return ctx.Err() })
+	c.deps.Executor = errorExecutor(clock, func(ctx context.Context, _ Selection) error { close(entered); <-ctx.Done(); return ctx.Err() })
 	go func() { _, err := c.Run(context.Background(), r.Ticket, true); done <- err }()
 	<-entered
 	c.Close()
@@ -496,7 +530,7 @@ func TestOriginalReviewExpiryBoundsExecutorDespiteFreshPreflight(t *testing.T) {
 	c, clock, audit, calls := fixture(t)
 	r := prepare(t, c)
 	clock.add(29 * time.Second)
-	c.deps.Executor = executorFunc(func(ctx context.Context, fresh Selection) error {
+	c.deps.Executor = executorFunc(func(ctx context.Context, fresh Selection) (gatewayicmp.Sample, error) {
 		calls.Add(1)
 		deadline, ok := ctx.Deadline()
 		if !ok || time.Until(deadline) > time.Second {
@@ -505,10 +539,10 @@ func TestOriginalReviewExpiryBoundsExecutorDespiteFreshPreflight(t *testing.T) {
 		if !fresh.Plan.CreatedAt.Equal(clock.now()) || !fresh.Plan.ReviewExpiresAt.After(r.ExpiresAt) {
 			t.Fatal("fixture did not acquire newer preflight evidence")
 		}
-		return nil
+		return gatewayicmp.Sample{}, context.DeadlineExceeded
 	})
 	result, err := c.Run(context.Background(), r.Ticket, true)
-	if err != nil || result.Outcome != "completed" || calls.Load() != 1 || len(audit.copy()) != 3 {
+	if !errors.Is(err, context.DeadlineExceeded) || result.Outcome != "canceled" || calls.Load() != 1 || len(audit.copy()) != 3 {
 		t.Fatalf("bounded execution: %+v %v", result, err)
 	}
 }

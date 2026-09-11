@@ -5,10 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 )
 
 // Dependencies are compiled controller collaborators, never caller-supplied
@@ -222,18 +225,19 @@ func (c *Control) Run(ctx context.Context, ticket Ticket, consent bool) (Result,
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	if err := c.record(ctx, approved, "authorized", "", ""); err != nil {
+	if err := c.record(ctx, approved, "authorized", "", "", nil); err != nil {
 		return Result{}, err
 	}
+	var measured *gatewayicmp.Sample
 	finish := func(outcome, reason string, cause error) (Result, error) {
 		// Finish synchronously within a separate cleanup deadline even on caller
 		// cancellation. This does not detach a worker or continue sending after cancel.
 		cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), AuditTimeout)
 		defer stop()
-		if err := c.record(cleanup, approved, "finished", outcome, reason); err != nil {
+		if err := c.record(cleanup, approved, "finished", outcome, reason, measured); err != nil {
 			return Result{}, err
 		}
-		return Result{RunID: approved.runID, Outcome: outcome}, cause
+		return Result{RunID: approved.runID, Outcome: outcome, Sample: copySample(measured)}, cause
 	}
 	if ctx.Err() != nil {
 		return finish("canceled", "canceled", ctx.Err())
@@ -259,7 +263,7 @@ func (c *Control) Run(ctx context.Context, ticket Ticket, consent bool) (Result,
 	if !sameSelection(approved.selection, fresh) {
 		return finish("blocked", "selection-changed", ErrPreflight)
 	}
-	if err := c.record(ctx, approved, "admitted", "", ""); err != nil {
+	if err := c.record(ctx, approved, "admitted", "", "", nil); err != nil {
 		return Result{}, err
 	}
 	// Audit I/O may consume the last instant of freshness. Recheck it and cancellation
@@ -274,18 +278,31 @@ func (c *Control) Run(ctx context.Context, ticket Ticket, consent bool) (Result,
 	if !approved.live(now) || overlong(start, now) {
 		return finish("blocked", "review-expired", ErrReview)
 	}
-	executionErr, panicked := safeExecute(c.deps.Executor, ctx, copySelection(fresh))
+	executionStarted := now.Round(0).UTC()
+	sample, executionErr, panicked := safeExecute(c.deps.Executor, ctx, copySelection(fresh))
 	if panicked {
 		return finish("indeterminate", "execution-panic", ErrExecution)
-	}
-	if ctx.Err() != nil {
-		return finish("canceled", "canceled", ctx.Err())
 	}
 	now, err = c.clock()
 	if err != nil {
 		return Result{}, err
 	}
-	if overlong(start, now) {
+	// Validate before retaining or auditing any sender-controlled measurement.
+	// Current cancellation is independent of whether a sample already completed.
+	measured, err = validateSample(sample, executionErr, fresh, executionStarted, now.Round(0).UTC(), approved.expiresAt)
+	if err != nil {
+		return finish("failed", "measurement-invalid", ErrExecution)
+	}
+	if ctx.Err() != nil {
+		return finish("canceled", "canceled", ctx.Err())
+	}
+	if !approved.live(now) || overlong(start, now) {
+		return finish("canceled", "canceled", context.DeadlineExceeded)
+	}
+	if executionErr == context.Canceled {
+		return finish("canceled", "canceled", context.Canceled)
+	}
+	if executionErr == context.DeadlineExceeded {
 		return finish("canceled", "canceled", context.DeadlineExceeded)
 	}
 	if executionErr != nil {
@@ -294,13 +311,13 @@ func (c *Control) Run(ctx context.Context, ticket Ticket, consent bool) (Result,
 	return finish("completed", "", nil)
 }
 
-func (c *Control) record(ctx context.Context, p pendingReview, state, outcome, reason string) error {
+func (c *Control) record(ctx context.Context, p pendingReview, state, outcome, reason string, sample *gatewayicmp.Sample) error {
 	now, err := c.clock()
 	if err != nil {
 		return err
 	} // Do not invent an event time after clock failure.
 	s := p.selection
-	event := Event{SchemaVersion: 1, RunID: p.runID, State: state, Outcome: outcome, Reason: reason, At: now.Round(0).UTC(), Profile: Profile,
+	event := Event{SchemaVersion: EventSchemaVersion, Measurement: auditMeasurement(sample), RunID: p.runID, State: state, Outcome: outcome, Reason: reason, At: now.Round(0).UTC(), Profile: Profile,
 		SelectionDigest: selectionDigest(s), ScopeID: s.Plan.Binding.ScopeID, InterfaceName: s.Plan.Binding.InterfaceName,
 		InterfaceIndex: s.Plan.Binding.InterfaceIndex, Target: s.Plan.Target.String(), Source: s.Source.String()}
 	if err := safeAudit(c.deps.Auditor, ctx, event); err != nil || ctx.Err() != nil {
@@ -338,14 +355,26 @@ func safePreflight(f Preflight, ctx context.Context, target netip.Addr) (s Selec
 	}()
 	return f(ctx, target)
 }
-func safeExecute(e Executor, ctx context.Context, s Selection) (err error, panicked bool) {
+func safeExecute(e Executor, ctx context.Context, s Selection) (sample gatewayicmp.Sample, err error, panicked bool) {
 	defer func() {
 		if recover() != nil {
+			sample = gatewayicmp.Sample{}
 			err = ErrExecution
 			panicked = true
 		}
 	}()
-	return e.ExecuteGateway(ctx, s), false
+	sample, err = e.ExecuteGateway(ctx, s)
+	// Error classification can call collaborator-defined Is/Unwrap methods, so
+	// keep it inside the same panic boundary as execution. Never retain raw errors.
+	switch {
+	case errors.Is(err, context.Canceled):
+		err = context.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		err = context.DeadlineExceeded
+	case err != nil:
+		err = ErrExecution
+	}
+	return sample, err, false
 }
 func safeAudit(a Auditor, ctx context.Context, e Event) (err error) {
 	defer func() {

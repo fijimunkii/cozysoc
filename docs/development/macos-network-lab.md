@@ -18,9 +18,16 @@ selected. In the live job, `check-macos-lab.py` requires the parent test and all
 six named cases to pass, rejects skips/failures/unexpected packages, and requires
 a successful package result. An empty or partially executed suite cannot pass.
 Portable regression tests exercise this checker and the child-owning launcher.
+The five packet cases now pass through the real coordinator and adapter as well:
+review creates no audit, admission precedes the sender, terminal sample counts
+match the result, and consumed-ticket replay is refused. The lab auditor is
+in-memory; separate real-SQLite tests prove durable measurement round-trips and
+write-failure behavior. Only the construction clock is aged by a minute to avoid
+a cooldown wait per fixture; all review, sample and audit times use the real clock.
 
 ```text
 Normal-user test process launched through Terminal
+  -> actual one-shot gatewayrun coordinator + ICMP adapter
   -> actual Cozy SOC gatewayroute + gatewayicmp implementations
   -> Darwin route/data sockets and source/interface checks
   -> feth42 <-> feth43 isolated Ethernet pair
@@ -121,8 +128,8 @@ policies, interface-index recycling, sustained overload, or GUI accessibility.
 Native local-API tests are not a claim that the full installed service/UI consent
 journey has been exercised on macOS. Existing process E2E remains a separate job.
 
-Before exposing live controls, preserve measurements through the audited one-shot
-coordinator, install its single controller-owned lifecycle, and exercise the
+Measurements now pass through the audited one-shot coordinator in the lab.
+Before exposing live controls, install its single controller-owned lifecycle and exercise the
 actual authenticated consent/result path. Validate the packaged product's
 permission-denied/recovery behavior and the remaining hardware scenarios without
 turning fixture success into a broad support claim. Enrollment still does not

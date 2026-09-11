@@ -38,7 +38,7 @@ const (
 // Request comes from trusted controller code AFTER one-shot audited admission.
 // It must never be decoded from the client-visible preview. The caller's context
 // must retain the original consumed approval deadline, even with newer preflight.
-// No production call site or gatewayrun.Executor adapter exists in this slice.
+// The gatewayrun adapter preserves samples; no production call site is installed.
 type Request struct {
 	Plan   networkquality.GatewayCheckPlan
 	Source netip.Addr
@@ -168,8 +168,8 @@ func safeError(err error) error {
 
 // Measure performs at most three sends. It does not grant consent, audit, retry a
 // run, or implement the controller-wide cooldown; those belong to gatewayrun.
-// It is deliberately NOT a gatewayrun.Executor: measurements need a separate,
-// truthful result projection before the coordinator can be wired to this sender.
+// gatewayrun adapts this method and validates/audits its returned measurement.
+// The sender itself does not implement gatewayrun.Executor or grant admission.
 func (s *Sender) Measure(ctx context.Context, request Request) (sample Sample, err error) {
 	if err := contextError(ctx, time.Now()); err != nil {
 		return Sample{}, err

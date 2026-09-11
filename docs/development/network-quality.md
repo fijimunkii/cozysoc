@@ -116,7 +116,7 @@ active execution remain separately gated.
 
 The [internal gateway run control](gateway-run-control.md) now provides bounded,
 one-shot review consumption and durable execution-state audits. It is not wired
-to production commands, IPC, or a sender; no active probes or real consent flow
+to production commands or IPC; no active product probes or real consent flow
 are enabled. Packaged-context validation and authenticated run integration remain
 required before execution can be exposed.
 
@@ -128,5 +128,7 @@ matching. In addition to packet-free unit tests, the separate
 [native macOS lab](macos-network-lab.md) now exercises real kernel networking on
 an isolated virtual Ethernet pair. Its evidence is scoped to the tested runner
 and Terminal launch context, not physical hardware or a packaged permission flow.
-The candidate is not connected to the coordinator or any production command/API;
-merging lab work does not enable probes or grant consent.
+A [disconnected coordinator adapter](gateway-run-measurements.md) now preserves
+validated complete/partial samples and commits their terminal measurement audit.
+It is exercised by the virtual lab but not installed in any production command/API;
+merging this work does not enable probes or grant consent.

@@ -1,4 +1,4 @@
-# One-shot gateway run control (internal, sender disconnected)
+# One-shot gateway run control (internal, not installed)
 
 Related to #14 and #29. This follows the
 [route/source metadata preflight](gateway-route-preflight.md) with internal
@@ -6,7 +6,9 @@ one-shot orchestration and a real SQLite audit adapter. It is not a live gateway
 check: **no production executor or run/approval API is installed**. Existing
 `network-quality-plan` responses still report execution unavailable and consent
 not granted. No new CLI command, browser control, UDS method, migration, scheduler,
-packet sender, or capability lifecycle mutation is introduced.
+automatic packet sending, or capability lifecycle mutation is introduced.
+The [measurement integration](gateway-run-measurements.md) adds a disconnected
+ICMP adapter and versioned measured terminal audits; no live product control.
 
 ## Authority lives in the controller, not the returned preview
 
@@ -28,7 +30,8 @@ or an assertion that a real user has consented in the current product.
 
 Missing preflight, executor, or audit collaborators leave the control unavailable.
 There is no fallback shell, ping executable, URL, or generic callback supplied by
-clients. All current executor implementations are test-only, packet-free fakes.
+clients. A concrete ICMP adapter now exists for the candidate sender, but it is
+not installed in the production controller. Portable tests use packet-free fakes.
 The real route inspector is not promoted to send-binding evidence by this work.
 
 ## One-shot state transitions
@@ -48,14 +51,16 @@ For an admitted attempt, the sequence is:
 3. Commit an `admitted` audit, then check cancellation, the original review expiry,
    and the operation deadline again **after** that storage I/O.
 4. Invoke the narrowly typed executor once, without implicit retries.
-5. Commit a `finished` audit with a bounded outcome.
+5. Validate returned sample provenance, counts, timing and completion semantics.
+6. Commit a `finished` audit with a bounded outcome and any valid measurement.
 
 `authorized` records accepted consent; `admitted` records execution admission.
 Neither claims a packet was sent. Terminal outcomes are `completed`, `blocked`,
 `canceled`, `failed`, or `indeterminate` (executor panic). Completed means only
-that the executor returned normally and the terminal audit committed. It does
+that a complete validated sample and its terminal audit committed. It does
 not mean ICMP succeeded, the gateway is healthy, or the internet is available.
-Measured outcomes require the separate network-quality evidence contract.
+A completed run may have zero replies and unknown RTT. Canceled/failed work may
+retain valid partial counts, never an inferred loss percentage.
 
 ## Audits and failure recovery
 
@@ -65,6 +70,8 @@ IDs reject duplicate lifecycle rows. Events include a non-authorizing run ID,
 controller-selected scope/interface, numeric target/source, fixed profile, approved
 selection digest, phase/outcome, timestamp and fixed reason code. They contain no
 review ticket, credentials, raw diagnostics, packets or fabricated quality metrics.
+Version 2 terminal audits optionally attach the bounded measurement in the same
+SQLite write; version 1 remains readable as legacy execution-only evidence.
 The selection digest binds canonical prefixes and all fixed budget values without
 copying a raw preflight payload into the audit record.
 
@@ -101,7 +108,7 @@ capped by the original review's remaining wall/monotonic lifetime, including the
 context passed to the executor; newer preflight evidence cannot extend it. Terminal
 audit cleanup may add at most its separate cooperative one-second context. Collaborators
 must obey their contexts and OS I/O limits: this package does not forcibly interrupt
-kernel calls or certify wire-level rate/byte/receive enforcement. The future sender
+kernel calls or certify wire-level rate/byte/receive enforcement. The sender
 must independently validate its actual socket source/interface immediately before
 EVERY send, enforce the fixed attempt/receive budgets, and stop on cancellation.
 
@@ -117,8 +124,10 @@ duplicate rejection, and persisted audits without restartable authority or new
 monitoring history. These are synthetic control-flow tests, not live consent or
 probe traffic, and not macOS runtime/hardware evidence.
 
-Before exposing run controls: validate the Mac route adapter in the owned lab;
-implement and validate the real bound ICMP sender; install one controller-owned
+The [isolated macOS lab](macos-network-lab.md) now drives the real sender through
+this coordinator and its adapter, without installing production controls.
+Before exposing run controls: validate packaged permissions and remaining
+hardware gates; install one controller-owned
 control with safe shutdown; add the narrow authenticated one-shot review/consent
 flow and process tests; preserve unsupported-platform behavior; and project actual
 measurements separately from audited execution state. Enrollment remains distinct
