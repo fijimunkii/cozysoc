@@ -101,7 +101,7 @@ independent virtual-link peer still checking packet counts/spacing. Its evidence
 remains scoped to the tested runner/Terminal context, not a packaged permission
 flow or physical Wi-Fi/NIC certification.
 
-The [experimental native consent/result path](gateway-consent-session.md) now
-uses this model. Next: deliberate client presentation and bounded historical
-reads/assessment. Packaged permission recovery and remaining hardware tests still
+The [experimental native consent/result path](gateway-consent-session.md)
+and [interactive command](interactive-gateway-check.md) now use this model.
+Next: bounded historical reads/assessment. Packaged permission recovery and remaining hardware tests still
 precede broad user-facing controls.

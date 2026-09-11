@@ -28,12 +28,10 @@ physical NIC/Wi-Fi behavior, real sleep/resume, VPN/Network Extension scenarios
 and remaining hardware gates still precede broad user-facing controls. This is a
 deliberate opt-in native development boundary, not a claim that those gates passed.
 
-There is not yet an interactive command or browser consent UI. Compiled native
-clients use `localapi.Client.CheckGateway` with an explicit confirmation callback.
-The next client must visibly present experimental status, selected target/source,
-interface and enrolled prefixes, all traffic limits, the review deadline, gateway
-role uncertainty and privacy implications before collecting a deliberate choice.
-It must default to decline; it must not approve on load or retry automatically.
+The [interactive native command](interactive-gateway-check.md) now presents
+`localapi.Client.CheckGateway` with a foreground terminal, complete disclosure
+and exact default-decline confirmation. There is still no browser consent UI.
+It never approves on load or retries automatically.
 
 ## One connection, one review, one decision
 
@@ -124,7 +122,8 @@ The isolated macOS matrix adds an eighth required `native-session` case. It buil
 and launches the actual `cozysoc serve --experimental-gateway-checks` process in
 the lab's Terminal context, enrolls only the job-created feth interface, waits the
 full real one-minute startup quiet interval (no test-clock or budget override),
-declines once, approves once through the typed authenticated client, and requires
+declines through the typed client, exercises the interactive command with real
+pseudo-terminal negative cases and final approval, and requires
 three independently observed requests/replies. It checks post-run cooldown,
 Device Watch remaining disabled, orderly process exit, and the matching terminal
 measurement in the real SQLite database. Decline adds no gateway audit and the
@@ -142,7 +141,8 @@ cover EOF, timeout and delayed launch after owner death. The longer dedicated la
 timeout accommodates the real startup quiet interval; production budgets do not
 change.
 
-Neither #14 nor #29 is complete. Still next: deliberate native/UI presentation,
+Neither #14 nor #29 is complete. The interactive native command is implemented.
+Still next: appropriate browser/UI presentation,
 bounded retained-result reads/assessment, and the remaining packaged/hardware
 validation. Do not turn this experimental switch into a default merely because
 the controlled native lab passes.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -113,16 +114,17 @@ func nativeConsentSession(t *testing.T) {
 	if err != nil || declined.Outcome != "declined" || declined.Measurement != nil {
 		t.Fatalf("decline: %+v %v", declined, err)
 	}
-	result, err := client.CheckGateway(ctx, target, func(_ context.Context, r api.GatewayCheckReview) (bool, error) {
-		if r.Source != source || r.Target != target || r.Binding.InterfaceName != "feth42" || r.Budget.MaxAttempts != 3 || r.Budget.MaxICMPRequestBytes != 120 {
-			t.Error("unexpected reviewed selection")
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil || result.Outcome != "completed" || result.Measurement == nil || !result.Measurement.Complete || result.Measurement.Replies != 3 {
-		t.Fatalf("native consent result: %+v %v", result, err)
+	// Drive the actual command with real pseudo-terminals, not an injected
+	// confirmation callback. All negative cases precede the only approved run.
+	for _, mode := range []string{"redirected-input", "redirected-output", "decline", "preloaded", "overlong", "eof", "interrupt", "expire"} {
+		interactiveGatewayCLI(t, ctx, work, python, mode)
 	}
+	output := interactiveGatewayCLI(t, ctx, work, python, "approve")
+	match := regexp.MustCompile(`(?m)^Run reference: ([0-9a-f]{32})$`).FindStringSubmatch(output)
+	if len(match) != 2 {
+		t.Fatal("interactive result lost its audit reference")
+	}
+	runID := match[1]
 	peer.assertEchoes(t, 3)
 	if _, err := client.CheckGateway(ctx, target, confirm); err == nil {
 		t.Fatal("run cooldown disappeared")
@@ -150,7 +152,7 @@ func nativeConsentSession(t *testing.T) {
 	}
 	defer db.Close()
 	var rawAudit string
-	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.gateway-run."+result.RunID+".finished").Scan(&rawAudit); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.gateway-run."+runID+".finished").Scan(&rawAudit); err != nil {
 		t.Fatal(err)
 	}
 	var event gatewayrun.Event
@@ -167,4 +169,32 @@ func nativeConsentSession(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind='gateway-run'`).Scan(&count); err != nil || count != 3 {
 		t.Fatal("decline created consent or run phases duplicated", err)
 	}
+}
+
+// The helper owns/reaps one CLI child. Its stdin pipe is lifetime authority only:
+// parent crash/EOF aborts the helper's child; it never supplies approval input.
+func interactiveGatewayCLI(t *testing.T, ctx context.Context, work, python, mode string) string {
+	t.Helper()
+	command := exec.Command(python, filepath.Join(work, "cli-driver.py"), mode)
+	input, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	stop := context.AfterFunc(ctx, func() { _ = input.Close() })
+	defer stop()
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("interactive CLI %s: %v\n%s", mode, err, output)
+	}
+	var result struct {
+		Mode     string `json:"mode"`
+		ExitCode int    `json:"exit_code"`
+		Output   string `json:"output"`
+	}
+	if json.Unmarshal(output, &result) != nil || result.Mode != mode {
+		t.Fatal("invalid interactive fixture result")
+	}
+	t.Logf("interactive CLI %s passed", mode)
+	return result.Output
 }

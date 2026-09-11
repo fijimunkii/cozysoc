@@ -117,8 +117,9 @@ active execution remain separately gated.
 The [internal gateway run control](gateway-run-control.md) now provides bounded,
 one-shot review consumption and durable execution-state audits. It is wired to the [experimental native consent protocol](gateway-consent-session.md)
 only after explicit macOS controller opt-in. Ordinary startup and the browser do
-not gain active checks. Packaged-context validation and deliberate client presentation still precede
-broad user-facing controls.
+not gain active checks. The [interactive native command](interactive-gateway-check.md)
+requires a foreground terminal and deliberate approval. Packaged-context validation
+still precedes broad user-facing controls.
 
 ## Explicitly gated ICMP candidate
 

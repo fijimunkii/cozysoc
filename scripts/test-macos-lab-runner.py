@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "lab_runner", Path(__file__).with_name("macos-lab-runner.py"))
@@ -40,22 +41,31 @@ class RunnerTests(unittest.TestCase):
     def test_timeout_and_abort_join_the_owned_child(self):
         for abort in (False, True):
             with self.subTest(abort=abort):
-                self.executable("import os, time\nfrom pathlib import Path\n"
-                                "Path('child-pid').write_text(str(os.getpid()))\n"
-                                "time.sleep(30)\n")
-                timer = threading.Timer(0.4, (self.work / "abort").touch)
-                if abort:
-                    timer.start()
+                self.executable("import time\ntime.sleep(30)\n")
+                children = []
+                timer = threading.Timer(0.1, (self.work / "abort").touch)
+                original_popen = runner.subprocess.Popen
+
+                def track_child(*args, **kwargs):
+                    child = original_popen(*args, **kwargs)
+                    children.append(child)
+                    # Revoke only after creation. Do not assume the child can
+                    # finish Python startup/write a PID file within 400 ms.
+                    if abort:
+                        timer.start()
+                    return child
+
                 try:
-                    result = runner.run_lab(self.work, timeout=0.8)
+                    with mock.patch.object(runner.subprocess, "Popen", side_effect=track_child):
+                        result = runner.run_lab(self.work, timeout=5 if abort else 0.1)
                 finally:
                     timer.cancel()
-                    if abort:
+                    if abort and children:
                         timer.join()
                 self.assertEqual(result, 130 if abort else 124)
-                pid = int((self.work / "child-pid").read_text())
-                with self.assertRaises(ProcessLookupError):
-                    os.kill(pid, 0)
+                self.assertEqual(len(children), 1)
+                # returncode is set only after Popen poll/wait has reaped it.
+                self.assertIsNotNone(children[0].returncode)
                 (self.work / "abort").unlink(missing_ok=True)
 
 

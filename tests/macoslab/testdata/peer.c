@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
     if (check_only) return 0;
     if (geteuid() != 0) die("BPF setup requires sudo");
     uid_t uid = (uid_t)identity("SUDO_UID"); gid_t gid = (gid_t)identity("SUDO_GID");
-    alarm(25); /* Hard lifetime even when the invoking test dies. */
+    alarm(50); /* Hard fixture lifetime, including a 30-second consent expiry test. */
     char error[PCAP_ERRBUF_SIZE];
     pcap_t *pc = pcap_create("feth43", error);
     if (!pc || pcap_set_snaplen(pc, 128) || pcap_set_promisc(pc, 0) ||
