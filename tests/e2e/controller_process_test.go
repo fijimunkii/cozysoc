@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -95,7 +96,16 @@ func TestControllerProcessSmoke(t *testing.T) {
 		t.Fatal("controller session secret did not rotate after crash recovery")
 	}
 	assertRunningSurface(t, absoluteBinary, stateDir, third.cmd.Process.Pid)
-	stopWithInterrupt(t, third)
+	stopWithSignal(t, third, syscall.SIGTERM)
+	assertRemoved(t, filepath.Join(stateDir, "controller.sock"))
+	assertRemoved(t, filepath.Join(stateDir, "controller.auth"))
+	fourth := startController(t, absoluteBinary, stateDir)
+	waitForReady(t, absoluteBinary, stateDir, fourth)
+	if readSecret(t, stateDir) == secret3 {
+		t.Fatal("session secret did not rotate after SIGTERM")
+	}
+	assertRunningSurface(t, absoluteBinary, stateDir, fourth.cmd.Process.Pid)
+	stopWithInterrupt(t, fourth)
 
 	if info, err := os.Stat(filepath.Join(stateDir, "cozysoc.db")); err != nil || info.Size() == 0 {
 		t.Fatalf("controller database was not preserved across restarts: info=%v err=%v", info, err)
@@ -221,7 +231,12 @@ func assertSecondInstanceRejected(t *testing.T, binary, stateDir, activeSecret s
 
 func stopWithInterrupt(t *testing.T, controller *runningController) {
 	t.Helper()
-	if err := controller.cmd.Process.Signal(os.Interrupt); err != nil {
+	stopWithSignal(t, controller, os.Interrupt)
+}
+
+func stopWithSignal(t *testing.T, controller *runningController, signal os.Signal) {
+	t.Helper()
+	if err := controller.cmd.Process.Signal(signal); err != nil {
 		t.Fatalf("signal controller: %v\n%s", err, controller.logs())
 	}
 	select {
@@ -231,7 +246,7 @@ func stopWithInterrupt(t *testing.T, controller *runningController) {
 		}
 	case <-time.After(5 * time.Second):
 		_ = controller.cmd.Process.Kill()
-		t.Fatalf("controller did not stop after interrupt\n%s", controller.logs())
+		t.Fatalf("controller did not stop after shutdown signal\n%s", controller.logs())
 	}
 }
 

@@ -18,8 +18,9 @@ The sender independently validates the selected private IPv4 target/source,
 complete enrolled binding, evidence deadline, and exact fixed profile.
 
 The [gatewayrun adapter](gateway-run-measurements.md) now carries samples through
-one-shot admission, validation and a versioned terminal audit. It is not installed
-in production. Execution completion remains separate from the measured outcome.
+one-shot admission, validation and a versioned terminal audit. The
+[controller lifecycle](gateway-controller-lifecycle.md) owns it dormant, with no
+production run entrypoint. Execution completion remains separate from measurement.
 The controller-wide one-minute cooldown, one-shot consent and single coordinator
 ownership remain `gatewayrun` responsibilities. A sender instance rejects a
 concurrent sample but is not a cross-instance, process-wide or persistent limiter.
@@ -127,7 +128,7 @@ physical egress. The sender requires no test-only verification bypass.
 Before production wiring, validate the packaged execution context and remaining
 owned-lab scenarios: VPN/route changes, interface recycling, denied-permission
 recovery, receive overload, physical sleep/resume and observed hardware egress.
-Then install the single controller coordinator, authenticated one-shot consent,
+Then expose authenticated one-shot consent through the controller-owned coordinator,
 measurement projection and lifecycle/process tests. Do not promote a virtual
 fixture to hardware certification or silently start probing after enrollment.
 

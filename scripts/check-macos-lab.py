@@ -4,7 +4,7 @@ import sys
 
 EXPECTED = {"TestMACOSGatewayLab"} | {
     "TestMACOSGatewayLab/" + name
-    for name in ("route", "reply", "silent", "wrong-nonce", "cancel", "source-loss")
+    for name in ("route", "reply", "silent", "wrong-nonce", "cancel", "source-loss", "shutdown")
 }
 PACKAGE = "github.com/fijimunkii/cozysoc/tests/macoslab"
 

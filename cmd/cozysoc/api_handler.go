@@ -43,6 +43,7 @@ type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) 
 
 type controllerAPIHandler struct {
 	controller            *core.Controller
+	gatewayRuns           gatewayRunLifecycle
 	store                 controllerStore
 	deviceWatch           deviceWatchAPIControl
 	gatewayRouteInspector gatewayroute.Inspector

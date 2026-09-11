@@ -41,6 +41,7 @@ type Control struct {
 	lastWall     time.Time
 	notBefore    time.Time
 	activeCancel context.CancelFunc
+	drained      chan struct{} // Closed once shutdown has no remaining collaborators.
 }
 
 func New(deps Dependencies) (*Control, error) {
@@ -51,7 +52,7 @@ func New(deps Dependencies) (*Control, error) {
 	if !validTime(now) || !validTime(now.Add(RunInterval)) {
 		return nil, ErrClock
 	}
-	return &Control{deps: deps, random: rand.Reader, lastWall: now.Round(0).UTC(), notBefore: now.Add(RunInterval)}, nil
+	return &Control{deps: deps, random: rand.Reader, lastWall: now.Round(0).UTC(), notBefore: now.Add(RunInterval), drained: make(chan struct{})}, nil
 }
 
 // clockLocked preserves a wall-clock high-water mark as well as Go's in-process
@@ -83,7 +84,23 @@ func (c *Control) availableLocked() error {
 	}
 	return nil
 }
-func (c *Control) release() { c.mu.Lock(); defer c.mu.Unlock(); c.busy = false; c.activeCancel = nil }
+func (c *Control) release() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.busy = false
+	c.activeCancel = nil
+	c.signalDrainedLocked()
+}
+
+func (c *Control) signalDrainedLocked() {
+	if c.closed && !c.busy {
+		select {
+		case <-c.drained:
+		default:
+			close(c.drained)
+		}
+	}
+}
 func (c *Control) clock() (time.Time, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -334,8 +351,8 @@ func (c *Control) record(ctx context.Context, p pendingReview, state, outcome, r
 }
 
 // Close invalidates pending consent and requests active cancellation. It does not
-// release an active reservation early: a misbehaving collaborator cannot leave an
-// orphan worker and allow a second run. The owner must join the active Run caller.
+// release an active reservation early. Use Shutdown to join active preflight,
+// execution and terminal audit work before closing their storage dependencies.
 func (c *Control) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -343,6 +360,29 @@ func (c *Control) Close() {
 	c.pending = nil
 	if c.activeCancel != nil {
 		c.activeCancel()
+	}
+	c.signalDrainedLocked()
+}
+
+// Shutdown irreversibly closes admission, cancels active work, then joins it.
+// Success means no collaborator can still execute or write an audit. Context
+// expiry bounds only this wait: it NEVER releases the reservation, detaches a
+// worker, reopens admission, or licenses closing storage under an active run.
+// A later call can finish waiting. Concurrent callers share the same drain signal.
+// Do not invoke synchronously from a collaborator; it would wait on itself.
+func (c *Control) Shutdown(ctx context.Context) error {
+	c.Close()
+	// Prefer already-complete shutdown over an expired wait context.
+	select {
+	case <-c.drained:
+		return nil
+	default:
+	}
+	select {
+	case <-c.drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

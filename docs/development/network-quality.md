@@ -130,5 +130,6 @@ an isolated virtual Ethernet pair. Its evidence is scoped to the tested runner
 and Terminal launch context, not physical hardware or a packaged permission flow.
 A [disconnected coordinator adapter](gateway-run-measurements.md) now preserves
 validated complete/partial samples and commits their terminal measurement audit.
-It is exercised by the virtual lab but not installed in any production command/API;
-merging this work does not enable probes or grant consent.
+It is exercised by the virtual lab and now owned by the
+[controller lifecycle](gateway-controller-lifecycle.md), with safe collaborator drain.
+No production execution API is exposed; ownership does not enable probes or grant consent.

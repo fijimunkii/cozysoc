@@ -62,7 +62,11 @@ func prepareCoordinatedRun(t *testing.T, ctx context.Context, r gatewayicmp.Requ
 		t.Fatal(err)
 	}
 	constructed = true
-	t.Cleanup(c.Close)
+	t.Cleanup(func() {
+		if err := c.Shutdown(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
 	review, err := c.Prepare(ctx, r.Plan.Target)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +106,7 @@ func (r *coordinatedRun) sample(t *testing.T, result gatewayrun.Result, runErr e
 	if (runErr == nil) != (result.Outcome == "completed") || (runErr == nil && !sample.Complete) {
 		t.Fatal("conflated run and measurement outcomes")
 	}
-	if _, err := c.Run(context.Background(), review.Ticket, true); !errors.Is(err, gatewayrun.ErrReview) {
+	if _, err := c.Run(context.Background(), review.Ticket, true); !errors.Is(err, gatewayrun.ErrReview) && !errors.Is(err, gatewayrun.ErrUnavailable) {
 		t.Fatal("live review replayed")
 	}
 	if len(audit.events) != 3 {
