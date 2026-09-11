@@ -1,11 +1,13 @@
-# Bounded gateway ICMP candidate (not enabled)
+# Bounded gateway ICMP candidate (experimental opt-in only)
 
 Related to #14 and #29. This adds `internal/controller/gatewayicmp` after the
 [one-shot run coordinator](gateway-run-control.md). It supplies a small candidate
-macOS ICMPv4 transport and packet-free unit tests, **not a live product capability**.
+macOS ICMPv4 transport and packet-free unit tests. It remains off by default.
 A separate [native macOS lab](macos-network-lab.md) exercises real isolated packets.
-No production caller, run API, CLI command, browser control,
-scheduler, permission escalation, or new dependency is installed. Existing gateway
+The [native consent session](gateway-consent-session.md) can reach it only with
+explicit experimental macOS controller opt-in and connection-bound approval. No
+interactive command, browser control, scheduler, privilege escalation or new
+dependency is installed. Existing gateway
 previews still report execution unavailable and consent not granted.
 
 ## Authority and integration boundary
@@ -125,11 +127,11 @@ loss. Passing evidence is explicitly scoped to the runner version and normal-use
 Terminal launch context; it is not proof of a packaged app's permissions or of
 physical egress. The sender requires no test-only verification bypass.
 
-Before production wiring, validate the packaged execution context and remaining
+Before broad user-facing exposure, validate the packaged execution context and remaining
 owned-lab scenarios: VPN/route changes, interface recycling, denied-permission
 recovery, receive overload, physical sleep/resume and observed hardware egress.
-Then expose authenticated one-shot consent through the controller-owned coordinator,
-measurement projection and lifecycle/process tests. Do not promote a virtual
+The experimental native path now exercises authenticated consent and durable
+results through the real controller; deliberate client presentation is still pending. Do not promote a virtual
 fixture to hardware certification or silently start probing after enrollment.
 
 Primary references (protocol/API behavior, not copied implementations):

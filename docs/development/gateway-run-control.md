@@ -1,14 +1,15 @@
-# One-shot gateway run control (internal, not enabled)
+# One-shot gateway run control
 
 Related to #14 and #29. This follows the
 [route/source metadata preflight](gateway-route-preflight.md) with internal
-one-shot orchestration and a real SQLite audit adapter. It is not a live gateway
-check: **no production run/approval API is installed**. Existing
-`network-quality-plan` responses still report execution unavailable and consent
-not granted. No new CLI command, browser control, UDS method, migration, scheduler,
-automatic packet sending, or capability lifecycle mutation is introduced.
-The [measurement integration](gateway-run-measurements.md) adds a disconnected
-ICMP adapter and versioned measured terminal audits; no live product control.
+one-shot orchestration and a real SQLite audit adapter. The later
+[experimental native consent session](gateway-consent-session.md) exposes one
+connection-bound operation only after explicit macOS controller opt-in. Ordinary
+startup and the browser still cannot initiate checks. Existing
+`network-quality-plan` responses remain read-only previews and grant no consent.
+The [measurement integration](gateway-run-measurements.md) preserves measured
+terminal audits. There is no scheduler, automatic probing, generic execution API
+or capability lifecycle mutation.
 
 ## Authority lives in the controller, not the returned preview
 
@@ -102,8 +103,9 @@ sixty seconds between consumed run admissions across **all** targets, including
 blocked attempts. A new control begins with a full sixty-second quiet interval,
 so restarting cannot reset the limiter to immediate eligibility. Exactly one
 control instance must be owned per controller lifetime; this is not a cross-process
-or distributed rate limiter. The controller lifecycle now owns that dormant
-instance; no public execution endpoint is exposed.
+or distributed rate limiter. The controller lifecycle owns that single instance. The dedicated native
+consent session is available only with explicit experimental startup opt-in;
+there is no browser or general-purpose execution endpoint.
 
 Prepare and Run each receive a five-second operation context. Run is additionally
 capped by the original review's remaining wall/monotonic lifetime, including the
@@ -127,12 +129,12 @@ monitoring history. These are synthetic control-flow tests, not live consent or
 probe traffic, and not macOS runtime/hardware evidence.
 
 The [isolated macOS lab](macos-network-lab.md) now drives the real sender through
-this coordinator and its adapter, without installing production controls.
+this coordinator and its adapter; its native-session case also exercises the
+opted-in real controller process.
 The [controller lifecycle](gateway-controller-lifecycle.md) now owns one dormant
 control and joins active work before storage cleanup using `Shutdown`.
-Before exposing run controls: validate packaged permissions and remaining
-hardware gates; add the narrow authenticated one-shot review/consent
-flow and process tests; preserve unsupported-platform behavior; and project actual
+Before broad user-facing controls: validate packaged permissions and remaining
+hardware gates; add deliberate client presentation; preserve unsupported-platform behavior; and project actual
 measurements separately from audited execution state. Enrollment remains distinct
 from Device Watch enablement and from permission for an individual active check.
 

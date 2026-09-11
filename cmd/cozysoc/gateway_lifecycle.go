@@ -13,7 +13,7 @@ import (
 )
 
 // gatewayRunLifecycle is owned by one controller API handler, not by web, a
-// request, a destination, or Device Watch enablement. It has no wire interface.
+// request, a destination, or Device Watch enablement. Only the gated native consent adapter may expose it.
 // Once closed, even an unsuccessful shutdown wait cannot replace its coordinator.
 // All dependencies and method callers are compiled controller code.
 type gatewayRunLifecycle struct {
@@ -48,9 +48,8 @@ func (l *gatewayRunLifecycle) current() (*gatewayrun.Control, error) {
 	return l.control, nil
 }
 
-// These internal entrypoints are intentionally NOT localapi.Handler extensions.
-// Future authenticated consent wiring must call this owner, not construct a new
-// Control. Existing read-only previews do not call prepare or reserve a ticket.
+// Internal entrypoints and the gated native consent adapter share this owner.
+// Read-only previews never call prepare or reserve a ticket.
 func (l *gatewayRunLifecycle) prepare(ctx context.Context, target netip.Addr) (gatewayrun.Review, error) {
 	c, err := l.current()
 	if err != nil {
@@ -121,4 +120,13 @@ func (h *controllerAPIHandler) preflightGatewayRun(ctx context.Context, target n
 	}
 	return gatewayrun.Selection{Plan: plan, Source: e.SourceAddress,
 		RouteObservedAt: e.ObservedAt, RouteFreshUntil: e.FreshUntil}, nil
+}
+
+// GatewayCheckControl is the sole native protocol adapter to this owner's
+// coordinator. Ordinary serve/dev/web startup does not enable active checks.
+func (h *controllerAPIHandler) GatewayCheckControl() (*gatewayrun.Control, error) {
+	if h == nil || !h.gatewayChecksEnabled {
+		return nil, gatewayrun.ErrUnavailable
+	}
+	return h.gatewayRuns.current()
 }

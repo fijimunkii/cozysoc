@@ -115,12 +115,12 @@ active execution remain separately gated.
 ## One-shot run control
 
 The [internal gateway run control](gateway-run-control.md) now provides bounded,
-one-shot review consumption and durable execution-state audits. It is not wired
-to production commands or IPC; no active product probes or real consent flow
-are enabled. Packaged-context validation and authenticated run integration remain
-required before execution can be exposed.
+one-shot review consumption and durable execution-state audits. It is wired to the [experimental native consent protocol](gateway-consent-session.md)
+only after explicit macOS controller opt-in. Ordinary startup and the browser do
+not gain active checks. Packaged-context validation and deliberate client presentation still precede
+broad user-facing controls.
 
-## Disconnected ICMP candidate
+## Explicitly gated ICMP candidate
 
 The [bounded macOS ICMP sender candidate](gateway-icmp-sender.md) now implements
 a small internal sample with per-send route/socket checks and strict reply
@@ -128,8 +128,10 @@ matching. In addition to packet-free unit tests, the separate
 [native macOS lab](macos-network-lab.md) now exercises real kernel networking on
 an isolated virtual Ethernet pair. Its evidence is scoped to the tested runner
 and Terminal launch context, not physical hardware or a packaged permission flow.
-A [disconnected coordinator adapter](gateway-run-measurements.md) now preserves
+A [coordinator adapter](gateway-run-measurements.md) now preserves
 validated complete/partial samples and commits their terminal measurement audit.
 It is exercised by the virtual lab and now owned by the
 [controller lifecycle](gateway-controller-lifecycle.md), with safe collaborator drain.
-No production execution API is exposed; ownership does not enable probes or grant consent.
+The [connection-bound native consent API](gateway-consent-session.md) requires
+explicit experimental startup opt-in and one-shot approval. Ownership, enrollment
+and Device Watch enablement still do not grant probe consent.

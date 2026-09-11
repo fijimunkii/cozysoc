@@ -15,7 +15,8 @@ cleanup() {
   touch "$work/abort"
   rm -f "$work/run.command"
   if [[ -f "$work/started" && ! -f "$work/exit-code" ]]; then
-    for ((i=0; i<100; i++)); do
+    # Allow the owned lab child and controller supervisor to finish their joins.
+    for ((i=0; i<220; i++)); do
       [[ -f "$work/exit-code" ]] && break
       sleep 0.1
     done
@@ -42,6 +43,7 @@ if /sbin/ifconfig feth42 >/dev/null 2>&1 || /sbin/ifconfig feth43 >/dev/null 2>&
 fi
 # Complete compilation before changing the VM's isolated network.
 go test -c -o "$work/lab.test" ./tests/macoslab
+go build -o "$work/cozysoc" ./cmd/cozysoc
 cp scripts/macos-lab-runner.py "$work/run.py"
 printf '#!/bin/bash\nexec %q %q\n' "$(command -v python3)" "$work/run.py" > "$work/run.command"
 chmod 700 "$work/run.command"
@@ -55,7 +57,7 @@ sudo -n /sbin/ifconfig feth43 up
 # LaunchServices/Terminal provides the actual non-root CLI execution context.
 # This is not evidence for a packaged app's Local Network permission UX.
 /usr/bin/open -a Terminal "$work/run.command"
-for ((i=0; i<110; i++)); do
+for ((i=0; i<180; i++)); do
   [[ -f "$work/exit-code" ]] && break
   sleep 1
 done

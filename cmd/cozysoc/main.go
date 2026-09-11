@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -90,7 +91,7 @@ func usageText() string {
 	return `cozysoc is the local Cozy SOC command-line entrypoint.
 
 Usage:
-  cozysoc serve [--state-dir PATH]
+  cozysoc serve [--state-dir PATH] [--experimental-gateway-checks]
   cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc coverage [--state-dir PATH]
@@ -117,11 +118,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	stateDir := fs.String("state-dir", "", "controller state directory")
+	experimentalGateway := fs.Bool("experimental-gateway-checks", false, "enable the experimental connection-bound native gateway-check protocol (macOS only)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("serve takes flags only")
+	}
+
+	if *experimentalGateway && runtime.GOOS != "darwin" {
+		return fmt.Errorf("experimental gateway checks require the validated macOS native path")
 	}
 
 	dir, err := resolveStateDir(*stateDir)
@@ -209,6 +215,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	if err != nil {
 		return err
 	}
+	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	server, err := localapi.NewServer(dir, apiHandler, logger)
 	if err != nil {
 		return err

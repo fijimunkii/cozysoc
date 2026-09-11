@@ -313,4 +313,6 @@ func TestMACOSGatewayLab(t *testing.T) {
 			p.assertEchoes(t, 1)
 		})
 	}
+	t.Run("native-session", nativeConsentSession)
+
 }
