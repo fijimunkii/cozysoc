@@ -40,11 +40,14 @@ func DefaultLimits() Limits {
 }
 
 type Store struct {
-	db     *sql.DB
-	conn   *sql.Conn
-	path   string
-	limits Limits
-	now    func() time.Time
+	// A separate read-only pool prevents history transactions from absorbing
+	// concurrent autocommit writes on the pinned writer connection.
+	gatewayHistoryDB *sql.DB
+	db               *sql.DB
+	conn             *sql.Conn
+	path             string
+	limits           Limits
+	now              func() time.Time
 }
 
 func Open(stateDir string, limits Limits) (*Store, error) {
@@ -80,6 +83,9 @@ func Open(stateDir string, limits Limits) (*Store, error) {
 	}
 	store := &Store{db: db, conn: conn, path: path, limits: limits, now: time.Now}
 	cleanup := func(cause error) (*Store, error) {
+		if store.gatewayHistoryDB != nil {
+			_ = store.gatewayHistoryDB.Close()
+		}
 		_ = conn.Close()
 		_ = db.Close()
 		return nil, cause
@@ -97,6 +103,10 @@ func Open(stateDir string, limits Limits) (*Store, error) {
 	if err := store.applyQuota(ctx); err != nil {
 		return cleanup(err)
 	}
+	store.gatewayHistoryDB, err = openGatewayHistoryDB(path)
+	if err != nil {
+		return cleanup(fmt.Errorf("initialize read-only gateway history: %w", err))
+	}
 	return store, nil
 }
 
@@ -105,8 +115,11 @@ func (s *Store) Close() error {
 		return nil
 	}
 	var result error
+	if s.gatewayHistoryDB != nil {
+		result = s.gatewayHistoryDB.Close()
+	}
 	if s.conn != nil {
-		result = s.conn.Close()
+		result = errors.Join(result, s.conn.Close())
 	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil && result == nil {

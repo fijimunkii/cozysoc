@@ -384,6 +384,16 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodGatewayHistory:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		history, ok := s.readGatewayHistory(ctx, conn, request)
+		if !ok {
+			return
+		}
+		result = history
 	case api.MethodNetworkQualityGatewayPlan:
 		plan, ok := s.readGatewayPlan(conn, request)
 		if !ok {

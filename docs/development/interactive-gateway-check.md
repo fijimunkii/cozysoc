@@ -103,7 +103,8 @@ Terminal/PTY behavior, not packaged permission recovery, screen-reader usability
 physical Wi-Fi/NIC egress, actual sleep/resume or arbitrary VPN policy. Those gates
 remain open; the experimental switch stays off by default.
 
-Next: bounded retained-result reads and assessment, then appropriate browser/UI
+The [retained history read](gateway-history.md) now inspects earlier runs without
+repeating traffic. Next: appropriate browser/UI
 presentation after its separate consent and packaged-permission boundaries.
 
 Primary terminal references: [Apple terminal queue control](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/tcflush.3.html)
