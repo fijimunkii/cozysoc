@@ -4,9 +4,10 @@ Related issues: #14 and #29. The local API has a typed HTTPS session and client,
 exercised with synthetic executors over real protected Unix sockets. The product
 controller does not implement the session's execution-control interface, so
 `network-quality.https-check` returns unavailable before preparing a review.
-There is no CLI check command, browser execution route or experimental enable flag
-in this change. Terminal consent and integrated native HTTPS lab evidence remain
-required before product execution.
+The `https-check` command implements foreground macOS terminal consent. The
+product controller still returns unavailable; no execution opt-in flag or browser
+execution route is added. Integrated native HTTPS lab evidence remains required
+before product execution.
 
 ## Review, decision and result
 
@@ -57,5 +58,34 @@ cross-connection replay, immutable callback inputs, cooldown, disconnect/server
 cancellation and unconfirmed terminal audits. Pure contract tests cover changed
 policy/request/privacy, maximum escaped targets, HTTP status semantics and expiry.
 The real controller settings process test verifies the session remains unavailable
-and its callback is never invoked. These tests do not prove terminal foreground
-consent, physical networking or integrated native TCP/TLS execution.
+and its callback is never invoked. These tests do not prove physical networking or integrated native TCP/TLS
+execution. The terminal flow below has separate presentation tests.
+
+## Foreground terminal client
+
+`cozysoc https-check [--state-dir PATH] SELECTION_ID` requires one saved HTTPS
+selection reference and a normal-user foreground macOS terminal for both input
+and output. It reuses the existing checked `/dev/tty` adapter. Noninteractive,
+redirected or unsupported terminal use fails before loading credentials or opening
+the controller connection. There is no `--yes`, approval flag or unattended mode.
+Help states that execution remains unavailable in the current product build.
+
+The client prints the entire validated disclosure, quoting exact request bytes so
+CRLF is visible as data. It flushes type-ahead only after disclosure, then asks for
+exactly `check SELECTION_ID` followed by a newline. Empty, partial, altered or extra
+input declines. Expiration, cancellation and output/input/flush failures prevent
+approval. Writing the pre-approval acknowledgement must succeed before the client
+returns an approving decision. Failure after approval reports unknown outcome and
+consumed approval, never automatic retry.
+
+Result text distinguishes execution outcome from HTTP status expectation, retains
+measured zero timing and describes response timing as elapsed connect/TLS/header
+time rather than pure network RTT. Missing measurements remain unknown; results
+are historical evidence, not current internet availability or security findings.
+
+Synthetic terminal tests exercise exact approval, default decline, ordering of
+review/flush/prompt, failures before consent, interruption after approval, every
+disclosed budget/policy field, escaped request bytes, status mismatch and zero
+timing. CLI tests reject unattended flags/nonterminal use without touching state.
+The real HTTPS controller/TCP/TLS/PTY lab gate is still pending; these tests do not
+stand in for that end-to-end evidence.

@@ -65,6 +65,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodQualityDiagnosis, args[1:], stdout, stderr)
 	case "resolver-history":
 		return runResolverHistoryCommand(ctx, args[1:], stdout, stderr)
+	case "https-check":
+		return runHTTPSCheckCommand(ctx, args[1:], stdout, stderr)
 	case "resolver-check":
 		return runResolverCheckCommand(ctx, args[1:], stdout, stderr)
 	case "https-save", "https-list", "https-retire", "https-plan":
@@ -124,6 +126,7 @@ Usage:
   cozysoc resolver-save [--state-dir PATH] --endpoint IP:53 --name FQDN. --family ipv4|ipv6 --transport udp --query-type A|AAAA --expect answer|nxdomain|no-data --destination-scope enrolled-prefix|exact-endpoint
   cozysoc resolver-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)
+  cozysoc https-check [--state-dir PATH] SELECTION_ID (interactive macOS client; execution unavailable)
   cozysoc resolver-list [--state-dir PATH]
   cozysoc resolver-retire [--state-dir PATH] SELECTION_ID
   cozysoc resolver-plan [--state-dir PATH] SELECTION_ID
