@@ -151,4 +151,14 @@ The [resolver evidence contract](resolver-evidence.md) now preserves request and
 transport state separately from matched DNS response codes and query expectations.
 It distinguishes negative replies, refusal, server errors, truncation, referrals,
 incomplete work and timeouts without DNS traffic or automatic fallback. This is
-pure normalized-evidence assessment, not an implemented resolver collector.
+pure normalized-evidence assessment. The separately gated [native resolver path](resolver-consent.md) now collects one explicitly approved query, and [retained resolver history](resolver-history.md) makes its original evidence available through the native command and shared frontend.
+
+## Cross-layer comparison
+
+The [corroboration contract](quality-corroboration.md) now compares bounded,
+already-collected evidence from matching device/scope/interface/time contexts.
+It preserves DNS expectations and explicit collection discontinuities, keeps
+address families separate, and explains selected-check associations without an
+internet-wide or root-cause verdict. Controller/history adapters and frontend
+diagnosis still need to supply this contract with trustworthy co-located evidence;
+external collectors remain separately scoped and authorized work.
