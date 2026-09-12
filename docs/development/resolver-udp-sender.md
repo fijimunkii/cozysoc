@@ -48,7 +48,11 @@ rechecks. Route loss, cancellation, uncertainty and receive-budget exhaustion
 remain distinct incomplete outcomes.
 
 Matched timing includes the send call and is recorded at arrival, before final
-route verification. A later verification failure suppresses the reply. Socket
+route verification. Response duration uses the same wall-clock timestamp pair as
+the stored interval; the monotonic clock separately bounds the wait. This avoids
+mixing a finer monotonic counter with coarser wall timestamps (which can also
+produce a legitimate measured zero). A later verification failure suppresses the
+reply. Socket
 cleanup failure can retain already validated evidence while failing the run.
 The run controller preserves incomplete cleanup after review expiry without
 allowing a completed reply/timeout outside the original approval window. No DNS

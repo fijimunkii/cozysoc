@@ -247,3 +247,38 @@ func TestUnavailableEntropyAndMissingDeadline(t *testing.T) {
 		t.Fatal("concurrent run accepted")
 	}
 }
+
+func TestRealClockResponseEvidenceRemainsConsistent(t *testing.T) {
+	for n := 0; n < 1000; n++ {
+		s, f, r, _ := fixture(t)
+		s.now = time.Now
+		d := r.Selection.Plan.Disclosure()
+		now := time.Now()
+		p, e := resolverplan.New(d.Binding, d.Configuration, now)
+		if e != nil {
+			t.Fatal(e)
+		}
+		r.Selection = resolverrun.Selection{Plan: p, RouteObservedAt: now, RouteFreshUntil: now.Add(30 * time.Second)}
+		s.lookup = func(context.Context, resolverrun.Request) (resolverrun.Selection, error) {
+			at := time.Now()
+			p, e := resolverplan.New(d.Binding, d.Configuration, at)
+			return resolverrun.Selection{Plan: p, RouteObservedAt: at, RouteFreshUntil: at.Add(30 * time.Second)}, e
+		}
+		f.receiveFunc = func() (datagram, error) {
+			dg := reply(f, r)
+			binary.BigEndian.PutUint16(dg.data[2:], 0x8180)
+			binary.BigEndian.PutUint16(dg.data[6:], 1)
+			dg.data = append(dg.data, 0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 192, 0, 2, 1)
+			return dg, nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		m, e := s.ExecuteResolver(ctx, r)
+		cancel()
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e := nq.ValidateResolverSnapshot(nq.ResolverSnapshot{Observer: m.Observer, Selections: []nq.ResolverSelection{m.Selection}, AsOf: time.Now(), WindowStart: m.StartedAt, Freshness: time.Second, Measurements: []nq.ResolverMeasurement{m}}); e != nil {
+			t.Fatalf("response timing inconsistent: elapsed=%s response=%s: %v", m.CompletedAt.Sub(m.StartedAt), *m.ResponseTime, e)
+		}
+	}
+}

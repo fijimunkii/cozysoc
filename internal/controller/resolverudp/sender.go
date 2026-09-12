@@ -282,7 +282,13 @@ func (s *Sender) ExecuteResolver(ctx context.Context, r resolverrun.Request) (m 
 		if _, e := clock(); e != nil {
 			return m, e
 		}
-		duration := arrived.Sub(sentAt)
+		// Store timing in the same clock domain as the evidence timestamps. Darwin
+		// wall timestamps can be coarser than the monotonic counter; mixing them
+		// can put an RTT outside its own recorded interval by a fraction of a µs.
+		duration := arrived.Round(0).Sub(sentAt.Round(0))
+		if duration < 0 || duration >= d.Budget.ExchangeTimeout {
+			return m, ErrClock
+		}
 		m.Exchange = nq.DNSResponseReceived
 		m.Reply = &reply
 		m.ResponseTime = &duration
