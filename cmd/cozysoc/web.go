@@ -59,6 +59,7 @@ type webHandler struct {
 	loadCapabilities     capabilityLoader
 	loadLocalQuality     func(context.Context) (api.LocalNetworkQuality, error)
 	loadGatewayHistory   func(context.Context) (api.GatewayHistory, error)
+	loadHTTPSHistory     func(context.Context) (api.HTTPSHistory, error)
 	loadResolverHistory  func(context.Context) (api.ResolverHistory, error)
 	loadQualityDiagnosis func(context.Context) (api.QualityDiagnosis, error)
 	labelDevice          deviceLabelMutator
@@ -166,6 +167,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	configureWebLocalQuality(handler, dir)
 	configureWebGatewayHistory(handler, dir)
 	configureWebResolverHistory(handler, dir)
+	configureWebHTTPSHistory(handler, dir)
 	configureWebQualityDiagnosis(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
@@ -305,6 +307,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDeviceLabel(w, r)
 	case "/api/network-quality/diagnosis":
 		h.handleQualityDiagnosis(w, r)
+	case "/api/network-quality/https-history":
+		h.handleHTTPSHistory(w, r)
 	case "/api/network-quality/resolver-history":
 		h.handleResolverHistory(w, r)
 	case "/api/network-quality/history":

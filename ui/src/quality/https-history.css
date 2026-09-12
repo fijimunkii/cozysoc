@@ -1,0 +1,3 @@
+.https-history .primary-action { min-height: 44px; padding: .65rem 1rem; border: 1px solid #4e6651; border-radius: 10px; background: #4e6651; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.https-history .primary-action:disabled { opacity: .65; cursor: wait; }
+.https-history .primary-action:focus-visible { outline: 3px solid #262923; outline-offset: 3px; }
