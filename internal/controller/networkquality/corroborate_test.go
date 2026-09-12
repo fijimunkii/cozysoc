@@ -61,8 +61,7 @@ func TestCorroborationKeepsAssociationsLimitedToSelectedChecks(t *testing.T) {
 		{"link down and silence", "local-link-issue-with-other-failures", func(in *CorroborationInput) { addLink(in, false); failICMP(in); timeoutDNS(in) }},
 		{"link down and response", "mixed-link-evidence", func(in *CorroborationInput) { addLink(in, false) }},
 		{"external failure with other replies", "external-check-issue-with-responses", func(in *CorroborationInput) {
-			in.Network.Targets = append(in.Network.Targets, Target{ID: "target.external", Layer: LayerExternal, Method: MethodHTTPS, Family: FamilyIPv4})
-			in.Network.Measurements = append(in.Network.Measurements, Measurement{ID: "measurement.external", TargetID: "target.external", Observer: in.Network.Observer, StartedAt: in.Network.AsOf.Add(-3 * time.Second), CompletedAt: in.Network.AsOf.Add(-time.Second), Outcome: OutcomeFailed, Attempts: 1})
+			addHTTPS(in, 503)
 		}},
 		{"incomplete DNS never becomes timeout", "insufficient-evidence", func(in *CorroborationInput) {
 			m := &in.Resolvers.Measurements[0]

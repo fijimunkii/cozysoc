@@ -163,3 +163,8 @@ internet-wide or root-cause verdict. The [native retained diagnosis](retained-qu
 controller-owned gateway/resolver pair from one read-only snapshot. Overview exposes
 that historical comparison through a manual, typed read-only card. External
 collectors remain separately scoped work.
+
+The [selected HTTPS evidence contract](external-https-evidence.md) now preserves
+external connection/TLS/HTTP stages and expected-status semantics for pure
+assessment and comparison. External collection, disclosure and execution consent
+remain unimplemented; this contract sends no traffic.

@@ -85,3 +85,12 @@ silent and partial checks, explicit gaps/recovery, temporal boundaries, family a
 device separation, malformed input, ownership and order independence. These tests
 validate interpretation only; they do not certify a collector, physical network,
 packaged permissions, topology or whole-home coverage.
+
+## Specialized external HTTPS input
+
+The optional `HTTPS` snapshot and `HTTPSDeviceID` use the
+[selected HTTPS evidence contract](external-https-evidence.md). They share the
+same observing context and combined input limits. Generic HTTPS counts are
+rejected in a comparison; HTTP error/redirect responses retain their status and
+original expectation independently of whether the check matched. Explicit gaps
+in this input also constrain comparisons. No external collector is enabled.
