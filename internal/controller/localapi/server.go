@@ -391,6 +391,16 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodQualityDiagnosis:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		diagnosis, ok := s.readQualityDiagnosis(ctx, conn, request)
+		if !ok {
+			return
+		}
+		result = diagnosis
 	case api.MethodResolverHistory:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
