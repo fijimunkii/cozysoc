@@ -279,6 +279,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		logger.Info("resolver_runs_drained")
 	}()
 
+	if err := apiHandler.startHTTPSRuns(store); err != nil {
+		return err
+	}
+	defer func() {
+		if err := apiHandler.httpsRuns.shutdown(context.Background()); err != nil {
+			logger.Warn("https_runs_shutdown_failed")
+		}
+		logger.Info("https_runs_drained")
+	}()
+
 	logger.Info("controller_started",
 		"version", controller.Version(),
 		"api_version", api.Version,

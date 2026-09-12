@@ -24,7 +24,7 @@ Planned capability areas include device discovery and presence, DNS protection, 
 - Controller-owned SQLite stores bounded local evidence and settings behind an authenticated Unix-socket API. The browser has a separate session and narrowly typed endpoints.
 - Network enrollment, explicit Device Watch enablement, device/evidence views, and coverage reporting distinguish observed data from missing or stale coverage.
 - Experimental macOS gateway and selected-resolver checks require controller opt-in and interactive one-shot approval. Retained history and plain-language diagnosis preserve evidence age and uncertainty.
-- HTTPS settings and native review disclose the exact request, identity, route, data limits and privacy impact. Internal TLS/HTTP and native TCP candidates produce normalized measurements with response timing. Internal one-shot run control persists durable audits and enforces cooldown; HTTPS execution remains disabled pending controller integration, consent and integrated lab evidence.
+- HTTPS settings and native review disclose the exact request, identity, route, data limits and privacy impact. Internal TLS/HTTP and native TCP candidates produce normalized measurements with response timing. The controller owns one-shot run control with durable audits, cooldown and joined shutdown; HTTPS execution remains disabled pending consent and integrated lab evidence.
 
 See [frontend and local web](docs/development/frontend.md), [Device Watch](docs/development/device-watch.md), [gateway checks](docs/development/interactive-gateway-check.md), [resolver checks](docs/development/resolver-consent.md), [retained diagnosis](docs/development/retained-quality-diagnosis.md), and [HTTPS review](docs/development/https-controller.md).
 

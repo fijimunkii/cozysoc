@@ -3,8 +3,10 @@
 Related issues: #14 and #29. `internal/controller/httpsrun` coordinates trusted,
 compiled preflight, executor and auditor collaborators. The native TCP candidate
 implements its executor contract; SQLite implements its auditor using existing
-retention and quota controls. This change adds no schema migration, product
-controller instance, native consent endpoint, browser execution or scheduler.
+retention and quota controls. The product controller now owns one instance after
+acquiring its protected socket
+and drains it before closing storage. No schema migration, native consent endpoint,
+browser execution or scheduler is added.
 
 ## Admission and lifetime
 
@@ -72,5 +74,5 @@ route/review evidence, clock reversal, timeout stages, malformed measurements,
 panics and shutdown joining. Real SQLite tests verify commit-before-execution,
 reopen durability, phase uniqueness, retention and failures at every audit phase.
 These are synthetic executor tests, not integrated native HTTPS traffic evidence.
-Controller lifecycle integration, interactive consent and an integrated native lab
-remain required before product execution. #14 and #29 remain open.
+Interactive consent and an integrated native lab remain required before product
+execution. #14 and #29 remain open.

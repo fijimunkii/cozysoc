@@ -62,6 +62,9 @@ func TestHTTPSSettingsProcessPersistsWithoutExecution(t *testing.T) {
 		t.Fatal("settings enabled Device Watch")
 	}
 	stopWithInterrupt(t, controller)
+	if !strings.Contains(controller.logs(), "https_runs_drained") || strings.Contains(controller.logs(), "https_runs_shutdown_failed") {
+		t.Fatal("HTTPS owner did not drain during process shutdown")
+	}
 	if strings.Contains(controller.logs(), "private.example") || strings.Contains(controller.logs(), "198.51.100.20") || strings.Contains(controller.logs(), "/check?test=1") {
 		t.Fatal("controller logs leaked settings")
 	}
@@ -81,6 +84,9 @@ func TestHTTPSSettingsProcessPersistsWithoutExecution(t *testing.T) {
 	}
 	assertCLIErrorContains(t, binary, "unavailable", "https-retire", "--state-dir", dir, id)
 	stopWithInterrupt(t, controller)
+	if !strings.Contains(controller.logs(), "https_runs_drained") || strings.Contains(controller.logs(), "https_runs_shutdown_failed") {
+		t.Fatal("HTTPS owner did not drain during process shutdown")
+	}
 	s, err = storage.Open(dir, storage.DefaultLimits())
 	if err != nil {
 		t.Fatal(err)

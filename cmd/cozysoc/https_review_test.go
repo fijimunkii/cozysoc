@@ -28,6 +28,7 @@ func httpsReviewHandler(t *testing.T) (*controllerAPIHandler, *storage.Store, *i
 		p, err := httpsplan.New(httpsplan.Binding{Observer: e.Observer, Prefixes: e.Prefixes, Source: netip.MustParseAddr("192.0.2.10")}, c, h.now())
 		return httpsroute.Selection{Plan: p, RouteObservedAt: h.now(), RouteFreshUntil: h.now().Add(30 * time.Second)}, err
 	})
+	t.Cleanup(func() { _ = h.httpsRuns.shutdown(context.Background()) })
 	return h, s, calls
 }
 func saveHTTPS(t *testing.T, h *controllerAPIHandler) string {
