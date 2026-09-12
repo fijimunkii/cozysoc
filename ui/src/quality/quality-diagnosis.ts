@@ -103,6 +103,8 @@ export function parseQualityDiagnosis(raw: unknown): QualityDiagnosis {
     if (out.conclusion !== expected || out.confidence !== "unknown" || v.compared.length !== 0 || out.evidence_start !== undefined || out.evidence_end !== undefined) return invalid();
   } else {
     if ((out.conclusion === "external-check-issue-with-responses" && !selected.has("https")) || (out.conclusion === "dns-query-issue-with-responses" && !selected.has("resolver")) || (out.conclusion === "icmp-misses-with-responses" && !selected.has("gateway"))) return invalid();
+    const https = selected.get("https")?.https;
+    if (https !== undefined && ((out.conclusion === "selected-checks-matched" && https.expectation_matched !== true) || (out.conclusion === "external-check-issue-with-responses" && https.expectation_matched === true))) return invalid();
     if (!["dns-query-issue-with-responses", "icmp-misses-with-responses", "problems-across-selected-layers", "selected-checks-matched", "mixed-or-limited-evidence", "external-check-issue-with-responses"].includes(out.conclusion) || out.confidence !== "limited" || v.compared.length !== out.selected.length || out.evidence_start === undefined || out.evidence_end === undefined || nanos(out.evidence_start) !== nanos(start!) || nanos(out.evidence_end) !== nanos(end!)) return invalid();
     const seen = new Set<string>();
     for (const ref of v.compared.map(runReference)) {

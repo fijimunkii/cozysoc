@@ -193,6 +193,12 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 		if (v.Conclusion == "external-check-issue-with-responses" && selected["https"].Kind == "") || (v.Conclusion == "dns-query-issue-with-responses" && selected["resolver"].Kind == "") || (v.Conclusion == "icmp-misses-with-responses" && selected["gateway"].Kind == "") {
 			return invalid()
 		}
+		if h := selected["https"].HTTPS; h != nil {
+			matched := h.Assessment.ExpectationMatched != nil && *h.Assessment.ExpectationMatched
+			if (v.Conclusion == "selected-checks-matched" && !matched) || (v.Conclusion == "external-check-issue-with-responses" && matched) {
+				return invalid()
+			}
+		}
 		switch v.Conclusion {
 		case "dns-query-issue-with-responses", "icmp-misses-with-responses", "problems-across-selected-layers", "selected-checks-matched", "mixed-or-limited-evidence", "external-check-issue-with-responses":
 		default:

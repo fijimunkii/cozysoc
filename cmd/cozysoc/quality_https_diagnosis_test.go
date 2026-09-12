@@ -164,7 +164,7 @@ func TestHTTPSDiagnosisDoesNotCherryPickAroundLatestEvidence(t *testing.T) {
 }
 
 func TestWebHTTPSDiagnosisRejectsTamperingAndOwnsEvidence(t *testing.T) {
-	for _, mode := range []string{"status", "time", "interface", "run", "expectation", "missing-https", "extra-https", "subset", "schema"} {
+	for _, mode := range []string{"status", "time", "interface", "run", "expectation", "missing-https", "extra-https", "subset", "schema", "matched-contradiction", "external-contradiction"} {
 		t.Run(mode, func(t *testing.T) {
 			h, _ := httpsDiagnosisFixture(t)
 			v, err := h.QualityDiagnosis(context.Background())
@@ -189,6 +189,12 @@ func TestWebHTTPSDiagnosisRejectsTamperingAndOwnsEvidence(t *testing.T) {
 				v.Selected[0].HTTPS = r.HTTPS
 			case "subset":
 				v.Compared = v.Compared[:2]
+			case "matched-contradiction":
+				r.HTTPS.Selection.ExpectedStatus = 204
+				matched := false
+				r.HTTPS.Assessment.ExpectationMatched = &matched
+			case "external-contradiction":
+				v.Conclusion = "external-check-issue-with-responses"
 			case "schema":
 				v.SchemaVersion = 1
 			}

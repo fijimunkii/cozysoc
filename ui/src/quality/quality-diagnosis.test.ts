@@ -72,6 +72,8 @@ it("rejects missing, inconsistent or cherry-picked HTTPS evidence", () => {
  v => { v.selected[2]!.https!.selection.expected_status = 204; },
  v => { v.selected[0]!.https = v.selected[2]!.https!; },
  v => { v.compared.pop(); },
+ v => { v.selected[2]!.https!.selection.expected_status = 204; v.selected[2]!.https!.expectation_matched = false; },
+ v => { v.conclusion = "external-check-issue-with-responses"; },
  ];
  for (const change of changes) { const v = httpsDiagnosisFixture(); change(v); expect(() => parseQualityDiagnosis(v)).toThrow(); }
 });
