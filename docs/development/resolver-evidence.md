@@ -97,3 +97,6 @@ not establish resolver selection, DNS wire correctness, DNSSEC, split-DNS/VPN
 behavior, permissions, physical networking or production support. #14 and #29
 remain open; future UI must preserve these distinctions rather than reducing
 responses to a generic DNS success counter.
+
+The [bounded resolver wire boundary](resolver-wire.md) now supplies synthetic,
+classic-UDP question/reply validation. It is not yet a sender or execution path.
