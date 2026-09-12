@@ -84,7 +84,13 @@ static void guest_error(const char *message,void *opaque) {
 static ssize_t send_packet(const void *data,size_t len,void *opaque) {
     (void)opaque;
     if (++sent>1024 || len>1600 || len<14) die("output frame bound exceeded");
-    if (capture && pcap_inject(capture,data,len)!=(int)len) die("frame injection failed");
+    if (capture) {
+        // Keep the fixture's link identity stable across TCP, DNS and ICMP peers.
+        // libslirp's virtual MAC must never replace feth43 in the host ARP cache.
+        uint8_t frame[1600]; memcpy(frame,data,len); memcpy(frame+6,peer_mac,6);
+        if(word(frame+12)==0x0806 && len>=42) memcpy(frame+22,peer_mac,6);
+        if(pcap_inject(capture,frame,len)!=(int)len) die("frame injection failed");
+    }
     return (ssize_t)len;
 }
 static void notify(void *opaque) { (void)opaque; }
@@ -108,7 +114,7 @@ static int get_events(int i,void *opaque) {
     return out;
 }
 static Slirp *stack(void) {
-    SlirpConfig cfg={0}; cfg.version=5; cfg.restricted=1; cfg.in_enabled=true;
+    SlirpConfig cfg={0}; cfg.version=6; cfg.restricted=1; cfg.in_enabled=true;
     cfg.disable_dns=true; cfg.disable_dhcp=true; cfg.disable_host_loopback=true;
     cfg.if_mtu=1500; cfg.if_mru=1500;
     inet_pton(AF_INET,"192.168.250.0",&cfg.vnetwork);
