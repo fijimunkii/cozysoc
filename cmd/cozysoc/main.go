@@ -67,6 +67,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runResolverHistoryCommand(ctx, args[1:], stdout, stderr)
 	case "resolver-check":
 		return runResolverCheckCommand(ctx, args[1:], stdout, stderr)
+	case "https-save", "https-list", "https-retire":
+		return runHTTPSCommand(ctx, args[0], args[1:], stdout, stderr)
 	case "resolver-save", "resolver-list", "resolver-retire", "resolver-plan":
 		return runResolverCommand(ctx, args[0], args[1:], stdout, stderr)
 	case "network-quality-check":
@@ -115,6 +117,9 @@ Usage:
   cozysoc network-quality [--state-dir PATH]
   cozysoc network-quality-history [--state-dir PATH] [RUN_ID]
   cozysoc network-quality-diagnosis [--state-dir PATH]
+  cozysoc https-save [--state-dir PATH] --endpoint IP:443 --server-name DNS_NAME --request-target PATH_QUERY --family ipv4|ipv6 --method GET|HEAD --expected-status STATUS --destination-policy exact-endpoint
+  cozysoc https-list [--state-dir PATH]
+  cozysoc https-retire [--state-dir PATH] SELECTION_ID
   cozysoc resolver-save [--state-dir PATH] --endpoint IP:53 --name FQDN. --family ipv4|ipv6 --transport udp --query-type A|AAAA --expect answer|nxdomain|no-data --destination-scope enrolled-prefix|exact-endpoint
   cozysoc resolver-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)

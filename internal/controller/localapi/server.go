@@ -421,6 +421,16 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = history
+	case api.MethodHTTPSSave, api.MethodHTTPSList, api.MethodHTTPSRetire:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		value, ok := s.httpsSettings(ctx, conn, request)
+		if !ok {
+			return
+		}
+		result = value
 	case api.MethodResolverSave, api.MethodResolverList, api.MethodResolverRetire, api.MethodResolverPlan:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
