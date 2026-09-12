@@ -254,6 +254,13 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 
 	var result any
 	switch request.Method {
+	case api.MethodResolverCheck:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		s.resolverCheck(ctx, conn, reader, payload, request)
+		return
 	case api.MethodGatewayCheck:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")

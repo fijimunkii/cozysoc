@@ -1,7 +1,7 @@
 // Package resolverrun admits one explicitly reviewed DNS exchange. Its compiled
 // collaborators are trusted controller code, never client-supplied transports.
-// The controller owns one inert coordinator; no product execution endpoint
-// exposes it yet. The isolated lab supplies a native sender for actual runs.
+// The controller owns one coordinator. The experimental native consent adapter
+// exposes it only under explicit opt-in and connection-bound one-shot approval.
 package resolverrun
 
 import (

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import signal
 import subprocess
@@ -24,9 +25,11 @@ TARGET = "192.168.250.1"
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in MODES or os.geteuid() == 0:
+    dns = len(sys.argv) == 3 and sys.argv[1].startswith("dns-")
+    mode = sys.argv[1][4:] if dns else (sys.argv[1] if len(sys.argv) == 2 else "")
+    target = sys.argv[2] if dns else TARGET
+    if mode not in MODES or os.geteuid() == 0 or (dns and re.fullmatch(r"selection\.[0-9a-f]{32}", target) is None):
         return 1
-    mode = sys.argv[1]
     work = Path(__file__).resolve().parent
     (work / "cli-done").unlink(missing_ok=True)
     (work / "cli-started").write_text("1\n", encoding="utf-8")
@@ -51,10 +54,10 @@ def main():
         signal.signal(signal.SIGHUP, lambda *_: None)
         before = termios.tcgetattr(slave)
         if mode == "preloaded":
-            os.write(master, ("check " + TARGET + "\n").encode("ascii"))
+            os.write(master, ("check " + target + "\n").encode("ascii"))
         child = subprocess.Popen(
-            [str(work / "cozysoc"), "network-quality-check", "--state-dir",
-             str(work / "controller-state"), TARGET],
+            [str(work / "cozysoc"), "resolver-check" if dns else "network-quality-check", "--state-dir",
+             str(work / "controller-state"), target],
             stdin=subprocess.DEVNULL if mode == "redirected-input" else slave,
             stdout=subprocess.DEVNULL if mode == "redirected-output" else slave,
             stderr=slave, close_fds=True)
@@ -83,7 +86,7 @@ def main():
                 if mode in ("decline", "preloaded"):
                     os.write(master, b"\n")
                 elif mode == "approve":
-                    os.write(master, ("check " + TARGET + "\n").encode("ascii"))
+                    os.write(master, ("check " + target + "\n").encode("ascii"))
                 elif mode == "overlong":
                     os.write(master, b"x" * 200 + b"\n")
                 elif mode == "interrupt":
@@ -110,18 +113,26 @@ def main():
                         "Interface: feth42", "Enrolled prefixes:", "Review expires:",
                         "at most 3 requests", "1000 ms apart", "120 bytes", "60000 ms",
                         "Privacy:", "not raw packets", "default: decline"]
+            if dns:
+                required = ["EXPERIMENTAL", "192.168.250.1:53", "test.example. IN A", "Source: 192.168.250.2",
+                            "Interface: feth42", "Review expires:", "1 send call", "30 DNS request bytes", "512 reply bytes",
+                            "60000 ms", "MAY FORWARD IT UPSTREAM", "not raw query names", "default: decline"]
             if not answered or any(part not in text for part in required):
                 raise RuntimeError("interactive disclosure missing")
+            run_marker = "Run:" if dns else "Run reference:"
             if mode == "approve":
-                if exit_code != 0 or "Run state: completed" not in text or "Sample: complete\n" not in text or "Matched replies: 3; completed timeouts: 0" not in text:
+                measured = (["Execution outcome: completed", "DNS exchange: response-received", "RCODE 0", "answer classification: answer"] if dns else
+                            ["Run state: completed", "Sample: complete\n", "Matched replies: 3; completed timeouts: 0"])
+                if exit_code != 0 or any(part not in text for part in measured):
                     raise RuntimeError("CLI did not publish completed measured result")
             elif mode in ("decline", "preloaded"):
-                if exit_code != 0 or "Declined. This command did not authorize a check." not in text or "Run reference:" in text:
+                declined = "Declined. No DNS request was authorized." if dns else "Declined. This command did not authorize a check."
+                if exit_code != 0 or declined not in text or run_marker in text:
                     raise RuntimeError("default/type-ahead consent did not decline")
-            elif exit_code == 0 or "no approval was submitted" not in text or "Run reference:" in text:
+            elif exit_code == 0 or "no approval was submitted" not in text or run_marker in text:
                 raise RuntimeError("interrupted/invalid/expired prompt did not fail closed")
         status = 0
-        print(json.dumps({"mode": mode, "exit_code": exit_code, "output": text}))
+        print(json.dumps({"mode": sys.argv[1], "exit_code": exit_code, "output": text}))
         return 0
     except Exception:
         print("Bounded CLI fixture transcript:\n" + output[-6000:].decode("utf-8", errors="replace"), file=sys.stderr)

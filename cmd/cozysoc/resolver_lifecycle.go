@@ -16,7 +16,7 @@ import (
 )
 
 // resolverRunLifecycle is owned by one controller API handler, not by web, a
-// request, a destination, or Device Watch enablement. A future gated native consent adapter may expose it.
+// request, a destination, or Device Watch enablement. Only the gated native consent adapter may expose it.
 // Once closed, even an unsuccessful shutdown wait cannot replace its coordinator.
 // All dependencies and method callers are compiled controller code.
 type resolverRunLifecycle struct {
@@ -51,7 +51,7 @@ func (l *resolverRunLifecycle) current() (*resolverrun.Control, error) {
 	return l.control, nil
 }
 
-// Internal entrypoints and a future native consent adapter share this owner.
+// Internal entrypoints and the native consent adapter share this owner.
 // Read-only previews never call prepare or reserve a ticket.
 func (l *resolverRunLifecycle) prepare(ctx context.Context, id string) (resolverrun.Review, error) {
 	c, err := l.current()
@@ -83,7 +83,7 @@ func (l *resolverRunLifecycle) shutdown(ctx context.Context) error {
 	return c.Shutdown(ctx)
 }
 
-// The controller owns this singleton even while execution endpoints are absent.
+// The controller owns this singleton even while native execution is disabled.
 // Installation is inert, follows socket ownership, and never resolves settings.
 func (h *controllerAPIHandler) startResolverRuns(auditor resolverrun.Auditor) error {
 	if h == nil || h.store == nil || h.resolverRouteInspector == nil || h.now == nil || auditor == nil {
@@ -178,4 +178,12 @@ func (h *controllerAPIHandler) collectResolverPlan(ctx context.Context, id strin
 		return fail()
 	}
 	return selection, current, nil
+}
+
+// ResolverCheckControl exposes the installed owner only for the native opt-in.
+func (h *controllerAPIHandler) ResolverCheckControl() (*resolverrun.Control, error) {
+	if h == nil || !h.resolverChecksEnabled {
+		return nil, resolverrun.ErrUnavailable
+	}
+	return h.resolverRuns.current()
 }

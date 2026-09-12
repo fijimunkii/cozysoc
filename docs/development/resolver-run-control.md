@@ -96,13 +96,14 @@ selection, stale route evidence, original deadlines, clock rollback, malformed
 measurements, uncertain sends, panics, cancellation, shutdown joining and storage
 failure. They prove no physical DNS traffic, native routing/socket behavior,
 production consent UI or resolver reachability. Separate native route and UDP
-lab tests provide their own bounded evidence. Immutable persisted configuration
-and product lifecycle/consent integration remain required. #14 and #29 stay open.
+lab tests provide their own bounded evidence. Immutable persisted configuration and controller lifecycle now accompany this
+contract; the native consent integration has its own lab gate. #14 and #29 stay open.
 
 The [native route inspector](resolver-route-inspection.md) now produces fresh
 source-bound plan selections on macOS. The [bounded UDP candidate](resolver-udp-sender.md)
-now executes through this controller in the isolated lab; product integration
-remains pending.
+now executes through this controller in the isolated lab. The
+[native consent adapter](resolver-consent.md) also drives the actual controller
+and interactive CLI under separate experimental opt-in.
 
 The [controller owner](resolver-controller.md) now installs this coordinator once
 following socket acquisition and drains it before storage shutdown. Internal

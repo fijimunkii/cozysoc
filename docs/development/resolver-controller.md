@@ -1,8 +1,9 @@
 # Native resolver settings, preview and controller ownership
 
 Related work: #14 and #29. The controller now owns one resolver run coordinator
-and exposes four narrow authenticated native methods. There is no resolver
-execution/approval method or browser route yet. Neither controller startup nor a
+and exposes narrow authenticated native settings and preview methods.
+[Experimental native execution](resolver-consent.md) requires a separate
+controller opt-in and an interactive one-shot approval. There is no browser route. Neither controller startup nor a
 settings operation creates consent or sends traffic. Device Watch enablement is
 independent; only its explicitly enrolled network binding is used.
 
@@ -78,6 +79,6 @@ stale evidence, startup quiet interval, singleton ownership, shutdown joining an
 absent browser/execution routes. The native route/sender lab remains a separate
 macOS gate; these tests do not certify physical networking or packaged permissions.
 
-The next step is a connection-bound native consent protocol and interactive check
-command, with server-held tickets, complete disclosure and explicit one-shot
-approval. Existing settings and previews cannot be submitted as that authority.
+The [connection-bound native consent protocol](resolver-consent.md) and interactive
+check command now retain tickets server-side and require explicit approval after
+complete disclosure. Settings and previews cannot be submitted as that authority.

@@ -61,6 +61,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "resolver-check":
+		return runResolverCheckCommand(ctx, args[1:], stdout, stderr)
 	case "resolver-save", "resolver-list", "resolver-retire", "resolver-plan":
 		return runResolverCommand(ctx, args[0], args[1:], stdout, stderr)
 	case "network-quality-check":
@@ -97,7 +99,7 @@ func usageText() string {
 	return `cozysoc is the local Cozy SOC command-line entrypoint.
 
 Usage:
-  cozysoc serve [--state-dir PATH] [--experimental-gateway-checks]
+  cozysoc serve [--state-dir PATH] [--experimental-gateway-checks] [--experimental-resolver-checks]
   cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc coverage [--state-dir PATH]
@@ -109,6 +111,7 @@ Usage:
   cozysoc network-quality [--state-dir PATH]
   cozysoc network-quality-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-save [--state-dir PATH] --endpoint IP:53 --name FQDN. --family ipv4|ipv6 --transport udp --query-type A|AAAA --expect answer|nxdomain|no-data --destination-scope enrolled-prefix|exact-endpoint
+  cozysoc resolver-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)
   cozysoc resolver-list [--state-dir PATH]
   cozysoc resolver-retire [--state-dir PATH] SELECTION_ID
   cozysoc resolver-plan [--state-dir PATH] SELECTION_ID
@@ -130,6 +133,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	stateDir := fs.String("state-dir", "", "controller state directory")
+	experimentalResolver := fs.Bool("experimental-resolver-checks", false, "enable the experimental connection-bound native resolver-check protocol (macOS only)")
 	experimentalGateway := fs.Bool("experimental-gateway-checks", false, "enable the experimental connection-bound native gateway-check protocol (macOS only)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -138,6 +142,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("serve takes flags only")
 	}
 
+	if *experimentalResolver && runtime.GOOS != "darwin" {
+		return fmt.Errorf("experimental resolver checks require the validated macOS native path")
+	}
 	if *experimentalGateway && runtime.GOOS != "darwin" {
 		return fmt.Errorf("experimental gateway checks require the validated macOS native path")
 	}
@@ -228,6 +235,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return err
 	}
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
+	apiHandler.resolverChecksEnabled = *experimentalResolver
 	server, err := localapi.NewServer(dir, apiHandler, logger)
 	if err != nil {
 		return err
