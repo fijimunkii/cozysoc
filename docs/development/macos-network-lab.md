@@ -205,8 +205,11 @@ those checks. Existing native code remains unprivileged; only narrow certificate
 installation/removal and isolated-interface setup use sudo.
 
 Before adding trust, the test records the public certificate and its SHA-256 hash
-in mode-0600 files. Cleanup removes its administrative trust and deletes exactly
-that certificate by hash, then verifies that the identity is no longer trusted.
+in mode-0600 files. Cleanup exports current administrative trust, removes only the entry matching
+that certificate, imports it, and verifies every other entry is unchanged. It
+then deletes exactly that certificate by hash and verifies the identity is no
+longer trusted. Each security-tool child has a ten-second bound and is joined
+by its privileged supervisor.
 Only confirmed cleanup writes the completion marker. If the test is interrupted,
 the outer harness attempts the same removal from the journal and fails on an
 unconfirmed operation. No existing certificates or trust settings are replaced.

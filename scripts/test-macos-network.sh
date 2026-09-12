@@ -28,13 +28,7 @@ cleanup() {
     fi
   fi
   if [[ -f "$work/https-trust.pem" && ! -f "$work/https-trust-removed" ]]; then
-    sudo -n /usr/bin/security remove-trusted-cert -d "$work/https-trust.pem" || status=1
-    fingerprint=$(cat "$work/https-trust.sha256")
-    if [[ $fingerprint =~ ^[0-9a-f]{64}$ ]]; then
-      sudo -n /usr/bin/security delete-certificate -Z "$fingerprint" /Library/Keychains/System.keychain || status=1
-    else
-      status=1
-    fi
+    sudo -n /usr/bin/python3 "$work/trust-cleanup.py" || status=1
   fi
   if (( right )); then sudo -n /sbin/ifconfig feth43 destroy || status=1; fi
   if (( left )); then sudo -n /sbin/ifconfig feth42 destroy || status=1; fi
@@ -60,6 +54,7 @@ fi
 go test -c -o "$work/lab.test" ./tests/macoslab
 go build -o "$work/cozysoc" ./cmd/cozysoc
 cp scripts/macos-lab-runner.py "$work/run.py"
+cp scripts/macos-lab-trust.py "$work/trust-cleanup.py"
 cp tests/macoslab/testdata/cli_driver.py "$work/cli-driver.py"
 printf '#!/bin/bash\nexec %q %q\n' "$(command -v python3)" "$work/run.py" > "$work/run.command"
 chmod 700 "$work/run.command"

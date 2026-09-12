@@ -32,17 +32,15 @@ func trustHTTPSFixture(t *testing.T, work string, der []byte, name string) {
 	}
 	// Journal precedes mutation. The outer shell repeats cleanup after a killed test.
 	security := func(args ...string) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		return exec.CommandContext(ctx, "/usr/bin/sudo", append([]string{"-n", "/usr/bin/security"}, args...)...).Run()
+		return exec.CommandContext(ctx, "/usr/bin/sudo", append([]string{"-n", "/usr/bin/python3", "-c", "import subprocess,sys; sys.exit(subprocess.run(['/usr/bin/security',*sys.argv[1:]],timeout=10).returncode)"}, args...)...).Run()
 	}
 	t.Cleanup(func() {
-		if err := security("remove-trusted-cert", "-d", certPath); err != nil {
-			t.Error("remove fixture trust failed")
-			return
-		}
-		if err := security("delete-certificate", "-Z", fingerprint, "/Library/Keychains/System.keychain"); err != nil {
-			t.Error("remove fixture certificate failed")
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "/usr/bin/sudo", "-n", "/usr/bin/python3", filepath.Join(work, "trust-cleanup.py")).Run(); err != nil {
+			t.Error("remove fixture trust/certificate failed")
 			return
 		}
 		cert, err := x509.ParseCertificate(der)
