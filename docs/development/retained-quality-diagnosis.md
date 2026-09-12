@@ -25,6 +25,17 @@ phase lookups per candidate. The combined worst-case bounds are twice these
 individual limits, not an unbounded audit search. Both reads see the same active
 scope and retention cutoff. Enrollment is rechecked before publication.
 
+Storage also provides `ReadQualityHistoryWithHTTPS` as the input boundary for
+the next adapter slice. It reads gateway, resolver and HTTPS histories in one
+read-only transaction with one shared retention cutoff and one-second deadline.
+The worst-case scan and run bounds are three times the individual limits, with
+separate completeness flags for each layer. Any corrupt included history rejects
+the whole result. Empty or incomplete HTTPS history remains explicit, and HTTP
+status, expectation and original timestamps retain their existing meaning.
+This method is not yet connected to native or browser diagnosis: those still
+use the two-layer read, independently of HTTPS audit validity. A shared snapshot
+does not itself establish comparable observation times, routes or interfaces.
+
 The newest retained run in each layer is selected by its last audit timestamp.
 Tied latest runs are rejected as ambiguous. The adapter does not search for a
 convenient older success or aggregate every saved target into a network verdict.
