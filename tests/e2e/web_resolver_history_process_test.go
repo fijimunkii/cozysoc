@@ -23,8 +23,8 @@ import (
 )
 
 func TestWebProcessResolverHistoryReadsRetainedAuditsWithoutExecution(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux process boundary evidence; synthetic retained audits, no active checks")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("Unix process boundary evidence; synthetic retained audits, no active checks")
 	}
 	binary, uiDir := os.Getenv(e2eBinaryEnv), os.Getenv(e2eUIDirEnv)
 	if binary == "" || uiDir == "" {
@@ -176,7 +176,7 @@ func assertResolverExecutionDisabled(t *testing.T, stateDir string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	result, err := localapi.NewClient(stateDir).CheckResolver(ctx, "selection.test", func(context.Context, api.ResolverCheckReview) (bool, error) {
+	result, err := localapi.NewClient(stateDir).CheckResolver(ctx, "selection."+strings.Repeat("a", 32), func(context.Context, api.ResolverCheckReview) (bool, error) {
 		t.Error("default controller offered a DNS review")
 		return false, nil
 	})

@@ -102,6 +102,6 @@ a sample's age or granting approval. Both list/scan truncation and missing phase
 are explicit. Unenrolled/empty states do not invent evidence; bounded read failures
 stay in the card. Demo mode sends no live request, and leaving the live card aborts
 its request and discards late results. Go boundary, TypeScript/parser, component,
-and Linux process tests cover this path with synthetic evidence and active checks
+and Unix process tests cover this path with synthetic evidence and active checks
 disabled. Browser history shares the existing read-only SQLite pool and does not
 change storage or the native send/consent path.
