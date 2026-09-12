@@ -144,3 +144,11 @@ recent runs and exact run-reference lookup under the current stored enrollment.
 Historical sample summaries preserve missing/legacy/incomplete evidence and
 original timestamps. No OS collection, active-check opt-in, renewed consent,
 monitoring mutation or browser execution endpoint is involved.
+
+## Selected-resolver evidence
+
+The [resolver evidence contract](resolver-evidence.md) now preserves request and
+transport state separately from matched DNS response codes and query expectations.
+It distinguishes negative replies, refusal, server errors, truncation, referrals,
+incomplete work and timeouts without DNS traffic or automatic fallback. This is
+pure normalized-evidence assessment, not an implemented resolver collector.
