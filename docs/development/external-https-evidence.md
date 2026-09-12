@@ -71,6 +71,10 @@ The earlier standalone generic `Assess` fixture contract remains available.
 
 ## Remaining collection work
 
+The [explicit HTTPS review plan](https-review-plan.md) now specifies pinned
+configuration, exact request encoding, disclosure and required executor ceilings.
+It remains pure and does not store settings or enable a collector.
+
 Before external traffic is exposed, a collector must implement explicit immutable
 destination configuration and local disclosure of the exact endpoint, TLS identity,
 request, data use and privacy impact. It must enforce eligible pinned addressing,
