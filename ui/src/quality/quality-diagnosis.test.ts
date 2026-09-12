@@ -1,3 +1,4 @@
+import { httpsDiagnosisFixture } from "./diagnosis-fixtures.test-helper";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadQualityDiagnosisFromWeb, parseQualityDiagnosis, type DiagnosisConclusion, type QualityDiagnosis } from "./quality-diagnosis";
 import { diagnosisFixture } from "./diagnosis-fixtures.test-helper";
@@ -43,4 +44,44 @@ describe("historical diagnosis boundary", () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(response); await expect(loadQualityDiagnosisFromWeb(new AbortController().signal)).rejects.toThrow();
     }
   });
+});
+
+it("compares three retained layers and DNS/HTTPS over IPv6", () => {
+ const v = httpsDiagnosisFixture();
+ expect(parseQualityDiagnosis(v)).toEqual(v);
+ v.selected = v.selected.filter(r => r.kind !== "gateway"); v.compared = v.compared.filter(r => r.kind !== "gateway");
+ v.selected[0]!.selection!.family = "ipv6"; v.selected[1]!.https!.selection.family = "ipv6";
+ v.evidence_start = v.selected[1]!.started_at!;
+ expect(parseQualityDiagnosis(v)).toEqual(v);
+});
+it("retains an unexpected HTTP response independently of execution", () => {
+ const v = httpsDiagnosisFixture(), h = v.selected[2]!.https!;
+ h.selection.expected_status = 204; h.expectation_matched = false;
+ h.outcome = "failed"; v.selected[2]!.execution_outcome = "failed";
+ v.conclusion = "external-check-issue-with-responses";
+ expect(parseQualityDiagnosis(v)).toEqual(v);
+});
+it("rejects missing, inconsistent or cherry-picked HTTPS evidence", () => {
+ const changes: ((v: ReturnType<typeof httpsDiagnosisFixture>) => void)[] = [
+ v => { delete v.selected[2]!.https; },
+ v => { v.selected[2]!.https!.measurement!.status_code = 600; },
+ v => { v.selected[2]!.https!.selection.family = "ipv6"; },
+ v => { v.selected[2]!.https!.interface_index++; },
+ v => { v.selected[2]!.https!.run_id = "d".repeat(32); },
+ v => { v.selected[2]!.https!.measurement!.completed_at = "2026-09-12T11:59:58Z"; },
+ v => { v.selected[2]!.https!.selection.expected_status = 204; },
+ v => { v.selected[0]!.https = v.selected[2]!.https!; },
+ v => { v.compared.pop(); },
+ v => { v.selected[2]!.https!.selection.expected_status = 204; v.selected[2]!.https!.expectation_matched = false; },
+ v => { v.conclusion = "external-check-issue-with-responses"; },
+ ];
+ for (const change of changes) { const v = httpsDiagnosisFixture(); change(v); expect(() => parseQualityDiagnosis(v)).toThrow(); }
+});
+it("preserves newest missing HTTPS evidence as an unknown comparison", () => {
+ const v = httpsDiagnosisFixture(), r = v.selected[2]!, h = r.https!;
+ h.terminal_retained = false; h.outcome = "unknown"; h.evidence = "unknown"; h.confidence = "unknown";
+ delete h.measurement; delete h.expectation_matched;
+ r.execution_outcome = "unknown"; r.sample_status = "missing-terminal"; delete r.started_at; delete r.completed_at;
+ v.conclusion = "latest-run-unmeasured"; v.confidence = "unknown"; v.compared = []; delete v.evidence_start; delete v.evidence_end;
+ expect(parseQualityDiagnosis(v)).toEqual(v);
 });

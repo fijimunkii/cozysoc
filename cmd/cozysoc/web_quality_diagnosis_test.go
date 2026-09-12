@@ -126,7 +126,7 @@ func TestWebDiagnosisProjectionMinimizesAndOwnsInterpretation(t *testing.T) {
 }
 func TestWebDiagnosisRejectsContradictoryContext(t *testing.T) {
 	for name, edit := range map[string]func(*api.QualityDiagnosis){
-		"schema": func(v *api.QualityDiagnosis) { v.SchemaVersion = 2 }, "mode": func(v *api.QualityDiagnosis) { v.Mode = "current" },
+		"schema": func(v *api.QualityDiagnosis) { v.SchemaVersion = 3 }, "mode": func(v *api.QualityDiagnosis) { v.Mode = "current" },
 		"window": func(v *api.QualityDiagnosis) { v.Since = v.ReadAt }, "limits": func(v *api.QualityDiagnosis) { v.RunLimitPerLayer = 21 }, "skew": func(v *api.QualityDiagnosis) { v.MaxCompletionSkewMS = 31000 },
 		"arrays": func(v *api.QualityDiagnosis) { v.Compared = nil }, "enrollment": func(v *api.QualityDiagnosis) { v.Enrolled = false },
 		"anchor": func(v *api.QualityDiagnosis) { v.AssessmentAt = &v.ReadAt }, "missing anchor": func(v *api.QualityDiagnosis) { v.AssessmentAt = nil },

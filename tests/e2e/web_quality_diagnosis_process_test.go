@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -60,9 +61,38 @@ func assertWebQualityDiagnosis(t *testing.T, binary, dir, uiDir string, native a
 			}
 		}
 		var out api.QualityDiagnosis
-		if json.Unmarshal(raw, &out) != nil || out.Conclusion != native.Conclusion || out.Confidence != native.Confidence || !reflect.DeepEqual(out.Selected, native.Selected) || !reflect.DeepEqual(out.Compared, native.Compared) || out.AssessmentAt == nil || !out.AssessmentAt.Equal(*native.AssessmentAt) || out.EvidenceStart == nil || !out.EvidenceStart.Equal(*native.EvidenceStart) {
+		if json.Unmarshal(raw, &out) != nil || out.Conclusion != native.Conclusion || out.Confidence != native.Confidence || !reflect.DeepEqual(out.Compared, native.Compared) || out.AssessmentAt == nil || !out.AssessmentAt.Equal(*native.AssessmentAt) || out.EvidenceStart == nil || !out.EvidenceStart.Equal(*native.EvidenceStart) {
 			t.Fatalf("changed historical comparison: %s", raw)
 		}
+		if len(out.Selected) != len(native.Selected) {
+			t.Fatal("changed selected layers")
+		}
+		expected := slices.Clone(native.Selected)
+		var detail struct {
+			Selected []struct {
+				HTTPS *struct {
+					Evidence           string `json:"evidence"`
+					ExpectationMatched *bool  `json:"expectation_matched"`
+				} `json:"https"`
+			} `json:"selected"`
+		}
+		if json.Unmarshal(raw, &detail) != nil {
+			t.Fatal("invalid HTTPS detail")
+		}
+		for j := range expected {
+			if expected[j].Kind == "https" {
+				got, want := out.Selected[j].HTTPS, expected[j].HTTPS
+				if got == nil || !reflect.DeepEqual(got.Measurement, want.Measurement) || got.Selection != want.Selection || got.Outcome != want.Outcome || detail.Selected[j].HTTPS == nil || detail.Selected[j].HTTPS.Evidence != want.Assessment.State || !reflect.DeepEqual(detail.Selected[j].HTTPS.ExpectationMatched, want.Assessment.ExpectationMatched) {
+					t.Fatal("changed HTTPS evidence")
+				}
+			}
+			expected[j].HTTPS = nil
+			out.Selected[j].HTTPS = nil
+		}
+		if !reflect.DeepEqual(out.Selected, expected) {
+			t.Fatal("changed selected observation context")
+		}
+
 	}
 	for _, suffix := range []string{"?", "?approve=true", "?scope_id=scope.other", "?as_of=2026-09-12T12:00:00Z"} {
 		response, err = client.Get(root + "api/network-quality/diagnosis" + suffix)

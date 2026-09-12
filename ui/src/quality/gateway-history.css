@@ -5,3 +5,7 @@
 .gateway-history-list summary span { display: block; margin: .5rem 0 0 1rem; }
 .gateway-history-list details > p, .gateway-history-limits { line-height: 1.6; }
 .gateway-history-warning { border-left: 3px solid currentColor; padding-left: 1rem; }
+
+.quality-diagnosis .primary-action { min-height: 44px; padding: .65rem 1rem; border: 1px solid #4e6651; border-radius: 10px; background: #4e6651; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.quality-diagnosis .primary-action:disabled { opacity: .65; cursor: wait; }
+.quality-diagnosis .primary-action:focus-visible { outline: 3px solid #262923; outline-offset: 3px; }

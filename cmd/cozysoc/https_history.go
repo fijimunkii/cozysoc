@@ -7,12 +7,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
@@ -87,26 +89,31 @@ func (h *controllerAPIHandler) HTTPSHistory(ctx context.Context, params api.HTTP
 		if r.Observer.ScopeID != binding.ScopeID || (params.RunID != "" && r.RunID != params.RunID) {
 			return api.HTTPSHistory{}, httpsrun.ErrHistory
 		}
-		item := api.HTTPSHistoryRun{RunID: r.RunID, AuditSchemaVersion: r.SchemaVersion, Profile: r.Profile,
-			Selection:   api.HTTPSHistorySelection{ID: r.Selection.ID, EndpointID: r.Selection.EndpointID, RequestID: r.Selection.RequestID, Family: string(r.Selection.Family), Method: r.Selection.Method, ExpectedStatus: r.Selection.ExpectedStatus},
-			Observer:    api.HTTPSHistoryObserver{ScopeID: r.Observer.ScopeID, SensorID: r.Observer.SensorID, InterfaceName: r.Observer.InterfaceName, InterfaceIndex: r.Observer.InterfaceIndex},
-			LastAuditAt: r.LastAuditAt, AuthorizationRetained: r.AuthorizationRetained, AdmissionRetained: r.AdmissionRetained, TerminalRetained: r.TerminalRetained, Outcome: r.Outcome, Reason: r.Reason,
-			Assessment: api.HTTPSHistoricalAssessment{State: r.Assessment.State, Confidence: r.Assessment.Confidence, Summary: r.Assessment.Summary, NextStep: r.Assessment.NextStep}}
-		if r.Measurement != nil {
-			m := api.HTTPSRunMeasurement(*r.Measurement)
-			if m.ResponseTimeNanoseconds != nil {
-				ns := *m.ResponseTimeNanoseconds
-				m.ResponseTimeNanoseconds = &ns
-			}
-			item.Measurement = &m
-		}
-		if r.Assessment.ExpectationMatched != nil {
-			matched := *r.Assessment.ExpectationMatched
-			item.Assessment.ExpectationMatched = &matched
-		}
+		item := httpsHistoryRun(r)
 		out.Runs = append(out.Runs, item)
 	}
 	return out, nil
+}
+
+func httpsHistoryRun(r httpsrun.RetainedRun) api.HTTPSHistoryRun {
+	item := api.HTTPSHistoryRun{RunID: r.RunID, AuditSchemaVersion: r.SchemaVersion, Profile: r.Profile,
+		Selection:   api.HTTPSHistorySelection{ID: r.Selection.ID, EndpointID: r.Selection.EndpointID, RequestID: r.Selection.RequestID, Family: string(r.Selection.Family), Method: r.Selection.Method, ExpectedStatus: r.Selection.ExpectedStatus},
+		Observer:    api.HTTPSHistoryObserver{ScopeID: r.Observer.ScopeID, SensorID: r.Observer.SensorID, InterfaceName: r.Observer.InterfaceName, InterfaceIndex: r.Observer.InterfaceIndex},
+		LastAuditAt: r.LastAuditAt, AuthorizationRetained: r.AuthorizationRetained, AdmissionRetained: r.AdmissionRetained, TerminalRetained: r.TerminalRetained, Outcome: r.Outcome, Reason: r.Reason,
+		Assessment: api.HTTPSHistoricalAssessment{State: r.Assessment.State, Confidence: r.Assessment.Confidence, Summary: r.Assessment.Summary, NextStep: r.Assessment.NextStep}}
+	if r.Measurement != nil {
+		m := api.HTTPSRunMeasurement(*r.Measurement)
+		if m.ResponseTimeNanoseconds != nil {
+			ns := *m.ResponseTimeNanoseconds
+			m.ResponseTimeNanoseconds = &ns
+		}
+		item.Measurement = &m
+	}
+	if r.Assessment.ExpectationMatched != nil {
+		matched := *r.Assessment.ExpectationMatched
+		item.Assessment.ExpectationMatched = &matched
+	}
+	return item
 }
 
 func runHTTPSHistoryCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
@@ -140,4 +147,36 @@ func runHTTPSHistoryCommand(ctx context.Context, args []string, stdout, stderr *
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(history)
+}
+
+func validatedHTTPSHistoryRun(r api.HTTPSHistoryRun, asOf time.Time) (httpsrun.RetainedRun, error) {
+	if !r.AuthorizationRetained && !r.AdmissionRetained && !r.TerminalRetained {
+		return httpsrun.RetainedRun{}, httpsrun.ErrHistory
+	}
+	// Revalidate only the latest retained phase. Earlier phase times are not in
+	// this DTO and must never be reconstructed from the read time.
+	e := httpsrun.Event{SchemaVersion: r.AuditSchemaVersion, RunID: r.RunID, Profile: r.Profile, At: r.LastAuditAt,
+		Selection: nq.HTTPSSelection{ID: r.Selection.ID, EndpointID: r.Selection.EndpointID, RequestID: r.Selection.RequestID, Family: nq.AddressFamily(r.Selection.Family), Method: r.Selection.Method, ExpectedStatus: r.Selection.ExpectedStatus},
+		Observer:  nq.Observer{ScopeID: r.Observer.ScopeID, SensorID: r.Observer.SensorID, InterfaceName: r.Observer.InterfaceName, InterfaceIndex: r.Observer.InterfaceIndex}}
+	if r.TerminalRetained {
+		e.State, e.Outcome, e.Reason = "finished", r.Outcome, r.Reason
+		if r.Measurement != nil {
+			m := httpsrun.Measurement(*r.Measurement)
+			e.Measurement = &m
+		}
+	} else {
+		if r.Outcome != "unknown" || r.Reason != "" || r.Measurement != nil {
+			return httpsrun.RetainedRun{}, httpsrun.ErrHistory
+		}
+		e.State = "authorized"
+		if r.AdmissionRetained {
+			e.State = "admitted"
+		}
+	}
+	derived, err := httpsrun.DescribeRetainedRun([]httpsrun.Event{e}, asOf)
+	if err != nil || r.Assessment.State != derived.Assessment.State || r.Assessment.Confidence != derived.Assessment.Confidence ||
+		!reflect.DeepEqual(r.Assessment.ExpectationMatched, derived.Assessment.ExpectationMatched) {
+		return httpsrun.RetainedRun{}, httpsrun.ErrHistory
+	}
+	return derived, nil
 }

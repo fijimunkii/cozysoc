@@ -4,8 +4,9 @@ Related issues: #14 and #29. `networkquality.Corroborate` is the shared, pure
 assessment boundary for comparing already-collected local-link, selected ICMP,
 normalized DNS and selected external-target evidence. It performs no I/O, creates
 no checks, and grants no consent. The [retained-history adapter](retained-quality-diagnosis.md) now supplies a
-controller-owned gateway/resolver pair through native and read-only browser views.
-External measurement collection remains separate work.
+controller-owned gateway, resolver and HTTPS evidence through native and read-only
+browser views. It selects the latest run in each available layer and requires all
+selected samples to be usable and comparable, with at least two layers present.
 
 ## Observation context
 
@@ -93,4 +94,5 @@ The optional `HTTPS` snapshot and `HTTPSDeviceID` use the
 same observing context and combined input limits. Generic HTTPS counts are
 rejected in a comparison; HTTP error/redirect responses retain their status and
 original expectation independently of whether the check matched. Explicit gaps
-in this input also constrain comparisons. No external collector is enabled.
+in this input also constrain comparisons. The retained adapter now supplies normalized HTTPS audits. Reading them does not
+enable an external collector or grant new execution authority.

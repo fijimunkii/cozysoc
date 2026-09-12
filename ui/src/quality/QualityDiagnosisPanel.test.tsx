@@ -1,3 +1,4 @@
+import { httpsDiagnosisFixture } from "./diagnosis-fixtures.test-helper";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QualityDiagnosisPanel } from "./QualityDiagnosisPanel";
@@ -17,7 +18,7 @@ it("reads manually and preserves historical times without probes or focus pollin
   expect(screen.queryByRole("button", { name: /approve|run|enable/i })).toBeNull();
 });
 it("shows unknowns, context mismatches and cross-layer problems distinctly", async () => {
-  for (const [conclusion, title] of [["not-enrolled", "No network selected"], ["history-incomplete", "History is incomplete"], ["latest-run-unmeasured", "Latest result cannot be compared"], ["observation-context-mismatch", "Checks came from different contexts"], ["icmp-misses-with-responses", "ICMP misses alongside DNS replies"], ["problems-across-selected-layers", "Both selected checks recorded problems"]] satisfies [DiagnosisConclusion, string][]) {
+  for (const [conclusion, title] of [["not-enrolled", "No network selected"], ["history-incomplete", "History is incomplete"], ["latest-run-unmeasured", "Latest result cannot be compared"], ["observation-context-mismatch", "Checks came from different contexts"], ["icmp-misses-with-responses", "ICMP misses alongside other replies"], ["problems-across-selected-layers", "Several selected checks recorded problems"]] satisfies [DiagnosisConclusion, string][]) {
     render(<QualityDiagnosisPanel mode="live" load={async () => diagnosisFixture(conclusion)} />); await read(); expect(screen.getByText(title)).toBeTruthy();
     if (conclusion === "history-incomplete") expect(screen.getByRole("note").textContent).toContain("audit read limit");
     if (conclusion === "latest-run-unmeasured") expect(screen.getByText(/An older success has not been substituted/)).toBeTruthy(); cleanup();
@@ -41,4 +42,17 @@ it("aborts on demo transition and never loads live data in demo", async () => {
   rerender(<QualityDiagnosisPanel mode="demo" load={load} />); expect(signal.aborted).toBe(true); await act(async () => resolve(diagnosisFixture()));
   expect(screen.queryByRole("button")).toBeNull(); expect(screen.getByText(/Synthetic demo: historical diagnosis is not loaded/)).toBeTruthy();
   rerender(<QualityDiagnosisPanel mode="live" load={load} />); expect(screen.getByText(/No comparison has been read yet/)).toBeTruthy(); expect(load).toHaveBeenCalledTimes(1);
+});
+
+it("shows original HTTP status and expectation with separate execution and phase provenance", async () => {
+ const v = httpsDiagnosisFixture(); const r = v.selected[2]!;
+ r.execution_outcome = "failed"; r.https!.outcome = "failed";
+ render(<QualityDiagnosisPanel mode="live" load={async () => v} />); await read();
+ expect(screen.getByText("HTTP 503 response · matched expectation")).toBeTruthy();
+ expect(screen.getByText(/Selected HTTPS check/)).toBeTruthy();
+ expect(screen.getByText("Retained HTTPS records")).toBeTruthy();
+ expect(screen.getByText("0 ms")).toBeTruthy();
+ expect(screen.getByText(/failed · separate from the measured result/)).toBeTruthy();
+ expect(screen.getByText(/not-sent does not rule out connection or TLS traffic/)).toBeTruthy();
+ expect(screen.queryByRole("button", { name: /approve|run|enable/i })).toBeNull();
 });

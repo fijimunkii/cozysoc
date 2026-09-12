@@ -74,4 +74,7 @@ empty/unenrolled states and truncation warnings. Not-sent refers to the HTTP
 request, not absence of connection/TLS traffic. Desktop and narrow mobile layouts
 are checked with synthetic fixtures. Real-process tests verify authentication,
 privacy filtering, inert repeat reads and execution remaining disabled.
-Cross-signal corroboration remains separate work.
+The [retained diagnosis](retained-quality-diagnosis.md) also compares the latest
+HTTPS run with available gateway and resolver evidence from one shared snapshot.
+It requires at least two layers and matching historical times and observation
+context. Missing, incomplete or stale selected evidence cannot be bypassed.

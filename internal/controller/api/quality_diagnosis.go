@@ -35,6 +35,9 @@ type QualityDiagnosisReference struct {
 	RunID string `json:"run_id"`
 }
 type QualityDiagnosisRun struct {
+	// HTTPS retains phase and response provenance. Its shared identity, times
+	// and outcome must agree with the enclosing selected-run fields.
+	HTTPS *HTTPSHistoryRun `json:"https,omitempty"`
 	QualityDiagnosisReference
 	InterfaceName    string                    `json:"interface_name"`
 	InterfaceIndex   int                       `json:"interface_index"`
