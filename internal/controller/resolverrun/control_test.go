@@ -518,3 +518,20 @@ func TestValidateEventRejectsContradictions(t *testing.T) {
 		}
 	}
 }
+
+func TestIncompleteCleanupMayFinishAfterOriginalReview(t *testing.T) {
+	h := setup(t)
+	r := h.prepare(t)
+	h.clock.add(29 * time.Second)
+	h.execute = func(ctx context.Context, req Request) (nq.ResolverMeasurement, error) {
+		d := req.Selection.Plan.Disclosure()
+		start := h.clock.now()
+		h.clock.add(1100 * time.Millisecond)
+		return nq.ResolverMeasurement{ID: req.MeasurementID, Selection: d.Configuration.Selection, Observer: d.Binding.Observer, StartedAt: start, CompletedAt: h.clock.now(), Request: nq.DNSRequestAccepted, Exchange: nq.DNSIncomplete}, context.DeadlineExceeded
+	}
+	result, e := h.control.Run(context.Background(), r.Ticket, true)
+	expectError(t, e, context.DeadlineExceeded)
+	if result.Outcome != "canceled" || result.Sample == nil || result.Sample.Exchange != nq.DNSIncomplete {
+		t.Fatal("lost incomplete cleanup evidence")
+	}
+}

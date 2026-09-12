@@ -52,8 +52,10 @@ window. Classic-UDP response codes are limited to 0–15; matched response timin
 required, including measured zero, and remains below the exchange timeout.
 
 Executor evidence must match the admitted observer, selection and generated
-measurement ID, lie inside the execution/original-review window and satisfy the
-normalized contract. Invalid evidence is omitted from the result and audit.
+measurement ID, start inside the execution/original-review window and satisfy the
+normalized contract. Completed replies/timeouts must finish before original review
+expiry. Incomplete cleanup may finish afterward, without extending send authority.
+Invalid evidence is omitted from the result and audit.
 Valid partial evidence can accompany execution failure or cancellation. A cleanup
 failure can retain a valid response without claiming clean run completion.
 Returned samples, terminal audit attachments and sender-owned samples are copied

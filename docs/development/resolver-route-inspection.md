@@ -79,3 +79,7 @@ revalidate the route before sending, and honor the original consumed approval an
 all traffic/deadline bounds. Immutable persisted configuration, product lifecycle
 and consent integration, real DNS lab evidence and history UI remain required.
 #14 and #29 stay open.
+
+The [bounded UDP candidate](resolver-udp-sender.md) now revalidates these selections
+and independently verifies the actual socket. It remains disconnected from
+product execution endpoints.
