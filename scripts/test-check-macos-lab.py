@@ -18,6 +18,16 @@ class EvidenceGateTests(unittest.TestCase):
     def test_pass(self):
         self.check(self.evidence())
 
+    def test_resolver_route_is_required(self):
+        name = "TestMACOSGatewayLab/resolver-route"
+        self.assertIn(name, checker.EXPECTED)
+        without_resolver = [e for e in self.evidence() if e.get("Test") != name]
+        with self.assertRaises(ValueError):
+            self.check(without_resolver)
+        for action in ("skip", "fail"):
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                self.check(without_resolver + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
+
     def test_missing_skipped_failed_or_foreign(self):
         for events in ([], self.evidence()[1:], self.evidence()[:-1],
                        self.evidence() + [dict(Package=checker.PACKAGE, Action="skip")],
