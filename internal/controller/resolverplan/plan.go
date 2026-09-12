@@ -97,18 +97,15 @@ func New(binding Binding, config Configuration, now time.Time) (Plan, error) {
 	if !validTime(now) || !validTime(now.Add(ReviewLifetime)) {
 		return Plan{}, ErrClock
 	}
-	snapshot := nq.ResolverSnapshot{Observer: binding.Observer, AsOf: now, WindowStart: now, Freshness: time.Second, Selections: []nq.ResolverSelection{config.Selection}}
-	if nq.ValidateResolverSnapshot(snapshot) != nil || config.Selection.Transport != nq.DNSUDP || (config.DestinationScope != EnrolledPrefix && config.DestinationScope != ExactEndpoint) {
-		return Plan{}, ErrConfiguration
+	if err := ValidateConfiguration(config); err != nil {
+		return Plan{}, err
 	}
-	query, err := resolverwire.NewQuery(config.Endpoint, config.Name, config.Selection.QueryType, 0)
-	if err != nil {
-		return Plan{}, ErrConfiguration
+	snapshot := nq.ResolverSnapshot{Observer: binding.Observer, AsOf: now, WindowStart: now, Freshness: time.Second}
+	if nq.ValidateResolverSnapshot(snapshot) != nil {
+		return Plan{}, ErrBinding
 	}
+	query, _ := resolverwire.NewQuery(config.Endpoint, config.Name, config.Selection.QueryType, 0)
 	target := config.Endpoint.Addr()
-	if !eligibleHost(target) || (target.Is4() && config.Selection.Family != nq.FamilyIPv4) || (target.Is6() && config.Selection.Family != nq.FamilyIPv6) {
-		return Plan{}, ErrConfiguration
-	}
 	source := binding.Source
 	if !eligibleHost(source) || source.Is4() != target.Is4() || source == target || len(binding.Prefixes) == 0 || len(binding.Prefixes) > 32 {
 		return Plan{}, ErrBinding
@@ -158,6 +155,23 @@ func New(binding Binding, config Configuration, now time.Time) (Plan, error) {
 			MaxReceivedDatagrams: 16, MaxReceiveCalls: 512, ExchangeTimeout: 2 * time.Second, TotalTimeout: 5 * time.Second,
 			MaxConcurrentRuns: 1, MinRunInterval: time.Minute},
 		CreatedAt: now, ExpiresAt: now.Add(ReviewLifetime)}}, nil
+}
+
+// ValidateConfiguration checks the supported profile without inventing a source,
+// route, enrollment or consent. New additionally validates the current binding.
+func ValidateConfiguration(config Configuration) error {
+	if nq.ValidateResolverSelection(config.Selection) != nil || config.Selection.Transport != nq.DNSUDP ||
+		(config.DestinationScope != EnrolledPrefix && config.DestinationScope != ExactEndpoint) {
+		return ErrConfiguration
+	}
+	if _, err := resolverwire.NewQuery(config.Endpoint, config.Name, config.Selection.QueryType, 0); err != nil {
+		return ErrConfiguration
+	}
+	target := config.Endpoint.Addr()
+	if !eligibleHost(target) || (target.Is4() && config.Selection.Family != nq.FamilyIPv4) || (target.Is6() && config.Selection.Family != nq.FamilyIPv6) {
+		return ErrConfiguration
+	}
+	return nil
 }
 
 func eligibleHost(a netip.Addr) bool {

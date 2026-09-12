@@ -153,3 +153,9 @@ The normalized-storage milestone is complete. Follow-on issues still own product
 - named-workload calibration and overload recovery for the measured latency/resource thresholds;
 - real low-disk/full-volume recovery evidence on named filesystems/hardware; and
 - broader controller/API projections for future sensors and capabilities.
+
+Schema 2 adds [immutable selected-resolver settings](resolver-configuration.md).
+Upgrades from schema 1 preserve existing rows. Settings and their redacted audits
+commit atomically through single-statement triggers on the pinned writer; reads
+use the separate read-only pool. Configuration is bounded, private local state,
+not a measurement or persistent probe consent.
