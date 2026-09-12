@@ -80,8 +80,8 @@ configuration ownership is still required before production integration.
 SQLite tests verify commit-before-execution, durable reopen, duplicate rejection,
 retention assignment and failure at each phase. The adapter uses the existing
 audit retention/quota transaction and adds no observations or coverage samples.
-The separate read-only history connection is unchanged. A resolver history reader
-and UI are not yet implemented.
+The separate read-only history connection is unchanged. The [resolver history reader](resolver-history.md) now uses it for bounded
+native reads; frontend history remains pending.
 
 Close invalidates pending reviews and cancels active work without releasing its
 reservation early. Shutdown joins active preflight, execution and terminal audit

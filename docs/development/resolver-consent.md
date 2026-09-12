@@ -82,5 +82,9 @@ missing, skipped or failed native cases.
 
 This remains experimental native Terminal support. Virtual feth networking is not
 physical Wi-Fi/NIC, VPN, packaged Local Network permission, sleep/resume or whole-home
-coverage certification. Resolver retained-history UI, external corroboration and
+coverage certification. Resolver frontend history, external corroboration and
 conservative combined diagnosis remain outstanding; #14 and #29 stay open.
+
+[Retained resolver history](resolver-history.md) is now available through the
+native read API and `resolver-history [RUN_ID]`, including after configuration
+retirement. Inspecting retained results sends no new query and restores no consent.

@@ -274,6 +274,7 @@ func nativeResolverCLI(t *testing.T, ctx context.Context, client *localapi.Clien
 	if len(match) != 2 {
 		t.Fatal("resolver CLI lost run reference")
 	}
+	assertNativeResolverHistory(t, ctx, client, work, id, match[1])
 	peer.stop(t)
 	queries, summaries := 0, 0
 	for _, e := range peer.events {
@@ -303,4 +304,41 @@ func nativeResolverCLI(t *testing.T, ctx context.Context, client *localapi.Clien
 		t.Fatal("resolver cooldown disappeared")
 	}
 	return match[1]
+}
+
+// Read list/exact/CLI history after configuration retirement while the peer
+// still counts packets. History cannot require active settings or revive consent.
+func assertNativeResolverHistory(t *testing.T, ctx context.Context, client *localapi.Client, work, selectionID, runID string) {
+	t.Helper()
+	if _, err := client.CallWithParams(ctx, api.MethodResolverRetire, api.ResolverIDParams{SelectionID: selectionID}); err != nil {
+		t.Fatal(err)
+	}
+	var original *api.ResolverRunMeasurement
+	for _, id := range []string{"", runID, runID} {
+		var raw json.RawMessage
+		var err error
+		if id == "" {
+			raw, err = client.Call(ctx, api.MethodResolverHistory)
+		} else {
+			raw, err = client.CallWithParams(ctx, api.MethodResolverHistory, api.ResolverHistoryParams{RunID: id})
+		}
+		var history api.ResolverHistory
+		if err != nil || json.Unmarshal(raw, &history) != nil || history.Mode != "retained-history" || !history.Enrolled || len(history.Runs) != 1 || history.Truncated || history.ScanTruncated {
+			t.Fatal("resolver history unavailable", err)
+		}
+		r := history.Runs[0]
+		if r.RunID != runID || r.Selection.ID != selectionID || r.Outcome != "completed" || r.Measurement == nil || r.Measurement.Reply == nil || r.Measurement.Reply.RCode != 0 || r.Assessment.State != "answer" || r.Assessment.ExpectationMatched == nil || !*r.Assessment.ExpectationMatched || !r.AuthorizationRetained || !r.AdmissionRetained || !r.TerminalRetained {
+			t.Fatal("resolver history lost provenance/evidence")
+		}
+		if original != nil && (!original.StartedAt.Equal(r.Measurement.StartedAt) || !original.CompletedAt.Equal(r.Measurement.CompletedAt)) {
+			t.Fatal("history refreshed original timestamps")
+		}
+		original = r.Measurement
+	}
+	command := exec.CommandContext(ctx, filepath.Join(work, "cozysoc"), "resolver-history", "--state-dir", filepath.Join(work, "controller-state"), runID)
+	out, err := command.Output()
+	var history api.ResolverHistory
+	if err != nil || json.Unmarshal(out, &history) != nil || len(history.Runs) != 1 || history.Runs[0].RunID != runID {
+		t.Fatal("resolver history CLI unavailable", err)
+	}
 }
