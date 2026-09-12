@@ -5,8 +5,8 @@ compiled preflight, executor and auditor collaborators. The native TCP candidate
 implements its executor contract; SQLite implements its auditor using existing
 retention and quota controls. The product controller now owns one instance after
 acquiring its protected socket
-and drains it before closing storage. No schema migration, native consent endpoint,
-browser execution or scheduler is added.
+and drains it before closing storage. The native [consent protocol](https-consent.md) is implemented, but the product
+handler leaves execution unavailable. No browser execution or scheduler is added.
 
 ## Admission and lifetime
 

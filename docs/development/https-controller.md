@@ -104,10 +104,17 @@ Internal run preflight uses the same bounded settings/enrollment reload around
 route collection as preview. Retirement or changed scope between review and run
 blocks admission. The TCP candidate and SQLite auditor are compiled dependencies,
 not caller-supplied transports. No command, browser route or opt-in execution flag
-exposes this owner yet.
+exposes this owner yet. The typed `network-quality.https-check` session now exists
+in the local API, but the product handler does not supply its execution control;
+it returns unavailable before preparing a review.
 
 Lifecycle tests cover inert startup/preview, singleton ownership, retirement after
 review and shutdown joining a canceled executor before storage closes. The real
 settings process test verifies the HTTPS owner drains on shutdown and restart,
 while execution methods remain unavailable. These are lifecycle evidence, not
 proof of integrated HTTPS traffic or interactive consent.
+
+The [HTTPS consent protocol](https-consent.md) now defines the authenticated
+review/decision/result exchange and verifies exact request, policy and privacy
+disclosures. Terminal presentation and integrated native traffic evidence remain
+required before the product handler can enable it.
