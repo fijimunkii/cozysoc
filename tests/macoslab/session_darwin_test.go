@@ -125,6 +125,7 @@ func nativeConsentSession(t *testing.T) {
 		t.Fatal("interactive result lost its audit reference")
 	}
 	runID := match[1]
+	assertNativeGatewayHistory(t, ctx, client, work, state, runID)
 	peer.assertEchoes(t, 3)
 	if _, err := client.CheckGateway(ctx, target, confirm); err == nil {
 		t.Fatal("run cooldown disappeared")
@@ -197,4 +198,42 @@ func interactiveGatewayCLI(t *testing.T, ctx context.Context, work, python, mode
 	}
 	t.Logf("interactive CLI %s passed", mode)
 	return result.Output
+}
+
+// Inspect the same retained run through the read API and built command while
+// the independent peer is still counting. These reads cannot send a fourth echo.
+func assertNativeGatewayHistory(t *testing.T, ctx context.Context, client *localapi.Client, work, state, runID string) {
+	t.Helper()
+	var reference *api.GatewayRunMeasurement
+	for _, id := range []string{"", runID, runID} {
+		var raw json.RawMessage
+		var err error
+		if id == "" {
+			raw, err = client.Call(ctx, api.MethodGatewayHistory)
+		} else {
+			raw, err = client.CallWithParams(ctx, api.MethodGatewayHistory, api.GatewayHistoryParams{RunID: id})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var history api.GatewayHistory
+		if json.Unmarshal(raw, &history) != nil || history.Mode != "retained-history" || !history.Enrolled || len(history.Runs) != 1 || history.Truncated || history.ScanTruncated {
+			t.Fatal("native history lost the retained run")
+		}
+		r := history.Runs[0]
+		if r.RunID != runID || r.Target != target || r.Source != source || r.Outcome != "completed" || r.Measurement == nil || !r.Measurement.Complete || r.Measurement.Replies != 3 || r.Assessment.State != "all-replied" || r.GatewayRoleVerified || !r.TerminalRetained || !r.AdmissionRetained || !r.AuthorizationRetained {
+			t.Fatal("native retained assessment changed measurement or provenance")
+		}
+		if reference != nil && (!r.Measurement.StartedAt.Equal(reference.StartedAt) || !r.Measurement.CompletedAt.Equal(*reference.CompletedAt)) {
+			t.Fatal("history read refreshed measurement timestamps")
+		}
+		reference = r.Measurement
+	}
+	// Read-only history supports redirected stdout; unlike check, it grants no consent.
+	command := exec.CommandContext(ctx, filepath.Join(work, "cozysoc"), "network-quality-history", "--state-dir", state, runID)
+	out, err := command.Output()
+	var history api.GatewayHistory
+	if err != nil || json.Unmarshal(out, &history) != nil || len(history.Runs) != 1 || history.Runs[0].RunID != runID {
+		t.Fatalf("built history command failed: %v", err)
+	}
 }

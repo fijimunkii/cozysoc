@@ -76,6 +76,7 @@ func TestControllerProcessSmoke(t *testing.T) {
 	assertRunningSurface(t, absoluteBinary, stateDir, first.cmd.Process.Pid)
 	assertPrivateState(t, stateDir)
 	assertGatewayExecutionDisabled(t, stateDir)
+	assertGatewayHistoryEmpty(t, absoluteBinary, stateDir)
 	secret1 := readSecret(t, stateDir)
 	assertSecondInstanceRejected(t, absoluteBinary, stateDir, secret1)
 
@@ -334,5 +335,18 @@ func assertGatewayExecutionDisabled(t *testing.T, stateDir string) {
 	var response *localapi.ResponseError
 	if !errors.As(err, &response) || response.Code != "unavailable" || result.RunID != "" || result.Measurement != nil {
 		t.Fatalf("default controller exposed gateway execution: %+v %v", result, err)
+	}
+}
+
+// A default controller can read retained history without experimental execution,
+// a live interface, enrollment, or a terminal. This fresh database is unconfigured.
+func assertGatewayHistoryEmpty(t *testing.T, binary, stateDir string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, binary, "network-quality-history", "--state-dir", stateDir).Output()
+	var history api.GatewayHistory
+	if err != nil || json.Unmarshal(out, &history) != nil || history.Mode != "retained-history" || history.Enrolled || history.Runs == nil || len(history.Runs) != 0 || history.Since == nil || history.Truncated || history.ScanTruncated {
+		t.Fatalf("default history read was not honest and empty: %+v %v", history, err)
 	}
 }

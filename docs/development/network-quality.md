@@ -136,3 +136,11 @@ It is exercised by the virtual lab and now owned by the
 The [connection-bound native consent API](gateway-consent-session.md) requires
 explicit experimental startup opt-in and one-shot approval. Ownership, enrollment
 and Device Watch enablement still do not grant probe consent.
+
+## Retained gateway history
+
+The [read-only history API and command](gateway-history.md) now provide bounded
+recent runs and exact run-reference lookup under the current stored enrollment.
+Historical sample summaries preserve missing/legacy/incomplete evidence and
+original timestamps. No OS collection, active-check opt-in, renewed consent,
+monitoring mutation or browser execution endpoint is involved.
