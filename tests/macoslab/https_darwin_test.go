@@ -1,6 +1,7 @@
 package macoslab
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -9,8 +10,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -26,7 +29,9 @@ import (
 
 // Real native route/TCP binding and TLS handshake through a restricted userspace
 // peer. The ephemeral self-signed identity MUST be rejected by production trust.
-func runHTTPSNativeLab(t *testing.T) {
+func runHTTPSNativeLab(t *testing.T)  { runHTTPSNativeCase(t, false) }
+func runHTTPSTrustedLab(t *testing.T) { runHTTPSNativeCase(t, true) }
+func runHTTPSNativeCase(t *testing.T, trusted bool) {
 	work := filepath.Dir(os.Getenv("COZYSOC_LAB_PEER"))
 	listener, err := net.Listen("unix", filepath.Join(work, "https.sock"))
 	if err != nil {
@@ -41,7 +46,11 @@ func runHTTPSNativeLab(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test.example"}, DNSNames: []string{"test.example"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	name := "test.example"
+	if trusted {
+		name = fmt.Sprintf("cozysoc-%x.invalid", now.UnixNano())
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: name}, DNSNames: []string{name}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +63,9 @@ func runHTTPSNativeLab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if trusted {
+		trustHTTPSFixture(t, work, der, name)
+	}
 	done := make(chan error, 1)
 	go func() {
 		conn, err := listener.Accept()
@@ -64,7 +76,22 @@ func runHTTPSNativeLab(t *testing.T) {
 		defer conn.Close()
 		_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
 		server := tls.Server(conn, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}})
-		done <- server.Handshake()
+
+		if err := server.Handshake(); err != nil || !trusted {
+			done <- err
+			return
+		}
+		request, err := http.ReadRequest(bufio.NewReader(server))
+		if err != nil {
+			done <- err
+			return
+		}
+		if request.Method != "HEAD" || request.URL.RequestURI() != "/check" || request.Host != name || request.Header.Get("User-Agent") != "CozySOC-Network-Check/1" || request.Header.Get("Authorization") != "" || request.Header.Get("Cookie") != "" {
+			done <- fmt.Errorf("unexpected owned request")
+			return
+		}
+		_, err = server.Write([]byte("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"))
+		done <- err
 	}()
 	defer func() {
 		listener.Close()
@@ -78,7 +105,7 @@ func runHTTPSNativeLab(t *testing.T) {
 	r := labRequest(t)
 	b := r.Plan.Binding
 	e := httpsroute.Enrollment{Observer: nq.Observer{ScopeID: b.ScopeID, SensorID: "fixture", InterfaceName: b.InterfaceName, InterfaceIndex: b.InterfaceIndex}, Prefixes: b.Prefixes}
-	config := httpsplan.Configuration{Selection: nq.HTTPSSelection{ID: "https1", EndpointID: "endpoint1", RequestID: "request1", Family: nq.FamilyIPv4, Method: "HEAD", ExpectedStatus: 204}, Endpoint: netip.AddrPortFrom(r.Plan.Target, 443), ServerName: "test.example", RequestTarget: "/check", DestinationPolicy: httpsplan.ExactEndpoint}
+	config := httpsplan.Configuration{Selection: nq.HTTPSSelection{ID: "https1", EndpointID: "endpoint1", RequestID: "request1", Family: nq.FamilyIPv4, Method: "HEAD", ExpectedStatus: 204}, Endpoint: netip.AddrPortFrom(r.Plan.Target, 443), ServerName: name, RequestTarget: "/check", DestinationPolicy: httpsplan.ExactEndpoint}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	selected, err := httpsroute.NewInspector().Inspect(ctx, e, config)
@@ -86,12 +113,19 @@ func runHTTPSNativeLab(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, err := httpstcp.NewCandidate().ExecuteHTTPS(ctx, httpstcp.Request{Selection: selected, MeasurementID: strings.Repeat("a", 32)})
-	if err == nil || m.Stage != nq.HTTPSTLS || m.Exchange != nq.HTTPSTLSError || m.Request != nq.HTTPSRequestNotSent || m.StatusCode != 0 || m.ResponseTime != nil || m.Observer != e.Observer {
+	if trusted {
+		if err != nil || m.Stage != nq.HTTPSRequest || m.Exchange != nq.HTTPSResponseReceived || m.Request != nq.HTTPSRequestAccepted || m.StatusCode != 204 || m.ResponseTime == nil || m.Observer != e.Observer {
+			t.Fatalf("native trusted response: %+v %v", m, err)
+		}
+	} else if err == nil || m.Stage != nq.HTTPSTLS || m.Exchange != nq.HTTPSTLSError || m.Request != nq.HTTPSRequestNotSent || m.StatusCode != 0 || m.ResponseTime != nil || m.Observer != e.Observer {
 		t.Fatalf("native TLS rejection: %+v %v", m, err)
 	}
 	select {
 	case err := <-done:
-		if err == nil {
+		if trusted && err != nil {
+			t.Fatal("owned HTTPS exchange failed", err)
+		}
+		if !trusted && err == nil {
 			t.Fatal("untrusted TLS session accepted")
 		}
 		done <- err // Retain completion for deferred join.

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Explicit disposable macOS VM lab. Product code runs as the normal user in
-# Terminal, not under sudo. No privacy, firewall or default-route settings change.
+# Terminal, not under sudo. Scoped test-certificate trust is removed on teardown.
 set -euo pipefail
 [[ $(uname -s) == Darwin && ${COZYSOC_MACOS_LAB:-} == 1 ]]
 [[ $(id -u) != 0 ]]
+[[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]]
 cd "$(git rev-parse --show-toplevel)"
 umask 077
 work=$(mktemp -d "$HOME/.czlab.XXXXXX")
 left=0; right=0
+printf 'github-hosted\n' > "$work/disposable-trust-allowed"
 cleanup() {
   status=$?
   trap - EXIT
@@ -22,6 +24,15 @@ cleanup() {
     done
     if [[ ! -f "$work/exit-code" ]]; then
       echo 'lab monitor did not confirm shutdown' >&2
+      status=1
+    fi
+  fi
+  if [[ -f "$work/https-trust.pem" && ! -f "$work/https-trust-removed" ]]; then
+    sudo -n /usr/bin/security remove-trusted-cert -d "$work/https-trust.pem" || status=1
+    fingerprint=$(cat "$work/https-trust.sha256")
+    if [[ $fingerprint =~ ^[0-9a-f]{64}$ ]]; then
+      sudo -n /usr/bin/security delete-certificate -Z "$fingerprint" /Library/Keychains/System.keychain || status=1
+    else
       status=1
     fi
   fi
