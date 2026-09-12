@@ -54,4 +54,24 @@ file paths and independent read/write ownership. Authenticated API tests reject
 scope/target/approval overrides and unverified peers. The required native HTTPS
 session reads list/exact/CLI history after configuration retirement and confirms
 original timestamps, audit phases and absence of extra monitoring evidence.
-Browser presentation and cross-signal corroboration remain separate work.
+The browser exposes a parameterless authenticated list read at
+`/api/network-quality/https-history`. Host/origin/session checks precede the
+bounded local call. Query strings, bodies, run/target/scope selectors and approval
+are rejected. Its Go projection revalidates the latest retained phase and derives
+the historical result again at the original time, excluding native prose, reasons,
+scope/sensor IDs and private target settings.
+
+The Recent HTTPS checks card loads only on request, with no polling, focus refresh,
+execution action or demo-mode network access. Reads have a six-second timeout,
+abort on unmount/mode changes and ignore late results. The TypeScript parser
+rejects incompatible phases, status/timing/expectation combinations, malformed
+references, invalid original times and oversized payloads. Zero timing, false
+expectation matches, late incomplete cleanup and missing phases remain explicit.
+
+The card shows HTTP statuses and redirects directly, separately from execution
+outcome. It preserves original timestamps, missing timing, phase provenance,
+empty/unenrolled states and truncation warnings. Not-sent refers to the HTTP
+request, not absence of connection/TLS traffic. Desktop and narrow mobile layouts
+are checked with synthetic fixtures. Real-process tests verify authentication,
+privacy filtering, inert repeat reads and execution remaining disabled.
+Cross-signal corroboration remains separate work.
