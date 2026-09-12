@@ -94,6 +94,9 @@ func TestQualityDiagnosisProcessUsesRetainedEvidenceWithoutExecution(t *testing.
 			t.Fatalf("diagnosis disclosed %s", forbidden)
 		}
 	}
+	if uiDir := os.Getenv(e2eUIDirEnv); uiDir != "" {
+		t.Run("browser-read", func(t *testing.T) { assertWebQualityDiagnosis(t, binary, dir, uiDir, first) })
+	}
 	stopWithInterrupt(t, controller)
 	s, err = storage.Open(dir, storage.DefaultLimits())
 	if err != nil {

@@ -11,8 +11,8 @@ The authenticated native method is `network-quality.diagnosis`. It accepts no
 parameters, including scope, run, time, target, policy or approval overrides. The
 CLI may run without a foreground terminal and its escaped JSON may be redirected.
 The controller requires verified OS peer identity, the session secret and the API
-version. Errors never repeat raw audit/database diagnostics. This change adds no
-browser route or diagnosis card; frontend presentation follows separately.
+version. Errors never repeat raw audit/database diagnostics. Overview also offers
+a manual historical comparison through the typed browser route described below.
 
 ## One bounded historical read
 
@@ -67,10 +67,32 @@ security or monitoring coverage. A DNS error reply is a response, and the select
 ICMP target's gateway role remains unverified. New measurements still require
 separate experimental startup opt-in and deliberate one-shot native approval.
 
+## Read-only browser presentation
+
+Overview's **What earlier checks suggest** card reads
+`GET /api/network-quality/diagnosis` using the authenticated local browser session.
+The route accepts no query or body, uses a bounded controller request and returns
+`Cache-Control: no-store`. The browser performs no background/focus polling and
+cancels reads on timeout or departure. Demo mode never requests live diagnosis.
+
+The minimized projection includes original timestamps, selected run references,
+interface context, execution outcomes, DNS expectations, comparison references
+and unknown/limited confidence. It excludes scope identifiers, native prose,
+private destinations/query names and approval material. Go and TypeScript validate
+the bounded shape, original-time policy, context, evidence references and confidence.
+They preserve the authoritative controller interpretation rather than recomputing
+raw measurements. Fixed UI explanations provide safe next steps for each supported
+conclusion. Expandable records separate execution outcomes from measurement results.
+No browser execution authority is added.
+
 Tests cover a shared read snapshot across a concurrent writer, read-only transaction
 rollback without losing an acknowledged audit, corruption without partial success,
 scope/queue bounds, original-time stability, latest unknowns, context mismatches,
 DNS expectations, protected IPC and hostile parameters. A real controller/CLI
 process regression on macOS and Linux uses synthetic audits with active checks
 disabled and confirms stable retained interpretation with no observations added.
+With the built UI configured, it also launches the real web process and verifies
+authenticated reads preserve the native comparison and original timestamps.
+Boundary and component tests cover malformed/contradictory results, authentication,
+forbidden parameters, cancellation, retries and demo isolation.
 This is process/storage evidence, not a physical-network or packaging claim.
