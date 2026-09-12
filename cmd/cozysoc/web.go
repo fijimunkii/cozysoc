@@ -49,26 +49,27 @@ type statusLoader func(context.Context) (api.Status, error)
 type capabilityLoader func(context.Context) (api.CapabilityList, error)
 
 type webHandler struct {
-	expectedHost       string
-	uiDir              string
-	loadCoverage       coverageLoader
-	loadDevices        deviceLoader
-	loadDeviceDetail   deviceDetailLoader
-	loadDeviceActivity deviceActivityLoader
-	loadStatus         statusLoader
-	loadCapabilities   capabilityLoader
-	loadLocalQuality   func(context.Context) (api.LocalNetworkQuality, error)
-	loadGatewayHistory func(context.Context) (api.GatewayHistory, error)
-	labelDevice        deviceLabelMutator
-	loadNetworks       networkLoader
-	enrollNetwork      networkEnrollMutator
-	enableDeviceWatch  deviceWatchMutator
-	disableDeviceWatch deviceWatchMutator
-	csrfToken          string
-	bootstrapToken     string
-	sessionToken       string
-	bootstrapMu        sync.Mutex
-	bootstrapUsed      bool
+	expectedHost        string
+	uiDir               string
+	loadCoverage        coverageLoader
+	loadDevices         deviceLoader
+	loadDeviceDetail    deviceDetailLoader
+	loadDeviceActivity  deviceActivityLoader
+	loadStatus          statusLoader
+	loadCapabilities    capabilityLoader
+	loadLocalQuality    func(context.Context) (api.LocalNetworkQuality, error)
+	loadGatewayHistory  func(context.Context) (api.GatewayHistory, error)
+	loadResolverHistory func(context.Context) (api.ResolverHistory, error)
+	labelDevice         deviceLabelMutator
+	loadNetworks        networkLoader
+	enrollNetwork       networkEnrollMutator
+	enableDeviceWatch   deviceWatchMutator
+	disableDeviceWatch  deviceWatchMutator
+	csrfToken           string
+	bootstrapToken      string
+	sessionToken        string
+	bootstrapMu         sync.Mutex
+	bootstrapUsed       bool
 }
 
 func runCoverageCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
@@ -163,6 +164,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	configureWebDeviceLabel(handler, dir)
 	configureWebLocalQuality(handler, dir)
 	configureWebGatewayHistory(handler, dir)
+	configureWebResolverHistory(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -299,6 +301,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDeviceDetail(w, r)
 	case "/api/devices/label":
 		h.handleDeviceLabel(w, r)
+	case "/api/network-quality/resolver-history":
+		h.handleResolverHistory(w, r)
 	case "/api/network-quality/history":
 		h.handleGatewayHistory(w, r)
 	case "/api/network-quality":

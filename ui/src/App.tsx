@@ -15,6 +15,8 @@ import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
 import { demoCapabilitiesRaw, demoStatusRaw } from "./demo/tools";
 import { OverviewPage } from "./OverviewPage";
+import { ResolverHistoryPanel } from "./quality/ResolverHistoryPanel";
+import { loadResolverHistoryFromWeb, type ResolverHistoryLoader } from "./quality/resolver-history";
 import { GatewayHistoryPanel } from "./quality/GatewayHistoryPanel";
 import { loadGatewayHistoryFromWeb, type GatewayHistoryLoader } from "./quality/gateway-history";
 import { LocalConnectionPanel } from "./quality/LocalConnectionPanel";
@@ -57,6 +59,7 @@ export interface AppProps {
   deviceLabelClient?: DeviceLabelClient;
   loadLocalQuality?: LocalQualityLoader;
   loadGatewayHistory?: GatewayHistoryLoader;
+  loadResolverHistory?: ResolverHistoryLoader;
 }
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
@@ -67,7 +70,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -120,6 +123,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
             {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} /> : null}
             <OverviewPage data={activeData} onNavigate={setPage} />
             <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
+            <ResolverHistoryPanel key={`resolver-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadResolverHistory} />
             <GatewayHistoryPanel key={`history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadGatewayHistory} />
           </>
         ) : null}

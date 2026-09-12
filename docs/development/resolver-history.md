@@ -15,8 +15,7 @@ Both commands accept `--state-dir PATH` before the optional run reference. Outpu
 is escaped JSON and may be redirected. The authenticated native method
 `network-quality.resolver-history` accepts no parameters for a recent list, or
 exactly one lowercase 32-character hexadecimal `run_id`. OS peer verification,
-rotating session-secret and API-version checks precede the read. There is no
-browser history route in this change; user-facing frontend history remains next.
+rotating session-secret and API-version checks precede the read. The browser also exposes a list-only, authenticated read as described below.
 
 ## Historical semantics
 
@@ -77,3 +76,32 @@ its saved selection while the independent peer still counts packets. It must
 retain original response evidence and finish with exactly one observed DNS query.
 These checks do not certify physical NICs, packaged permissions or whole-home
 coverage; #14 and #29 remain open.
+
+## Shared browser history
+
+Overview's **Recent DNS checks** card reads `GET /api/network-quality/resolver-history`
+only when requested. It accepts no query/body, scope selector, settings, run command
+or approval. Host/origin/session checks precede a bounded local controller call.
+The Go projection revalidates the latest retained phase with the resolver history
+validator and derives the historical result again at the original sample end.
+It excludes native prose, failure reasons, scope/sensor IDs and all private query
+settings. Immutable references, interface, family, question type and recorded
+expectation remain available to correlate a historical check.
+
+The TypeScript parser requires bounded fields, valid original times, compatible
+execution/result/response-code combinations and correct optional expectation
+matching. Zero response time and an explicit false match survive projection.
+The card distinguishes NXDOMAIN, NODATA, DNS error replies, truncation, referrals,
+transport failures, timeouts, incomplete work and missing final records. A matched
+reply remains visible after failed cleanup; execution completion never means
+successful resolution. Confidence and safe next steps stay limited to historical
+evidence and never label the network healthy, secure or down from this one check.
+
+Refreshing re-reads the retained list without polling, sending traffic, refreshing
+a sample's age or granting approval. Both list/scan truncation and missing phases
+are explicit. Unenrolled/empty states do not invent evidence; bounded read failures
+stay in the card. Demo mode sends no live request, and leaving the live card aborts
+its request and discards late results. Go boundary, TypeScript/parser, component,
+and Linux process tests cover this path with synthetic evidence and active checks
+disabled. Browser history shares the existing read-only SQLite pool and does not
+change storage or the native send/consent path.
