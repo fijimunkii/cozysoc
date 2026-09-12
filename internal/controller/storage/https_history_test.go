@@ -204,7 +204,7 @@ func TestCorruptHTTPSAuditsNeverReturnPartialSuccess(t *testing.T) {
 		"oversized-id":       `id=printf('%05000d',0)`,
 		"oversized":          `payload=json_set(payload,'$.padding',printf('%05000d',0))`,
 		"unknown-field":      `payload=json_set(payload,'$.secret','do-not-echo')`,
-		"impossible-counts":  `payload=json_set(payload,'$.measurement.reply.RCode',50)`,
+		"impossible-status":  `payload=json_set(payload,'$.measurement.status_code',600)`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, q, e := httpsHistoryStore(t)

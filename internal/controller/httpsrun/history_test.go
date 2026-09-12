@@ -135,3 +135,12 @@ func TestHTTPSHistoryDistinguishesFailuresFromTimeouts(t *testing.T) {
 		})
 	}
 }
+
+func TestHTTPSHistoryRetainsResponseAfterFailedCleanup(t *testing.T) {
+	events, now := httpsHistoryEvents()
+	events[2].Outcome, events[2].Reason = "failed", "execution-error"
+	r, err := DescribeRetainedRun(events, now)
+	if err != nil || r.Outcome != "failed" || r.Measurement == nil || r.Measurement.StatusCode != 503 || r.Assessment.State != "status-response" || r.Assessment.ExpectationMatched == nil || *r.Assessment.ExpectationMatched {
+		t.Fatal("failed cleanup discarded or rewrote a received response", err)
+	}
+}
