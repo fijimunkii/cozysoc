@@ -21,6 +21,11 @@ func trustHTTPSFixture(t *testing.T, work string, der []byte, name string) {
 	if err != nil || string(marker) != "github-hosted\n" {
 		t.Fatal("trusted TLS lab requires disposable hosted CI")
 	}
+	// Fixtures are sequential, but each new identity needs its own completion.
+	// A previous success must not suppress outer cleanup if this test is killed.
+	if err := os.Remove(filepath.Join(work, "https-trust-revoked")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
 	certPath := filepath.Join(work, "https-trust.pem")
 	sum := sha256.Sum256(der)
 	fingerprint := hex.EncodeToString(sum[:])

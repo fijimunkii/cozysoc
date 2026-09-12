@@ -149,8 +149,8 @@ The `native-session` case waits the real one-minute startup quiet interval rathe
 than aging the construction clock used by the smaller coordinator fixtures. A
 private controller monitor owns the actual child; stdin EOF revokes its lifetime
 even if the Go test dies. The outer monitor waits for child-drain confirmation,
-without signaling a PID read from a file. The dedicated lab test timeout is 150
-seconds and its monitor ceiling is 160 seconds; these changes do not alter any
+without signaling a PID read from a file. The dedicated lab test timeout is 210
+seconds and its monitor ceiling is 220 seconds; these changes do not alter any
 production probe or consent budget. See the native consent document for claims
 and remaining packaged/hardware limits.
 
@@ -184,8 +184,8 @@ server. Production system trust must reject it, with TLS-stage error, no HTTP
 request accepted, no status and no response latency. No trust store is modified.
 This establishes native TCP/TLS rejection through the isolated peer, not trusted
 HTTPS success, real physical NICs or complete controller/PTY consent support.
-Trusted-response and integrated controller/consent cases remain gates before
-product HTTPS execution is enabled.
+The following trusted-response and integrated consent cases provide additional
+evidence for the default-off experimental macOS execution flag.
 
 ## Trusted HTTPS response and trust cleanup
 
@@ -221,6 +221,17 @@ the outer harness attempts the same revocation from the journal and fails on an
 unconfirmed operation. No unrelated certificates or trust settings are replaced.
 A forced VM termination relies on disposal of the hosted runner.
 
-This is trusted native TCP/TLS/HTTP evidence for the isolated fixture, not yet
-controller admission, terminal approval, persistent audit or physical NIC evidence.
-The integrated controller/PTY consent gate remains open before product execution.
+The required `native-session/https-native-session` starts the actual opted-in
+controller and drives `https-check` through real PTYs. It requires full startup
+quiet time, disclosure, redirected-I/O rejection, default/type-ahead decline,
+overlong input, EOF, Ctrl-C, original review expiry, an approved HEAD/204 response,
+response timing and cooldown. After joining the controller it checks exactly
+three persisted HTTPS audit phases and no monitoring observations/coverage.
+The controller session has a 170-second deadline and a 180-second owner ceiling;
+the outer Terminal launcher waits at most 240 seconds. These bounds allow the
+real HTTPS review expiry in addition to the existing gateway/resolver cases.
+They do not shorten or bypass product deadlines or consent.
+
+This is isolated controller/TCP/TLS/PTY evidence, not physical NIC, packaged
+permission recovery, VPN or sleep/resume certification. It enables only the
+explicit macOS `--experimental-https-checks` opt-in.

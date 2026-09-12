@@ -25,10 +25,11 @@ TARGET = "192.168.250.1"
 
 
 def main():
+    https = len(sys.argv) == 3 and sys.argv[1].startswith("https-")
     dns = len(sys.argv) == 3 and sys.argv[1].startswith("dns-")
-    mode = sys.argv[1][4:] if dns else (sys.argv[1] if len(sys.argv) == 2 else "")
-    target = sys.argv[2] if dns else TARGET
-    if mode not in MODES or os.geteuid() == 0 or (dns and re.fullmatch(r"selection\.[0-9a-f]{32}", target) is None):
+    mode = sys.argv[1][6:] if https else sys.argv[1][4:] if dns else (sys.argv[1] if len(sys.argv) == 2 else "")
+    target = sys.argv[2] if (dns or https) else TARGET
+    if mode not in MODES or os.geteuid() == 0 or ((dns or https) and re.fullmatch(r"(?:selection|https-selection)\.[0-9a-f]{32}", target) is None):
         return 1
     work = Path(__file__).resolve().parent
     (work / "cli-done").unlink(missing_ok=True)
@@ -56,7 +57,7 @@ def main():
         if mode == "preloaded":
             os.write(master, ("check " + target + "\n").encode("ascii"))
         child = subprocess.Popen(
-            [str(work / "cozysoc"), "resolver-check" if dns else "network-quality-check", "--state-dir",
+            [str(work / "cozysoc"), "https-check" if https else "resolver-check" if dns else "network-quality-check", "--state-dir",
              str(work / "controller-state"), target],
             stdin=subprocess.DEVNULL if mode == "redirected-input" else slave,
             stdout=subprocess.DEVNULL if mode == "redirected-output" else slave,
@@ -117,16 +118,29 @@ def main():
                 required = ["EXPERIMENTAL", "192.168.250.1:53", "test.example. IN A", "Source: 192.168.250.2",
                             "Interface: feth42", "Review expires:", "1 send call", "30 DNS request bytes", "512 reply bytes",
                             "60000 ms", "MAY FORWARD IT UPSTREAM", "not raw query names", "default: decline"]
+            if https:
+                required = ["EXPERIMENTAL", "192.168.250.1:443", "TLS server identity: cozysoc-",
+                            "Request: HEAD /check; expected status: 204", "Exact request bytes (quoted):",
+                            "Source: 192.168.250.2", "Interface: feth42", "Review expires:",
+                            "trust: system", "verify identity: true", "ALPN: http/1.1",
+                            "Proxy: false; name resolution: false; redirects: false; response-body reading: false",
+                            "1 connection, 1 request, 0 retries", "60000 ms", "Privacy:", "default: decline"]
             if not answered or any(part not in text for part in required):
                 raise RuntimeError("interactive disclosure missing")
-            run_marker = "Run:" if dns else "Run reference:"
+            run_marker = "Run:" if (dns or https) else "Run reference:"
             if mode == "approve":
                 measured = (["Execution outcome: completed", "DNS exchange: response-received", "RCODE 0", "answer classification: answer"] if dns else
                             ["Run state: completed", "Sample: complete\n", "Matched replies: 3; completed timeouts: 0"])
+                if https:
+                    measured = ["Execution outcome: completed", "HTTPS exchange: response-received",
+                                "Received HTTP status: 204; expected: 204; matches expectation: true",
+                                "Time to final response header:", "Historical evidence only."]
                 if exit_code != 0 or any(part not in text for part in measured):
                     raise RuntimeError("CLI did not publish completed measured result")
             elif mode in ("decline", "preloaded"):
                 declined = "Declined. No DNS request was authorized." if dns else "Declined. This command did not authorize a check."
+                if https:
+                    declined = "Declined. No HTTPS request was authorized."
                 if exit_code != 0 or declined not in text or run_marker in text:
                     raise RuntimeError("default/type-ahead consent did not decline")
             elif exit_code == 0 or "no approval was submitted" not in text or run_marker in text:

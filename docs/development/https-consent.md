@@ -1,13 +1,15 @@
 # Native HTTPS consent protocol
 
-Related issues: #14 and #29. The local API has a typed HTTPS session and client,
-exercised with synthetic executors over real protected Unix sockets. The product
-controller does not implement the session's execution-control interface, so
-`network-quality.https-check` returns unavailable before preparing a review.
-The `https-check` command implements foreground macOS terminal consent. The
-product controller still returns unavailable; no execution opt-in flag or browser
-execution route is added. Integrated native HTTPS lab evidence remains required
-before product execution.
+Related issues: #14 and #29. A macOS controller started explicitly with
+`cozysoc serve --experimental-https-checks` exposes the typed HTTPS session.
+Ordinary controllers return unavailable before preparing a review. Unsupported
+platforms reject this opt-in before creating state. There is no browser execution
+route or scheduler. Starting the controller does not itself authorize traffic.
+
+The native isolated lab runs the actual controller and `https-check` command,
+with real pseudo-terminals, production route/TCP/TLS handling, an owned HTTPS
+server and persisted SQLite audits. This is experimental feth/Terminal evidence;
+physical NICs, packaged permission recovery, VPNs and sleep/resume remain unproven.
 
 ## Review, decision and result
 
@@ -57,9 +59,10 @@ strict request and decision grammar, approval, decline, abandoned reviews,
 cross-connection replay, immutable callback inputs, cooldown, disconnect/server
 cancellation and unconfirmed terminal audits. Pure contract tests cover changed
 policy/request/privacy, maximum escaped targets, HTTP status semantics and expiry.
-The real controller settings process test verifies the session remains unavailable
-and its callback is never invoked. These tests do not prove physical networking or integrated native TCP/TLS
-execution. The terminal flow below has separate presentation tests.
+The real controller settings process test verifies ordinary controllers leave the
+session unavailable and never invoke its callback. Synthetic executor tests do
+not prove physical networking; the isolated native session below supplies separate
+controller/TCP/TLS/terminal evidence.
 
 ## Foreground terminal client
 
@@ -68,7 +71,8 @@ selection reference and a normal-user foreground macOS terminal for both input
 and output. It reuses the existing checked `/dev/tty` adapter. Noninteractive,
 redirected or unsupported terminal use fails before loading credentials or opening
 the controller connection. There is no `--yes`, approval flag or unattended mode.
-Help states that execution remains unavailable in the current product build.
+The command requires a separately started controller with the experimental flag,
+an enrolled scope and an active saved HTTPS selection.
 
 The client prints the entire validated disclosure, quoting exact request bytes so
 CRLF is visible as data. It flushes type-ahead only after disclosure, then asks for
@@ -87,5 +91,11 @@ Synthetic terminal tests exercise exact approval, default decline, ordering of
 review/flush/prompt, failures before consent, interruption after approval, every
 disclosed budget/policy field, escaped request bytes, status mismatch and zero
 timing. CLI tests reject unattended flags/nonterminal use without touching state.
-The real HTTPS controller/TCP/TLS/PTY lab gate is still pending; these tests do not
-stand in for that end-to-end evidence.
+The required native session checks redirected input/output, default decline,
+preloaded approval, overlong input, EOF, Ctrl-C and the real review expiry before
+its sole approved HEAD/204 response. It verifies terminal modes are restored,
+response timing is present, subsequent admission hits cooldown, and exactly three
+HTTPS audit phases survive controller shutdown. It checks the full real startup
+quiet interval and confirms no observations or coverage samples were created.
+The owned fixture uses normal system trust and verifies revocation afterward.
+These cases do not certify in-flight cancellation on physical networks.

@@ -8,7 +8,7 @@ import sys
 import time
 
 
-def run_lab(work: Path, timeout: float = 160.0) -> int:
+def run_lab(work: Path, timeout: float = 220.0) -> int:
     """Run one fixed test binary; join it before returning on failure or abort."""
     if (work / "abort").exists():
         return 130
@@ -16,7 +16,7 @@ def run_lab(work: Path, timeout: float = 160.0) -> int:
     env.update(COZYSOC_MACOS_LAB="1", COZYSOC_LAB_PEER=str(work / "peer"),
                COZYSOC_LAB_PYTHON=sys.executable, TMPDIR="/private/tmp")
     command = [str(work / "lab.test"), "-test.v=test2json", "-test.count=1",
-               "-test.timeout=150s", "-test.run=^TestMACOSGatewayLab$"]
+               "-test.timeout=210s", "-test.run=^TestMACOSGatewayLab$"]
     with (work / "output").open("wb") as out, (work / "error").open("wb") as err:
         process = subprocess.Popen(command, cwd=work, env=env, stdout=out, stderr=err)
         try:
@@ -49,7 +49,7 @@ def run_lab(work: Path, timeout: float = 160.0) -> int:
                 time.sleep(0.05)
 
 
-def run_controller(work: Path, input_fd: int = 0, timeout: float = 120.0) -> int:
+def run_controller(work: Path, input_fd: int = 0, timeout: float = 180.0) -> int:
     """Own one real controller; stdin EOF revokes its lifetime, including crashes."""
     (work / "controller-started").write_text("1\n", encoding="utf-8")
     status = 1
@@ -60,7 +60,7 @@ def run_controller(work: Path, input_fd: int = 0, timeout: float = 120.0) -> int
             return 1
         with (work / "controller.log").open("wb") as log:
             process = subprocess.Popen(
-                [str(work / "cozysoc"), "serve", "--experimental-gateway-checks", "--experimental-resolver-checks",
+                [str(work / "cozysoc"), "serve", "--experimental-gateway-checks", "--experimental-resolver-checks", "--experimental-https-checks",
                  "--state-dir", str(work / "controller-state")],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=log, cwd=work)
             until = time.monotonic() + timeout

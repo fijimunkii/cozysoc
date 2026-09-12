@@ -95,3 +95,11 @@ func (h *controllerAPIHandler) preflightHTTPSRun(ctx context.Context, id string)
 	}
 	return selection, nil
 }
+
+// HTTPSCheckControl exposes the installed owner only for the native opt-in.
+func (h *controllerAPIHandler) HTTPSCheckControl() (*httpsrun.Control, error) {
+	if h == nil || !h.httpsChecksEnabled {
+		return nil, httpsrun.ErrUnavailable
+	}
+	return h.httpsRuns.current()
+}

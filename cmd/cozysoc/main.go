@@ -107,7 +107,7 @@ func usageText() string {
 	return `cozysoc is the local Cozy SOC command-line entrypoint.
 
 Usage:
-  cozysoc serve [--state-dir PATH] [--experimental-gateway-checks] [--experimental-resolver-checks]
+  cozysoc serve [--state-dir PATH] [--experimental-gateway-checks] [--experimental-resolver-checks] [--experimental-https-checks]
   cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc coverage [--state-dir PATH]
@@ -148,6 +148,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	stateDir := fs.String("state-dir", "", "controller state directory")
+	experimentalHTTPS := fs.Bool("experimental-https-checks", false, "enable the experimental connection-bound native HTTPS-check protocol (macOS only)")
 	experimentalResolver := fs.Bool("experimental-resolver-checks", false, "enable the experimental connection-bound native resolver-check protocol (macOS only)")
 	experimentalGateway := fs.Bool("experimental-gateway-checks", false, "enable the experimental connection-bound native gateway-check protocol (macOS only)")
 	if err := fs.Parse(args); err != nil {
@@ -157,6 +158,9 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("serve takes flags only")
 	}
 
+	if *experimentalHTTPS && runtime.GOOS != "darwin" {
+		return fmt.Errorf("experimental HTTPS checks require the validated macOS native path")
+	}
 	if *experimentalResolver && runtime.GOOS != "darwin" {
 		return fmt.Errorf("experimental resolver checks require the validated macOS native path")
 	}
@@ -250,6 +254,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return err
 	}
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
+	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver
 	server, err := localapi.NewServer(dir, apiHandler, logger)
 	if err != nil {

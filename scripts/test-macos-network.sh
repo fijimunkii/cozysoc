@@ -68,7 +68,7 @@ sudo -n /sbin/ifconfig feth43 up
 # LaunchServices/Terminal provides the actual non-root CLI execution context.
 # This is not evidence for a packaged app's Local Network permission UX.
 /usr/bin/open -a Terminal "$work/run.command"
-for ((i=0; i<180; i++)); do
+for ((i=0; i<240; i++)); do
   [[ -f "$work/exit-code" ]] && break
   sleep 1
 done
