@@ -1,6 +1,6 @@
 # Native selected-HTTPS settings
 
-Related issues: #14 and #29. The running controller exposes three authenticated
+Related issues: #14 and #29. The running controller exposes four authenticated
 native commands for [durable HTTPS settings](https-configuration.md). Saving uses
 the sole active enrolled LAN binding from storage. It does not inspect the current
 route, resolve names, send traffic, enable Device Watch or grant execution consent.
@@ -14,6 +14,7 @@ cozysoc https-save --endpoint 198.51.100.20:443 --server-name check.example \
   --request-target '/check?test=1' --family ipv4 --method HEAD \
   --expected-status 204 --destination-policy exact-endpoint
 cozysoc https-list
+cozysoc https-plan SELECTION_ID
 cozysoc https-retire SELECTION_ID
 ```
 
@@ -38,20 +39,42 @@ the record for attribution and does not free a lifetime slot. Saving identical
 settings creates a new reference. After an uncertain mutation response, reload
 settings before retrying; a lost response does not mean the write failed.
 
+## Native review
+
+`https-plan SELECTION_ID` reads the saved selection and sole enrolled binding,
+inspects current native route/interface metadata, then reloads both durable
+inputs. Retirement, changed enrollment, missing storage, mismatched inspection,
+cancellation or stale/reversed clocks produces no review. The entire operation
+has a five-second deadline. Link-local enrollment prefixes are excluded from the
+routable prefix comparison; source and target retain the HTTPS plan restrictions.
+
+The escaped JSON output deliberately includes the exact HTTP/1.1 request bytes,
+endpoint, TLS identity, scope/interface/source, privacy notes, TLS policy and all
+request, header, transport-byte, call-count and timing ceilings. Durations use
+explicit millisecond fields. These are the future executor's requirements, not
+measurements of transmitted data. The route observation and expiry timestamps
+remain separate from review creation and expiry. Reloading settings does not
+refresh route evidence.
+
+Preview returns `mode: preview-only`, `execution_available: false` and
+`consent_granted: false`. It sends no HTTPS request, creates no ticket, reserves no
+run slot and records no observation. Native preview currently requires macOS and
+an inspectable route; Linux settings remain available while preview fails closed.
+
 ## Native boundary and evidence
 
-The `network-quality.https-save`, `network-quality.https-list` and
-`network-quality.https-retire` methods require verified kernel peer identity, the
+The `network-quality.https-save`, `network-quality.https-list`,
+`network-quality.https-plan` and `network-quality.https-retire` methods require verified kernel peer identity, the
 rotating session secret and the matching API version. Requests use exact, unique,
 bounded JSON fields; list requires an empty object. Caller-supplied scope, source,
 interface, references on save, budgets and approval fields are rejected. Errors
 return normalized messages without database details or private settings.
 
 These commands are available on supported Unix controller platforms, including
-macOS and Linux. No browser route, HTTPS plan/check/run/approval command, consent
+macOS and Linux. No browser route, HTTPS check/run/approval command, consent
 ticket or collector is exposed. Enrollment and saved settings cannot establish
-current route validity or network reachability. An internal [route inspector](https-route-inspection.md)
-is available for future controller preflight. Actual HTTPS socket binding,
+current route validity or network reachability. The [route inspector](https-route-inspection.md)
+is used for native preview. Actual HTTPS socket binding,
 TLS/HTTP execution, enforced byte/deadline budgets and one-shot consent remain
 future work.
 
@@ -59,5 +82,9 @@ Tests cover exact-field and authority rejection, authenticated socket/CLI round
 trips, unavailable enrollment, retirement, and absent browser routes. A real
 controller-process test saves settings, restarts, lists and retires them while
 checking that no observation or gateway/resolver run audit was created and no
-private settings reached controller logs. Synthetic enrollment is sufficient:
+private settings reached controller logs. Review tests additionally exercise
+retirement and enrollment changes during inspection, wrong selections, clock
+limits, exact reference/authority rejection and the full socket/CLI disclosure.
+The required macOS 15/26 native-process lab saves a selection and runs the real
+`https-plan` command against its isolated network without a TLS server. Synthetic enrollment is sufficient:
 this evidence does not certify actual HTTPS traffic, TLS or packaged permissions.

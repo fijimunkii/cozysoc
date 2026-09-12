@@ -132,12 +132,15 @@ func runHTTPSCommand(ctx context.Context, command string, args []string, stdout,
 			return errors.New("https-list accepts no positional arguments")
 		}
 		method, params = api.MethodHTTPSList, struct{}{}
-	case "https-retire":
+	case "https-retire", "https-plan":
 		if fs.NArg() != 1 || !localapi.ValidHTTPSSelectionID(fs.Arg(0)) {
 			return errors.New("https command requires one opaque SELECTION_ID")
 		}
 		params = api.HTTPSIDParams{SelectionID: fs.Arg(0)}
 		method = api.MethodHTTPSRetire
+		if command == "https-plan" {
+			method = api.MethodHTTPSPlan
+		}
 	default:
 		return errors.New("unknown https command")
 	}

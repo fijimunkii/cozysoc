@@ -144,6 +144,24 @@ func nativeConsentSession(t *testing.T) {
 			t.Fatal("check enabled Device Watch")
 		}
 	}
+	t.Run("https-native-review", func(t *testing.T) {
+		raw, err := client.CallWithParams(ctx, api.MethodHTTPSSave, api.HTTPSSettingsParams{Endpoint: target + ":443", ServerName: "test.example", RequestTarget: "/check", Family: "ipv4", Method: "HEAD", ExpectedStatus: 204, DestinationPolicy: "exact-endpoint"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var saved api.HTTPSSettingsResult
+		if json.Unmarshal(raw, &saved) != nil || len(saved.Items) != 1 {
+			t.Fatal("HTTPS save failed")
+		}
+		output, err := exec.CommandContext(ctx, filepath.Join(work, "cozysoc"), "https-plan", "--state-dir", state, saved.Items[0].SelectionID).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var review api.HTTPSPlan
+		if json.Unmarshal(output, &review) != nil || review.Mode != "preview-only" || review.ExecutionAvailable || review.ConsentGranted || review.Configuration.SelectionID != saved.Items[0].SelectionID || review.RequestBytes == "" || review.Source == "" || !time.Now().Before(review.RouteFreshUntil) {
+			t.Fatal("native HTTPS review failed")
+		}
+	})
 	var dnsRunID string
 	t.Run("resolver-native-session", func(t *testing.T) { dnsRunID = nativeResolverCLI(t, ctx, client, work, python) })
 	stop() // Join the actual controller before reading its persisted evidence.

@@ -421,7 +421,7 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = history
-	case api.MethodHTTPSSave, api.MethodHTTPSList, api.MethodHTTPSRetire:
+	case api.MethodHTTPSSave, api.MethodHTTPSList, api.MethodHTTPSRetire, api.MethodHTTPSPlan:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
 			return

@@ -91,5 +91,6 @@ tests exercise the extracted shared validation. No test here demonstrates actual
 TLS, public-endpoint, packaged permission or hardware behavior.
 [Durable settings](https-configuration.md) and [native settings commands](https-controller.md) are now available.
 [Native route inspection](https-route-inspection.md) is available internally.
-Remaining work includes controller preflight, socket binding, actual byte/deadline
+[Native preview](https-controller.md) now reloads settings and enrollment around
+inspection. Remaining work includes socket binding, actual byte/deadline
 enforcement, one-shot consent and durable audit/recovery.

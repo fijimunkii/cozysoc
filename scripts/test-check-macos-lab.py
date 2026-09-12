@@ -39,7 +39,7 @@ class EvidenceGateTests(unittest.TestCase):
                 self.check(without_https + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
 
     def test_dns_cases_are_required(self):
-        for mode in ("dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "native-session/resolver-native-session"):
+        for mode in ("dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "native-session/resolver-native-session", "native-session/https-native-review"):
             name = "TestMACOSGatewayLab/" + mode
             self.assertIn(name, checker.EXPECTED)
             with self.subTest(mode=mode), self.assertRaises(ValueError):
