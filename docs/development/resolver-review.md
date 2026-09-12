@@ -87,3 +87,7 @@ isolated lab. Product execution endpoints remain pending.
 [Durable settings](resolver-configuration.md) now allocate and retain immutable
 configuration references across restarts. Product preflight wiring and explicit
 one-shot consent remain separate from saving those settings.
+
+Source/target prefix validation is shared with the selected HTTPS review plan in
+`checkbinding`. The existing resolver destination policies, source membership,
+subnet exclusions and owned prefix copies remain unchanged.
