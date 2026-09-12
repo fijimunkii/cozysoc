@@ -28,16 +28,19 @@ var (
 )
 
 // Result omits endpoint, request, headers, bodies, certificates and raw errors.
-// These stages begin after connection establishment; outer run control must retain
-// the earlier connect start and any connect failure when building a measurement.
+// Exchange begins timing after connection establishment. The TCP candidate
+// retains the earlier connect start and final attribution completion separately.
 type Result struct {
-	Stage                                   nq.HTTPSStage
-	Exchange                                nq.HTTPSExchange
-	Request                                 nq.HTTPSRequestState
-	StatusCode                              int
-	TransportReadBytes, TransportWriteBytes int
-	TransportReadCalls, TransportWriteCalls int
-	ResponseHeaderBytes                     int
+	// ResponseReceivedAt is captured at final header receipt, before parsing and
+	// later route validation. Zero means no attributable final response.
+	StartedAt, CompletedAt, ResponseReceivedAt time.Time
+	Stage                                      nq.HTTPSStage
+	Exchange                                   nq.HTTPSExchange
+	Request                                    nq.HTTPSRequestState
+	StatusCode                                 int
+	TransportReadBytes, TransportWriteBytes    int
+	TransportReadCalls, TransportWriteCalls    int
+	ResponseHeaderBytes                        int
 }
 
 // Exchange takes ownership of conn, closing it on every path. The caller must
@@ -84,6 +87,8 @@ func exchange(ctx context.Context, plan httpsplan.Plan, conn net.Conn, roots *x5
 		result.TransportReadCalls = wire.readCalls
 		result.TransportWriteCalls = wire.writeCalls
 	}()
+	result.StartedAt = time.Now().Round(0).UTC()
+	defer func() { result.CompletedAt = time.Now().Round(0).UTC() }()
 	result.Stage = nq.HTTPSTLS
 	result.Exchange = nq.HTTPSIncomplete
 	result.Request = nq.HTTPSRequestNotSent
@@ -160,6 +165,7 @@ func exchange(ctx context.Context, plan httpsplan.Plan, conn net.Conn, roots *x5
 			}
 			return fail(err, fallback)
 		}
+		receivedAt := time.Now().Round(0).UTC()
 		response, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(header)), &http.Request{Method: d.Configuration.Selection.Method})
 		if err != nil {
 			return fail(err, ErrProtocol)
@@ -177,6 +183,7 @@ func exchange(ctx context.Context, plan httpsplan.Plan, conn net.Conn, roots *x5
 		if !time.Now().Before(deadline) {
 			return fail(context.DeadlineExceeded, ErrTransport)
 		}
+		result.ResponseReceivedAt = receivedAt
 		result.StatusCode = response.StatusCode
 		result.Exchange = nq.HTTPSResponseReceived
 		return result, nil

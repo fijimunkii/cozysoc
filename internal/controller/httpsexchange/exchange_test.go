@@ -140,6 +140,12 @@ func TestTLSExchangeResponseSemanticsAndExactRequest(t *testing.T) {
 			if !errors.Is(err, tc.want) || result.StatusCode != tc.status || result.Stage != nq.HTTPSRequest || result.Request != nq.HTTPSRequestAccepted {
 				t.Fatalf("result=%+v err=%v", result, err)
 			}
+			if tc.want == nil && (result.ResponseReceivedAt.Before(result.StartedAt) || result.ResponseReceivedAt.After(result.CompletedAt) || result.ResponseReceivedAt.IsZero()) {
+				t.Fatal("lost header receipt time")
+			}
+			if tc.want != nil && !result.ResponseReceivedAt.IsZero() {
+				t.Fatal("failed response has receipt time")
+			}
 			if tc.want == nil && result.Exchange != nq.HTTPSResponseReceived {
 				t.Fatal("lost response")
 			}
