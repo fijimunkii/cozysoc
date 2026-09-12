@@ -3,9 +3,9 @@
 Related issues: #14 and #29. `networkquality.Corroborate` is the shared, pure
 assessment boundary for comparing already-collected local-link, selected ICMP,
 normalized DNS and selected external-target evidence. It performs no I/O, creates
-no checks, and grants no consent. Controller/history and frontend integration
-remain separate work; this contract alone does not add a user-facing diagnosis
-or an external measurement collector.
+no checks, and grants no consent. The [retained-history adapter](retained-quality-diagnosis.md) now supplies a
+controller-owned gateway/resolver pair through a native read. Frontend diagnosis
+and external measurement collection remain separate work.
 
 ## Observation context
 

@@ -61,6 +61,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "network-quality-diagnosis":
+		return runReadCommand(ctx, api.MethodQualityDiagnosis, args[1:], stdout, stderr)
 	case "resolver-history":
 		return runResolverHistoryCommand(ctx, args[1:], stdout, stderr)
 	case "resolver-check":
@@ -112,6 +114,7 @@ Usage:
   cozysoc networks [--state-dir PATH]
   cozysoc network-quality [--state-dir PATH]
   cozysoc network-quality-history [--state-dir PATH] [RUN_ID]
+  cozysoc network-quality-diagnosis [--state-dir PATH]
   cozysoc resolver-save [--state-dir PATH] --endpoint IP:53 --name FQDN. --family ipv4|ipv6 --transport udp --query-type A|AAAA --expect answer|nxdomain|no-data --destination-scope enrolled-prefix|exact-endpoint
   cozysoc resolver-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)

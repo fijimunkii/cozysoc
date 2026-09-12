@@ -94,6 +94,17 @@ func (s *Store) ReadGatewayHistory(ctx context.Context, q GatewayHistoryQuery) (
 		return GatewayHistoryPage{}, err
 	}
 	defer tx.Rollback()
+	page, err := readGatewayHistoryTx(ctx, tx, q, retainedAt, since)
+	if err != nil {
+		return GatewayHistoryPage{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return GatewayHistoryPage{}, err
+	}
+	return page, nil
+}
+
+func readGatewayHistoryTx(ctx context.Context, tx *sql.Tx, q GatewayHistoryQuery, retainedAt int64, since time.Time) (GatewayHistoryPage, error) {
 	scopes, err := listActiveDeviceWatchScopesTx(ctx, tx, 2)
 	if err != nil {
 		return GatewayHistoryPage{}, err
@@ -179,9 +190,6 @@ func (s *Store) ReadGatewayHistory(ctx context.Context, q GatewayHistoryQuery) (
 			return GatewayHistoryPage{}, err
 		}
 		page.Runs = append(page.Runs, run)
-	}
-	if err := tx.Commit(); err != nil {
-		return GatewayHistoryPage{}, err
 	}
 	return page, nil
 }

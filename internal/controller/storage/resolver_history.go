@@ -98,6 +98,17 @@ func (s *Store) ReadResolverHistory(ctx context.Context, q ResolverHistoryQuery)
 		return ResolverHistoryPage{}, err
 	}
 	defer tx.Rollback()
+	page, err := readResolverHistoryTx(ctx, tx, q, retainedAt, since)
+	if err != nil {
+		return ResolverHistoryPage{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ResolverHistoryPage{}, err
+	}
+	return page, nil
+}
+
+func readResolverHistoryTx(ctx context.Context, tx *sql.Tx, q ResolverHistoryQuery, retainedAt int64, since time.Time) (ResolverHistoryPage, error) {
 	scopes, err := listActiveDeviceWatchScopesTx(ctx, tx, 2)
 	if err != nil {
 		return ResolverHistoryPage{}, err
@@ -183,9 +194,6 @@ func (s *Store) ReadResolverHistory(ctx context.Context, q ResolverHistoryQuery)
 			return ResolverHistoryPage{}, err
 		}
 		page.Runs = append(page.Runs, run)
-	}
-	if err := tx.Commit(); err != nil {
-		return ResolverHistoryPage{}, err
 	}
 	return page, nil
 }

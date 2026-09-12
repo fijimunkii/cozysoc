@@ -159,6 +159,6 @@ The [corroboration contract](quality-corroboration.md) now compares bounded,
 already-collected evidence from matching device/scope/interface/time contexts.
 It preserves DNS expectations and explicit collection discontinuities, keeps
 address families separate, and explains selected-check associations without an
-internet-wide or root-cause verdict. Controller/history adapters and frontend
-diagnosis still need to supply this contract with trustworthy co-located evidence;
-external collectors remain separately scoped and authorized work.
+internet-wide or root-cause verdict. The [native retained diagnosis](retained-quality-diagnosis.md) now supplies a
+controller-owned gateway/resolver pair from one read-only snapshot. Frontend
+diagnosis and external collectors remain separately scoped work.
