@@ -84,3 +84,9 @@ The internal measurement/audit coordinator now supplies one-shot admission and
 cooldown. An integrated native HTTPS lab and
 interactive one-shot consent remain required before enabling product traffic.
 #14 and #29 remain open.
+
+The [isolated native lab](macos-network-lab.md) now includes a restricted libslirp
+TCP peer forwarding only to an owned Unix-socket TLS server. Its required
+`https-native-tls-rejection` case checks production route/socket binding and
+system-trust rejection of an ephemeral self-signed certificate before HTTP.
+Trusted responses and controller/PTY consent integration remain unproven.

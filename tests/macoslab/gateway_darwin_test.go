@@ -99,10 +99,16 @@ func startPeer(t *testing.T, mode string) *peer {
 	if !filepath.IsAbs(path) {
 		t.Fatal("absolute lab peer path required")
 	}
+	if mode == "https" {
+		path = filepath.Join(filepath.Dir(path), "https-peer")
+	}
 	// Includes the real 30-second interactive review-expiry case; packet limits stay fixed.
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	p := &peer{cancel: cancel, ready: make(chan peerEvent, 1), first: make(chan struct{}), done: make(chan struct{})}
 	cmd := exec.CommandContext(ctx, "/usr/bin/sudo", "-n", path, mode)
+	if mode == "https" {
+		cmd.Dir = filepath.Dir(path)
+	}
 	cmd.Stderr = &p.stderr
 	var err error
 	p.input, err = cmd.StdinPipe()
@@ -272,6 +278,7 @@ func TestMACOSGatewayLab(t *testing.T) {
 			t.Fatal("HTTPS accepted wrong interface")
 		}
 	})
+	t.Run("https-native-tls-rejection", runHTTPSNativeLab)
 	for _, mode := range []string{"dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss"} {
 		t.Run(mode, func(t *testing.T) { runDNSLab(t, mode) })
 	}
