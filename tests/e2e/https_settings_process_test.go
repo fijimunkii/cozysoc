@@ -49,10 +49,16 @@ func TestHTTPSSettingsProcessPersistsWithoutExecution(t *testing.T) {
 	if !localapi.ValidHTTPSSelectionID(id) {
 		t.Fatal("invalid reference")
 	}
-	for _, method := range []string{"network-quality.https-run", "network-quality.https-check", "network-quality.https-approve"} {
+	for _, method := range []string{"network-quality.https-run", "network-quality.https-approve"} {
 		if _, err := localapi.NewClient(dir).Call(context.Background(), method); err == nil || !strings.Contains(err.Error(), "method_not_found") {
 			t.Fatal("settings exposed execution/route authority")
 		}
+	}
+	if _, err := localapi.NewClient(dir).CheckHTTPS(context.Background(), id, func(context.Context, api.HTTPSCheckReview) (bool, error) {
+		t.Error("production controller offered HTTPS execution review")
+		return false, nil
+	}); err == nil || !strings.Contains(err.Error(), "unavailable") {
+		t.Fatal("HTTPS execution gate opened", err)
 	}
 	assertCLIErrorContains(t, binary, "unavailable", "https-plan", "--state-dir", dir, id)
 	assertGatewayExecutionDisabled(t, dir)

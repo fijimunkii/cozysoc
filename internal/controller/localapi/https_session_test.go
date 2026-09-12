@@ -1,0 +1,353 @@
+package localapi
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"net/netip"
+	"os"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsplan"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
+	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
+)
+
+// Real Unix socket/peer/secret/protocol, synthetic metadata and packet-free sender.
+type httpsSessionHandler struct {
+	testHandler
+	control *httpsrun.Control
+}
+
+func (h httpsSessionHandler) HTTPSCheckControl() (*httpsrun.Control, error) {
+	return h.control, nil
+}
+
+type httpsSessionExecutor func(context.Context, httpsrun.Request) (networkquality.HTTPSMeasurement, error)
+
+func (f httpsSessionExecutor) ExecuteHTTPS(ctx context.Context, s httpsrun.Request) (networkquality.HTTPSMeasurement, error) {
+	return f(ctx, s)
+}
+
+type httpsSessionAudit struct {
+	mu           sync.Mutex
+	events       []httpsrun.Event
+	failTerminal bool
+	finished     chan struct{}
+}
+
+func (a *httpsSessionAudit) InsertHTTPSRunAudit(_ context.Context, e httpsrun.Event) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err := httpsrun.ValidateEvent(e); err != nil {
+		return err
+	}
+	a.events = append(a.events, e)
+	if e.State == "finished" {
+		defer close(a.finished)
+		if a.failTerminal {
+			return errors.New("private uncertain database acknowledgement")
+		}
+	}
+	return nil
+}
+func (a *httpsSessionAudit) count() int { a.mu.Lock(); defer a.mu.Unlock(); return len(a.events) }
+
+func httpsSessionFixture(t *testing.T, execute httpsSessionExecutor, verifier peerVerifier, failAudit bool) (*Server, *httpsrun.Control, *httpsSessionAudit, *atomic.Int32, *atomic.Int32, context.CancelFunc) {
+	t.Helper()
+	calls, preflights := &atomic.Int32{}, &atomic.Int32{}
+	audit := &httpsSessionAudit{finished: make(chan struct{}), failTerminal: failAudit}
+	if execute == nil {
+		execute = func(_ context.Context, s httpsrun.Request) (networkquality.HTTPSMeasurement, error) {
+			d := s.Selection.Plan.Disclosure()
+			now := time.Now().UTC()
+			return networkquality.HTTPSMeasurement{ID: s.MeasurementID, Selection: d.Configuration.Selection, Observer: d.Binding.Observer, StartedAt: now, CompletedAt: now, Request: networkquality.HTTPSRequestAccepted, Exchange: networkquality.HTTPSIncomplete, Stage: networkquality.HTTPSRequest}, httpsrun.ErrExecution
+		}
+	}
+	constructed := false
+	control, err := httpsrun.New(httpsrun.Dependencies{
+		Now: func() time.Time {
+			if !constructed {
+				return time.Now().Add(-httpsrun.RunInterval)
+			}
+			return time.Now()
+		},
+		Auditor: audit,
+		Preflight: func(_ context.Context, id string) (httpsrun.Selection, error) {
+			preflights.Add(1)
+			now := time.Now().UTC()
+			plan, err := httpsplan.New(httpsplan.Binding{Observer: networkquality.Observer{ScopeID: "scope.fixture", SensorID: "fixture", InterfaceName: "fixture0", InterfaceIndex: 7}, Prefixes: []string{"192.168.50.0/24"}, Source: netip.MustParseAddr("192.168.50.23")}, httpsplan.Configuration{Selection: networkquality.HTTPSSelection{ID: id, EndpointID: "endpoint-v1", RequestID: "request-v1", Family: networkquality.FamilyIPv4, Method: "HEAD", ExpectedStatus: 204}, Endpoint: netip.MustParseAddrPort("198.51.100.20:443"), ServerName: "test.example", RequestTarget: "/check", DestinationPolicy: httpsplan.ExactEndpoint}, now)
+			return httpsrun.Selection{Plan: plan, RouteObservedAt: now, RouteFreshUntil: now.Add(30 * time.Second)}, err
+		},
+		Executor: httpsSessionExecutor(func(ctx context.Context, s httpsrun.Request) (networkquality.HTTPSMeasurement, error) {
+			calls.Add(1)
+			return execute(ctx, s)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	constructed = true
+	dir, err := os.MkdirTemp("", "cz-consent-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verifier == nil {
+		verifier = verifyPeer
+	}
+	server, err := newServer(dir, httpsSessionHandler{control: control}, nil, verifier)
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = server.Serve(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = control.Shutdown(context.Background())
+		_ = server.Close()
+		<-done
+		_ = os.RemoveAll(dir)
+	})
+	return server, control, audit, calls, preflights, cancel
+}
+
+func httpsSessionRequest(secret string, params json.RawMessage) api.Request {
+	return api.Request{Version: api.Version, ID: "https-check", Method: api.MethodHTTPSCheck, Auth: secret, Params: params}
+}
+func openHTTPSReview(t *testing.T, s *Server) (net.Conn, *bufio.Reader, api.HTTPSCheckReview) {
+	t.Helper()
+	conn, err := net.Dial("unix", s.SocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+	if err := json.NewEncoder(conn).Encode(httpsSessionRequest(s.secret, json.RawMessage(`{"selection_id":"https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))); err != nil {
+		t.Fatal(err)
+	}
+	reader := bufio.NewReaderSize(conn, httpsFrameLimit+1)
+	raw, err := readHTTPSResponse(reader, "https-check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var review api.HTTPSCheckReview
+	if json.Unmarshal(raw, &review) != nil || validateHTTPSReview(review, "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", time.Now()) != nil {
+		t.Fatal("invalid review")
+	}
+	return conn, reader, review
+}
+func waitHTTPSSession(t *testing.T, f func() bool) {
+	t.Helper()
+	until := time.Now().Add(2 * time.Second)
+	for time.Now().Before(until) {
+		if f() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("session did not settle")
+}
+
+func TestHTTPSConsentAndImmutableReview(t *testing.T) {
+	s, _, audit, calls, _, _ := httpsSessionFixture(t, nil, nil, false)
+	callbackCalls := 0
+	got, err := NewClient(s.stateDir).CheckHTTPS(context.Background(), "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", func(ctx context.Context, r api.HTTPSCheckReview) (bool, error) {
+		callbackCalls++
+		if _, ok := ctx.Deadline(); !ok || audit.count() != 0 || calls.Load() != 0 {
+			t.Fatal("review granted authority")
+		}
+		if r.Budget.MaxConnections != 1 || r.Source != "192.168.50.23" || r.Binding.InterfaceIndex != 7 {
+			t.Fatal("missing review")
+		}
+		r.SelectionID = "https-selection.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		r.Binding.Prefixes[0] = "10.0.0.0/8"
+		r.Budget.MaxConnections = 1000
+		r.Privacy[0] = "changed"
+		return true, nil
+	})
+	if err != nil || callbackCalls != 1 || got.Outcome != "failed" || got.FailureCode != "execution_failed" || got.Measurement == nil || got.Measurement.Exchange != networkquality.HTTPSIncomplete || got.Measurement.Request != networkquality.HTTPSRequestAccepted || calls.Load() != 1 || audit.count() != 3 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Review.SelectionID != "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" || got.Review.Binding.Prefixes[0] != "192.168.50.0/24" || got.Review.Privacy[0] == "changed" {
+		t.Fatal("client retargeted authority")
+	}
+	_, err = NewClient(s.stateDir).CheckHTTPS(context.Background(), "https-selection.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", func(context.Context, api.HTTPSCheckReview) (bool, error) {
+		t.Error("cooldown issued review")
+		return true, nil
+	})
+	var response *ResponseError
+	if !errors.As(err, &response) || response.Code != "cooldown" || calls.Load() != 1 {
+		t.Fatal("missing global cooldown", err)
+	}
+}
+
+func TestHTTPSDeclineAndAbandon(t *testing.T) {
+	s, c, audit, calls, _, _ := httpsSessionFixture(t, nil, nil, false)
+	got, err := NewClient(s.stateDir).CheckHTTPS(context.Background(), "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", func(context.Context, api.HTTPSCheckReview) (bool, error) { return false, nil })
+	if err != nil || got.Outcome != "declined" || got.RunID != "" || got.Measurement != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	conn, _, old := openHTTPSReview(t, s)
+	conn.Close()
+	waitHTTPSSession(t, func() bool {
+		r, err := c.Prepare(context.Background(), "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+		if err != nil {
+			return false
+		}
+		c.Discard(r.Ticket)
+		return true
+	})
+	conn, reader, newReview := openHTTPSReview(t, s)
+	if old.Challenge == newReview.Challenge {
+		t.Fatal("reused challenge")
+	}
+	approve := true
+	_ = json.NewEncoder(conn).Encode(api.HTTPSCheckDecision{Challenge: old.Challenge, Approve: &approve})
+	if _, err := readHTTPSResponse(reader, "https-check"); err == nil {
+		t.Fatal("cross-connection approval accepted")
+	}
+	if calls.Load() != 0 || audit.count() != 0 {
+		t.Fatal("decline or replay executed")
+	}
+}
+
+func TestHTTPSDecisionGrammar(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing-approval":  `{"challenge":%q}`,
+		"null":              `{"challenge":%q,"approve":null}`,
+		"string":            `{"challenge":%q,"approve":"true"}`,
+		"case":              `{"challenge":%q,"Approve":true}`,
+		"duplicate":         `{"challenge":%q,"approve":false,"approve":true}`,
+		"escaped-duplicate": `{"challenge":%q,"approve":false,"\u0061pprove":true}`,
+		"override":          `{"challenge":%q,"approve":true,"selection_id":"https-selection.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`,
+		"extra-value":       `{"challenge":%q,"approve":true} true`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, _, audit, calls, _, _ := httpsSessionFixture(t, nil, nil, false)
+			conn, reader, r := openHTTPSReview(t, s)
+			_, _ = fmt.Fprintf(conn, body+"\n", r.Challenge)
+			if _, err := readHTTPSResponse(reader, "https-check"); err == nil {
+				t.Fatal("invalid decision accepted")
+			}
+			if calls.Load() != 0 || audit.count() != 0 {
+				t.Fatal("invalid consent executed")
+			}
+		})
+	}
+}
+
+func TestHTTPSAuthenticationAndStrictRequest(t *testing.T) {
+	for _, mode := range []string{"wrong-secret", "unverified-peer", "wrong-uid", "duplicate-target", "case-target", "scope", "null-target", "public", "duplicate-method", "large"} {
+		t.Run(mode, func(t *testing.T) {
+			var verify peerVerifier
+			if mode == "unverified-peer" {
+				verify = func(net.Conn) (PeerIdentity, error) { return PeerIdentity{UID: os.Geteuid()}, nil }
+			}
+			if mode == "wrong-uid" {
+				verify = func(net.Conn) (PeerIdentity, error) { return PeerIdentity{UID: os.Geteuid() + 1, Verified: true}, nil }
+			}
+			s, _, audit, calls, preflights, _ := httpsSessionFixture(t, nil, verify, false)
+			params := `{"selection_id":"https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`
+			switch mode {
+			case "duplicate-target":
+				params = `{"selection_id":"https-selection.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","selection_id":"https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`
+			case "case-target":
+				params = `{"Selection_ID":"https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`
+			case "scope":
+				params = `{"selection_id":"https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","scope_id":"scope.fixture"}`
+			case "null-target":
+				params = `{"selection_id":null}`
+			case "public":
+				params = `{"selection_id":"8.8.8.8"}`
+			case "large":
+				params = `{"selection_id":"` + strings.Repeat("1", 9000) + `"}`
+			}
+			secret := s.secret
+			if mode == "wrong-secret" {
+				secret = "wrong"
+			}
+			raw, _ := json.Marshal(httpsSessionRequest(secret, json.RawMessage(params)))
+			if mode == "duplicate-method" {
+				raw = []byte(strings.Replace(string(raw), `"method":`, `"method":"status","method":`, 1))
+			}
+			conn, err := net.Dial("unix", s.SocketPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			_, _ = conn.Write(append(raw, '\n'))
+			var response api.Response
+			if err := json.NewDecoder(conn).Decode(&response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Error == nil || len(response.Result) != 0 || calls.Load() != 0 || preflights.Load() != 0 || audit.count() != 0 {
+				t.Fatal("invalid request reached authority")
+			}
+		})
+	}
+}
+
+func TestHTTPSDisconnectCancelsRun(t *testing.T) {
+	entered := make(chan struct{})
+	execute := httpsSessionExecutor(func(ctx context.Context, s httpsrun.Request) (networkquality.HTTPSMeasurement, error) {
+		close(entered)
+		<-ctx.Done()
+		return networkquality.HTTPSMeasurement{}, ctx.Err()
+	})
+	s, _, audit, calls, _, _ := httpsSessionFixture(t, execute, nil, false)
+	conn, _, r := openHTTPSReview(t, s)
+	approve := true
+	_ = json.NewEncoder(conn).Encode(api.HTTPSCheckDecision{Challenge: r.Challenge, Approve: &approve})
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("executor not entered")
+	}
+	conn.Close()
+	select {
+	case <-audit.finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("disconnect left execution running")
+	}
+	audit.mu.Lock()
+	defer audit.mu.Unlock()
+	if len(audit.events) != 3 || audit.events[2].Outcome != "canceled" || calls.Load() != 1 {
+		t.Fatal("missing cancellation audit")
+	}
+}
+
+func TestHTTPSServerCancelClosesReview(t *testing.T) {
+	s, _, audit, calls, _, cancel := httpsSessionFixture(t, nil, nil, false)
+	conn, reader, _ := openHTTPSReview(t, s)
+	cancel()
+	if _, err := readHTTPSResponse(reader, "https-check"); err == nil {
+		t.Fatal("server cancellation left session open")
+	}
+	conn.Close()
+	if audit.count() != 0 || calls.Load() != 0 {
+		t.Fatal("cancel authorized work")
+	}
+}
+
+func TestHTTPSUnconfirmedAuditHasNoResult(t *testing.T) {
+	s, _, audit, calls, _, _ := httpsSessionFixture(t, nil, nil, true)
+	got, err := NewClient(s.stateDir).CheckHTTPS(context.Background(), "https-selection.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", func(context.Context, api.HTTPSCheckReview) (bool, error) { return true, nil })
+	var response *ResponseError
+	if !errors.As(err, &response) || response.Code != "audit_unconfirmed" || got.RunID != "" || got.Measurement != nil || audit.count() != 3 || calls.Load() != 1 {
+		t.Fatalf("published uncertain audit: %+v %v", got, err)
+	}
+	if strings.Contains(err.Error(), "private") {
+		t.Fatal("raw error leaked")
+	}
+}
