@@ -80,5 +80,6 @@ binding, consent enforcement, durability or hardware support. #14 and #29 remain
 open.
 
 The [one-shot run controller](resolver-run-control.md) now consumes process-local
-reviews and commits lifecycle/measurement audits through SQLite. It remains
-disconnected from product endpoints and live DNS execution.
+reviews and commits lifecycle/measurement audits through SQLite. The
+[bounded UDP candidate](resolver-udp-sender.md) is exercised through it in the
+isolated lab. Product execution endpoints remain pending.
