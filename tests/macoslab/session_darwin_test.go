@@ -16,7 +16,9 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverrun"
 	_ "modernc.org/sqlite"
 )
@@ -63,7 +65,7 @@ func nativeConsentSession(t *testing.T) {
 		})
 	}
 	t.Cleanup(stop)
-	ctx, cancel := context.WithTimeout(context.Background(), 110*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 170*time.Second)
 	defer cancel()
 	client := localapi.NewClient(state)
 	deadline := time.Now().Add(10 * time.Second)
@@ -96,6 +98,17 @@ func nativeConsentSession(t *testing.T) {
 		var response *localapi.ResponseError
 		if !errors.As(err, &response) || response.Code != "cooldown" {
 			t.Fatalf("startup gate: %v", err)
+		}
+	}
+	if _, err := client.CheckHTTPS(ctx, "https-selection.00000000000000000000000000000000", func(context.Context, api.HTTPSCheckReview) (bool, error) {
+		t.Error("HTTPS startup quiet interval issued a review")
+		return false, nil
+	}); err == nil {
+		t.Fatal("missing HTTPS startup quiet interval")
+	} else {
+		var response *localapi.ResponseError
+		if !errors.As(err, &response) || response.Code != "cooldown" {
+			t.Fatalf("HTTPS startup gate: %v", err)
 		}
 	}
 	if _, err := client.CallWithParams(ctx, api.MethodNetworkEnroll, api.NetworkEnrollParams{InterfaceName: "feth42"}); err != nil {
@@ -164,6 +177,8 @@ func nativeConsentSession(t *testing.T) {
 	})
 	var dnsRunID string
 	t.Run("resolver-native-session", func(t *testing.T) { dnsRunID = nativeResolverCLI(t, ctx, client, work, python) })
+	var httpsRunID string
+	t.Run("https-native-session", func(t *testing.T) { httpsRunID = nativeHTTPSCLI(t, ctx, client, work, python) })
 	stop() // Join the actual controller before reading its persisted evidence.
 	if t.Failed() {
 		return // Never read SQLite after an unconfirmed child shutdown.
@@ -173,6 +188,28 @@ func nativeConsentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	var httpsRaw string
+	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.https-run."+httpsRunID+".finished").Scan(&httpsRaw); err != nil {
+		t.Fatal(err)
+	}
+	var httpsEvent httpsrun.Event
+	if json.Unmarshal([]byte(httpsRaw), &httpsEvent) != nil || httpsrun.ValidateEvent(httpsEvent) != nil || httpsEvent.Outcome != "completed" || httpsEvent.Measurement == nil || httpsEvent.Measurement.StatusCode != 204 || httpsEvent.Measurement.ResponseTimeNanoseconds == nil || httpsEvent.Measurement.Exchange != nq.HTTPSResponseReceived {
+		t.Fatal("native HTTPS audit missing")
+	}
+	var httpsCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind='https-run'`).Scan(&httpsCount); err != nil || httpsCount != 3 {
+		t.Fatal("HTTPS declines admitted work or phases duplicated", err)
+	}
+	for _, phase := range []string{"authorized", "admitted"} {
+		var raw string
+		if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.https-run."+httpsRunID+"."+phase).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var event httpsrun.Event
+		if json.Unmarshal([]byte(raw), &event) != nil || httpsrun.ValidateEvent(event) != nil || event.State != phase || event.Selection != httpsEvent.Selection || event.Observer != httpsEvent.Observer || event.At.After(httpsEvent.At) {
+			t.Fatal("HTTPS audit phases lost admission provenance")
+		}
+	}
 	var dnsRaw string
 	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.resolver-run."+dnsRunID+".finished").Scan(&dnsRaw); err != nil {
 		t.Fatal(err)
@@ -359,4 +396,51 @@ func assertNativeResolverHistory(t *testing.T, ctx context.Context, client *loca
 	if err != nil || json.Unmarshal(out, &history) != nil || len(history.Runs) != 1 || history.Runs[0].RunID != runID {
 		t.Fatal("resolver history CLI unavailable", err)
 	}
+}
+
+func nativeHTTPSCLI(t *testing.T, ctx context.Context, client *localapi.Client, work, python string) string {
+	t.Helper()
+	name, done := ownedHTTPSServer(t, true)
+	raw, err := client.CallWithParams(ctx, api.MethodHTTPSSave, api.HTTPSSettingsParams{Endpoint: target + ":443", ServerName: name, RequestTarget: "/check", Family: "ipv4", Method: "HEAD", ExpectedStatus: 204, DestinationPolicy: "exact-endpoint"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings api.HTTPSSettingsResult
+	if json.Unmarshal(raw, &settings) != nil || len(settings.Items) != 1 || settings.ConsentGranted {
+		t.Fatal("HTTPS settings failed")
+	}
+	id := settings.Items[0].SelectionID
+	// Expiry uses the real review lifetime. Start the short-lived peer afterward.
+	interactiveGatewayCLI(t, ctx, work, python, "https-expire", id)
+	peer := startPeer(t, "https")
+	for _, mode := range []string{"redirected-input", "redirected-output", "decline", "preloaded", "overlong", "eof", "interrupt"} {
+		interactiveGatewayCLI(t, ctx, work, python, "https-"+mode, id)
+	}
+	output := interactiveGatewayCLI(t, ctx, work, python, "https-approve", id)
+	match := regexp.MustCompile(`(?m)^Run: ([0-9a-f]{32})$`).FindStringSubmatch(output)
+	if len(match) != 2 {
+		t.Fatal("HTTPS CLI lost run reference")
+	}
+	select {
+	case err := <-done:
+		done <- err
+		if err != nil {
+			t.Fatal("owned HTTPS request failed", err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	peer.stop(t)
+	if _, err := client.CheckHTTPS(ctx, id, func(context.Context, api.HTTPSCheckReview) (bool, error) {
+		t.Error("HTTPS cooldown issued review")
+		return true, nil
+	}); err == nil {
+		t.Fatal("HTTPS cooldown disappeared")
+	} else {
+		var response *localapi.ResponseError
+		if !errors.As(err, &response) || response.Code != "cooldown" {
+			t.Fatalf("HTTPS cooldown: %v", err)
+		}
+	}
+	return match[1]
 }

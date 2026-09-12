@@ -50,6 +50,7 @@ type controllerAPIHandler struct {
 	httpsRuns              httpsRunLifecycle
 	httpsRouteInspector    httpsroute.Inspector
 	resolverRouteInspector resolverroute.Inspector
+	httpsChecksEnabled     bool
 	resolverChecksEnabled  bool
 	gatewayChecksEnabled   bool // Immutable after server startup; experimental native opt-in only.
 	store                  controllerStore

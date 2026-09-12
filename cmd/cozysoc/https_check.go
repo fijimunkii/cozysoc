@@ -24,7 +24,7 @@ func runHTTPSCheckCommand(ctx context.Context, args []string, stdout, stderr *os
 	fs.SetOutput(stderr)
 	stateDir := fs.String("state-dir", "", "controller state directory")
 	fs.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: cozysoc https-check [--state-dir PATH] SELECTION_ID\nExperimental macOS one-shot HTTPS consent client. Requires a foreground terminal. Product execution is currently unavailable pending integrated native lab evidence. Default: decline. No --yes, unattended mode or automatic retry.")
+		fmt.Fprintln(stderr, "Usage: cozysoc https-check [--state-dir PATH] SELECTION_ID\nExperimental macOS one-shot HTTPS consent client. Requires a foreground terminal. Requires a controller started with --experimental-https-checks. Default: decline. No --yes, unattended mode or automatic retry.")
 	}
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -117,7 +117,7 @@ func httpsCommandError(err error, approved bool) error {
 	}
 	var response *localapi.ResponseError
 	if errors.As(err, &response) && response.Code == "unavailable" {
-		return errors.New("HTTPS execution is not enabled in this build; integrated native lab evidence is still required")
+		return errors.New("HTTPS checks require a separately started macOS controller with --experimental-https-checks and an active saved selection")
 	}
 	return errors.New("https review or terminal exchange failed; no approval was submitted; do not automatically retry")
 }

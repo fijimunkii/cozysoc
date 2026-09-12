@@ -71,15 +71,16 @@ interface, references on save, budgets and approval fields are rejected. Errors
 return normalized messages without database details or private settings.
 
 These commands are available on supported Unix controller platforms, including
-macOS and Linux. No browser route, HTTPS check/run/approval command, consent
-ticket or collector is exposed. Enrollment and saved settings cannot establish
+macOS and Linux. Settings and preview expose no execution ticket or collector.
+Enrollment and saved settings cannot establish
 current route validity or network reachability. The [route inspector](https-route-inspection.md)
 is used for native preview. A [native TCP candidate](https-native-tcp.md) combines
 socket verification and the bounded exchange internally. Internal
 [audited run control](https-run-control.md) now enforces one-shot admission and
 cooldown. The controller installs one coordinator after acquiring the protected
-Unix socket and drains active work before storage closes. One-shot consent and
-end-to-end lab evidence remain required before execution.
+Unix socket and drains active work before storage closes. Execution separately
+requires the experimental macOS opt-in and foreground one-shot consent described
+in [the consent protocol](https-consent.md).
 
 Tests cover exact-field and authority rejection, authenticated socket/CLI round
 trips, unavailable enrollment, retirement, and absent browser routes. A real
@@ -103,19 +104,18 @@ preview never prepare a run ticket or reset cooldown.
 Internal run preflight uses the same bounded settings/enrollment reload around
 route collection as preview. Retirement or changed scope between review and run
 blocks admission. The TCP candidate and SQLite auditor are compiled dependencies,
-not caller-supplied transports. The foreground `https-check` client is present, but no opt-in execution flag or
-browser route exposes this owner yet. The typed `network-quality.https-check` session now exists
-in the local API, but the product handler does not supply its execution control;
-it returns unavailable before preparing a review.
+not caller-supplied transports. The foreground `https-check` client reaches this
+owner only when a macOS controller was started with `--experimental-https-checks`.
+Ordinary controllers leave the typed session unavailable before preparing a review.
+No browser route exposes execution.
 
 Lifecycle tests cover inert startup/preview, singleton ownership, retirement after
 review and shutdown joining a canceled executor before storage closes. The real
-settings process test verifies the HTTPS owner drains on shutdown and restart,
-while execution methods remain unavailable. These are lifecycle evidence, not
-proof of integrated HTTPS traffic or interactive consent.
+settings process test verifies the HTTPS owner drains on shutdown and restart
+while ordinary controllers leave execution unavailable.
 
-The [HTTPS consent protocol](https-consent.md) now defines the authenticated
-review/decision/result exchange and verifies exact request, policy and privacy
-disclosures. The terminal client now presents that disclosure and requires exact one-shot
-approval. Integrated native traffic/PTY evidence remains required before the
-product handler can enable it.
+The [HTTPS consent protocol](https-consent.md) defines the authenticated
+review/decision/result exchange. Its required isolated native session exercises
+the real controller, terminal consent, trusted HEAD/204 exchange and persisted
+audits. This evidence permits the default-off experimental macOS flag; it does
+not establish physical-network or packaged permission support.

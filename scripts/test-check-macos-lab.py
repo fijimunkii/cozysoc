@@ -29,7 +29,7 @@ class EvidenceGateTests(unittest.TestCase):
                 self.check(without_resolver + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
 
     def test_https_route_is_required(self):
-        name = "TestMACOSGatewayLab/https-native-trusted-response"
+        name = "TestMACOSGatewayLab/native-session/https-native-session"
         self.assertIn(name, checker.EXPECTED)
         without_https = [e for e in self.evidence() if e.get("Test") != name]
         with self.assertRaises(ValueError):

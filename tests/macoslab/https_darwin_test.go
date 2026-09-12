@@ -31,13 +31,14 @@ import (
 // peer. The ephemeral self-signed identity MUST be rejected by production trust.
 func runHTTPSNativeLab(t *testing.T)  { runHTTPSNativeCase(t, false) }
 func runHTTPSTrustedLab(t *testing.T) { runHTTPSNativeCase(t, true) }
-func runHTTPSNativeCase(t *testing.T, trusted bool) {
+func ownedHTTPSServer(t *testing.T, trusted bool) (string, chan error) {
+	t.Helper()
 	work := filepath.Dir(os.Getenv("COZYSOC_LAB_PEER"))
 	listener, err := net.Listen("unix", filepath.Join(work, "https.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() { _ = listener.Close() })
 	if err := os.Chmod(filepath.Join(work, "https.sock"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -93,14 +94,19 @@ func runHTTPSNativeCase(t *testing.T, trusted bool) {
 		_, err = server.Write([]byte("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"))
 		done <- err
 	}()
-	defer func() {
+	t.Cleanup(func() {
 		listener.Close()
 		select {
 		case <-done:
 		case <-time.After(9 * time.Second):
 			t.Error("TLS fixture did not drain")
 		}
-	}()
+	})
+	return name, done
+}
+
+func runHTTPSNativeCase(t *testing.T, trusted bool) {
+	name, done := ownedHTTPSServer(t, trusted)
 	peer := startPeer(t, "https")
 	r := labRequest(t)
 	b := r.Plan.Binding
