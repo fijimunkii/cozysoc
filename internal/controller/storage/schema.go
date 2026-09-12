@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -201,6 +201,52 @@ CREATE TRIGGER resolver_configuration_retired AFTER UPDATE ON resolver_configura
  INSERT INTO audit_events (id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
  VALUES ('audit.resolver-configuration.' || NEW.id || '.retired', 'resolver-configuration', 'local-os-user', NEW.retired_at_ns, 1,
  json_object('schema_version', 1, 'state', 'retired', 'selection_id', NEW.id, 'resolver_id', NEW.resolver_id, 'query_id', NEW.query_id, 'scope_id', NEW.scope_id),
+ 'audit', NEW.audit_expires_at_ns);
+END;
+`
+
+// Private HTTPS settings remain immutable; audit insertion and configuration
+// creation/retirement are one atomic statement on the existing writer.
+const migrationV3 = `
+CREATE TABLE https_configurations (
+ id TEXT PRIMARY KEY,
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id) ON DELETE RESTRICT,
+ endpoint_id TEXT NOT NULL UNIQUE,
+ request_id TEXT NOT NULL UNIQUE,
+ profile TEXT NOT NULL CHECK (profile = 'selected-https-v1'),
+ configuration TEXT NOT NULL CHECK (length(CAST(configuration AS BLOB)) <= 4096 AND json_valid(configuration) AND json_type(configuration) = 'object'),
+ created_at_ns INTEGER NOT NULL,
+ retired_at_ns INTEGER CHECK (retired_at_ns IS NULL OR retired_at_ns >= created_at_ns),
+ audit_expires_at_ns INTEGER NOT NULL CHECK (audit_expires_at_ns > created_at_ns AND (retired_at_ns IS NULL OR audit_expires_at_ns > retired_at_ns))
+) STRICT;
+CREATE TRIGGER https_configuration_insert_guard BEFORE INSERT ON https_configurations BEGIN
+ SELECT CASE WHEN (SELECT count(*) FROM https_configurations) >= 256
+ OR (SELECT count(*) FROM https_configurations WHERE retired_at_ns IS NULL) >= 16
+ OR EXISTS (SELECT 1 FROM https_configurations WHERE id = NEW.id OR endpoint_id = NEW.endpoint_id OR request_id = NEW.request_id)
+ OR NEW.retired_at_ns IS NOT NULL
+ OR NOT EXISTS (SELECT 1 FROM network_scopes WHERE id = NEW.scope_id AND kind = 'lan' AND retired_at_ns IS NULL AND enrolled_at_ns <= NEW.created_at_ns)
+ THEN RAISE(ABORT, 'HTTPS configuration unavailable') END;
+END;
+CREATE TRIGGER https_configuration_update_guard BEFORE UPDATE ON https_configurations BEGIN
+ SELECT CASE WHEN NEW.id != OLD.id OR NEW.scope_id != OLD.scope_id
+ OR NEW.endpoint_id != OLD.endpoint_id OR NEW.request_id != OLD.request_id OR NEW.profile != OLD.profile
+ OR NEW.configuration != OLD.configuration OR NEW.created_at_ns != OLD.created_at_ns
+ OR OLD.retired_at_ns IS NOT NULL OR NEW.retired_at_ns IS NULL
+ THEN RAISE(ABORT, 'HTTPS configuration is immutable') END;
+END;
+CREATE TRIGGER https_configuration_delete_guard BEFORE DELETE ON https_configurations BEGIN
+ SELECT RAISE(ABORT, 'HTTPS configuration is immutable');
+END;
+CREATE TRIGGER https_configuration_created AFTER INSERT ON https_configurations BEGIN
+ INSERT INTO audit_events (id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
+ VALUES ('audit.https-configuration.' || NEW.id || '.created', 'https-configuration', 'local-os-user', NEW.created_at_ns, 1,
+ json_object('schema_version', 1, 'state', 'created', 'selection_id', NEW.id, 'endpoint_id', NEW.endpoint_id, 'request_id', NEW.request_id, 'scope_id', NEW.scope_id, 'profile', NEW.profile),
+ 'audit', NEW.audit_expires_at_ns);
+END;
+CREATE TRIGGER https_configuration_retired AFTER UPDATE ON https_configurations BEGIN
+ INSERT INTO audit_events (id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
+ VALUES ('audit.https-configuration.' || NEW.id || '.retired', 'https-configuration', 'local-os-user', NEW.retired_at_ns, 1,
+ json_object('schema_version', 1, 'state', 'retired', 'selection_id', NEW.id, 'endpoint_id', NEW.endpoint_id, 'request_id', NEW.request_id, 'scope_id', NEW.scope_id, 'profile', NEW.profile),
  'audit', NEW.audit_expires_at_ns);
 END;
 `

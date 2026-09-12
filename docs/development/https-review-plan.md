@@ -54,7 +54,8 @@ A review expires after 30 seconds, is invalid at exact expiry and on clock rever
 and uses bounded signed-nanosecond times. `SameSelection` compares all configuration,
 binding, policy and budget values while ignoring review times and prefix ordering.
 A new review cannot renew an earlier approval. Configuration references must rotate
-when settings change; durable allocation/immutability is still future storage work.
+when settings change; [durable allocation and immutability](https-configuration.md) are now supplied by
+the controller store.
 
 ## Required executor policy and limits
 
@@ -87,6 +88,7 @@ Tests verify exact standard-library request encoding, escaping and bounds,
 redaction/explicit disclosure, ownership, stale/reversed clocks, changed selections,
 IPv4/IPv6 membership and hostile inputs. Existing resolver plan/route/coordinator
 tests exercise the extracted shared validation. No test here demonstrates actual
-TLS, public-endpoint, packaged permission or hardware behavior. Before traffic is
-exposed, remaining work includes durable settings, native route/socket binding,
-actual byte/deadline enforcement, one-shot consent and durable audit/recovery.
+TLS, public-endpoint, packaged permission or hardware behavior.
+[Durable settings](https-configuration.md) are now available. Before traffic is
+exposed, remaining work includes native route/socket binding, actual byte/deadline
+enforcement, one-shot consent and durable audit/recovery.

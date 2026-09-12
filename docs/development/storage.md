@@ -159,3 +159,8 @@ Upgrades from schema 1 preserve existing rows. Settings and their redacted audit
 commit atomically through single-statement triggers on the pinned writer; reads
 use the separate read-only pool. Configuration is bounded, private local state,
 not a measurement or persistent probe consent.
+
+Schema 3 adds [immutable selected-HTTPS settings](https-configuration.md), with
+atomic redacted save/retire audits and bounded reads on the existing read-only
+pool. Upgrades from schemas 1 and 2 preserve prior records and roll back the
+whole migration on failure. Saving settings grants no execution authority.
