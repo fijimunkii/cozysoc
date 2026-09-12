@@ -95,3 +95,7 @@ failure. They prove no physical DNS traffic, native routing/socket behavior,
 production consent UI or resolver reachability. The live sender, route adapter,
 immutable persisted configuration and product lifecycle/consent integration remain
 required. #14 and #29 stay open.
+
+The [native route inspector](resolver-route-inspection.md) now produces fresh
+source-bound plan selections on macOS. Live DNS sending and product integration
+remain pending.

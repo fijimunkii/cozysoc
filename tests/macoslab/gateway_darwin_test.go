@@ -21,6 +21,8 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
+	"github.com/fijimunkii/cozysoc/internal/controller/resolverplan"
+	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
 )
 
 const source = "192.168.250.2"
@@ -236,6 +238,20 @@ func TestMACOSGatewayLab(t *testing.T) {
 		}
 		if _, err := gatewayroute.NewInspector().Inspect(context.Background(), r.Plan.Binding, r.Source); err == nil {
 			t.Fatal("self-target accepted")
+		}
+	})
+	t.Run("resolver-route", func(t *testing.T) {
+		r := labRequest(t)
+		b := r.Plan.Binding
+		enrollment := resolverroute.Enrollment{Observer: networkquality.Observer{ScopeID: b.ScopeID, SensorID: "fixture", InterfaceName: b.InterfaceName, InterfaceIndex: b.InterfaceIndex}, Prefixes: b.Prefixes}
+		config := resolverplan.Configuration{Selection: networkquality.ResolverSelection{ID: "dns1", ResolverID: "resolver-v1", QueryID: "query-v1", Family: networkquality.FamilyIPv4, Transport: networkquality.DNSUDP, QueryType: networkquality.DNSQueryA, Expect: networkquality.DNSExpectAnswer}, Endpoint: netip.AddrPortFrom(r.Plan.Target, 53), Name: "test.example.", DestinationScope: resolverplan.EnrolledPrefix}
+		selected, err := resolverroute.NewInspector().Inspect(context.Background(), enrollment, config)
+		if err != nil || selected.Plan.Disclosure().Binding.Source != r.Source {
+			t.Fatalf("resolver route: %v", err)
+		}
+		enrollment.Observer.InterfaceIndex++
+		if _, err := resolverroute.NewInspector().Inspect(context.Background(), enrollment, config); err == nil {
+			t.Fatal("resolver accepted wrong interface")
 		}
 	})
 	for _, mode := range []string{"reply", "silent", "wrong-nonce"} {
