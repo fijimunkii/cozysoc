@@ -61,6 +61,7 @@ rejection before HTTP, exact request fields, informational responses, redirects,
 error statuses, malformed/oversized headers and absent bodies. In-memory stream
 tests exercise cancellation/deadlines and exact byte/call limits with partial
 writes. These tests do not prove native socket binding, external reachability,
-packaged permissions or one-shot consent. Native TCP binding, admission/audit
-integration and real isolated end-to-end execution remain required before product
+packaged permissions or one-shot consent. A [native TCP candidate](https-native-tcp.md) now verifies socket binding and
+connects this exchange internally. Admission/audit integration and real isolated
+end-to-end execution remain required before product
 HTTPS traffic is exposed. #14 and #29 remain open.
