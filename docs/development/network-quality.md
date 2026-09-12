@@ -160,5 +160,6 @@ already-collected evidence from matching device/scope/interface/time contexts.
 It preserves DNS expectations and explicit collection discontinuities, keeps
 address families separate, and explains selected-check associations without an
 internet-wide or root-cause verdict. The [native retained diagnosis](retained-quality-diagnosis.md) now supplies a
-controller-owned gateway/resolver pair from one read-only snapshot. Frontend
-diagnosis and external collectors remain separately scoped work.
+controller-owned gateway/resolver pair from one read-only snapshot. Overview exposes
+that historical comparison through a manual, typed read-only card. External
+collectors remain separately scoped work.

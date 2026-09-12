@@ -15,6 +15,8 @@ import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
 import { demoCapabilitiesRaw, demoStatusRaw } from "./demo/tools";
 import { OverviewPage } from "./OverviewPage";
+import { QualityDiagnosisPanel } from "./quality/QualityDiagnosisPanel";
+import { loadQualityDiagnosisFromWeb, type QualityDiagnosisLoader } from "./quality/quality-diagnosis";
 import { ResolverHistoryPanel } from "./quality/ResolverHistoryPanel";
 import { loadResolverHistoryFromWeb, type ResolverHistoryLoader } from "./quality/resolver-history";
 import { GatewayHistoryPanel } from "./quality/GatewayHistoryPanel";
@@ -60,6 +62,7 @@ export interface AppProps {
   loadLocalQuality?: LocalQualityLoader;
   loadGatewayHistory?: GatewayHistoryLoader;
   loadResolverHistory?: ResolverHistoryLoader;
+  loadQualityDiagnosis?: QualityDiagnosisLoader;
 }
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }> = {
@@ -70,7 +73,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -123,6 +126,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
             {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} /> : null}
             <OverviewPage data={activeData} onNavigate={setPage} />
             <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
+            <QualityDiagnosisPanel key={`diagnosis-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadQualityDiagnosis} />
             <ResolverHistoryPanel key={`resolver-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadResolverHistory} />
             <GatewayHistoryPanel key={`history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadGatewayHistory} />
           </>
