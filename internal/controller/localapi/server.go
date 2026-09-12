@@ -418,6 +418,16 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = history
+	case api.MethodHTTPSHistory:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		history, ok := s.readHTTPSHistory(ctx, conn, request)
+		if !ok {
+			return
+		}
+		result = history
 	case api.MethodGatewayHistory:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")

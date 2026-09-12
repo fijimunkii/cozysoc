@@ -61,6 +61,11 @@ func TestHTTPSSettingsProcessPersistsWithoutExecution(t *testing.T) {
 		t.Fatal("HTTPS execution gate opened", err)
 	}
 	assertCLIErrorContains(t, binary, "unavailable", "https-plan", "--state-dir", dir, id)
+	history := runCLIJSONArgs[api.HTTPSHistory](t, binary, "https-history", "--state-dir", dir)
+	if history.Mode != "retained-history" || !history.Enrolled || history.ScopeID != scope.ID || len(history.Runs) != 0 || history.Truncated || history.ScanTruncated {
+		t.Fatal("offline default controller did not expose empty retained history")
+	}
+	assertCLIErrorContains(t, binary, "not_found", "https-history", "--state-dir", dir, strings.Repeat("a", 32))
 	assertGatewayExecutionDisabled(t, dir)
 	assertResolverExecutionDisabled(t, dir)
 	coverage := runCLIJSONArgs[map[string]any](t, binary, "device-watch-coverage", "--state-dir", dir)
