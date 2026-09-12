@@ -6,11 +6,13 @@ import (
 	"time"
 )
 
-// CorroborationInput joins already collected evidence from two specialized
+// CorroborationInput joins already collected evidence from specialized
 // collectors. Device references are supplied by the trusted evidence owner;
 // matching scope/interface names alone cannot identify the observing device.
 // Nothing in this contract verifies provenance, authorizes traffic or performs I/O.
 type CorroborationInput struct {
+	HTTPSDeviceID     string
+	HTTPS             *HTTPSSnapshot // Optional until an external collector is configured.
 	NetworkDeviceID   string
 	ResolverDeviceID  string
 	Network           Snapshot
@@ -22,6 +24,11 @@ type CorroborationInput struct {
 const MaxCorroborationSkew = 30 * time.Second
 
 type CorroborationEvidence struct {
+	HTTPSSelection         *HTTPSSelection
+	HTTPSResult            HTTPSResult
+	HTTPSStage             HTTPSStage
+	HTTPSRequest           HTTPSRequestState
+	HTTPStatus             int
 	Selection              *ResolverSelection // Owned immutable DNS configuration references.
 	Layer                  Layer
 	Reference              string
@@ -110,6 +117,25 @@ func Corroborate(in CorroborationInput) (Corroboration, error) {
 		}
 		out.Evidence = append(out.Evidence, e)
 	}
+	if in.HTTPS != nil {
+		h, err := AssessHTTPS(*in.HTTPS)
+		if err != nil {
+			return Corroboration{}, err
+		}
+		for _, c := range h.Checks {
+			if c.Selection.Family != in.Family {
+				continue
+			}
+			selection := c.Selection
+			e := CorroborationEvidence{Layer: LayerExternal, Reference: selection.ID, HTTPSSelection: &selection,
+				Observer: h.Observer, Family: selection.Family, Method: MethodHTTPS, State: c.State, HTTPSResult: c.Result, ExpectationMatched: c.ExpectationMatched}
+			if m := c.Evidence; m != nil {
+				e.MeasurementID, e.StartedAt, e.CompletedAt, e.Gap = m.ID, m.StartedAt, m.CompletedAt, m.Gap
+				e.HTTPSStage, e.HTTPSRequest, e.HTTPStatus = m.Stage, m.Request, m.StatusCode
+			}
+			out.Evidence = append(out.Evidence, e)
+		}
+	}
 	sort.Slice(out.Evidence, func(i, j int) bool {
 		a, b := out.Evidence[i], out.Evidence[j]
 		if a.Layer != b.Layer {
@@ -177,14 +203,18 @@ func Corroborate(in CorroborationInput) (Corroboration, error) {
 			dnsReply = dnsReply || responded
 			dnsIssue = dnsIssue || e.State == StateIssueObserved
 		default:
-			reply = reply || e.Successes > 0
+			responded := e.Successes > 0
+			if e.Method == MethodHTTPS {
+				responded = e.HTTPStatus != 0
+			}
+			reply = reply || responded
 			if e.Layer == LayerGateway {
 				icmpMiss = icmpMiss || !passed
 				icmpReply = icmpReply || e.Successes > 0
 			}
 			if e.Layer == LayerExternal {
 				externalMiss = externalMiss || !passed
-				externalReply = externalReply || e.Successes > 0
+				externalReply = externalReply || responded
 			}
 		}
 		if !passed {
@@ -251,12 +281,35 @@ func validateCorroboration(in CorroborationInput) error {
 	if err := ValidateResolverSnapshot(b); err != nil {
 		return invalid()
 	}
-	ids := map[string]bool{}
-	for _, t := range a.Targets {
-		if t.Layer == LayerDNS {
+	if in.HTTPS == nil {
+		if in.HTTPSDeviceID != "" {
 			return invalid()
 		}
-	} // DNS must retain the specialized reply/expectation semantics.
+	} else {
+		h := in.HTTPS
+		if in.HTTPSDeviceID != in.NetworkDeviceID || h.Observer.ScopeID != a.Observer.ScopeID || h.Observer.InterfaceName != a.Observer.InterfaceName || h.Observer.InterfaceIndex != a.Observer.InterfaceIndex ||
+			!h.AsOf.Equal(a.AsOf) || !h.WindowStart.Equal(a.WindowStart) || h.Freshness != a.Freshness ||
+			len(a.Targets)+len(b.Selections)+len(h.Selections) > MaxTargets || len(a.Measurements)+len(b.Measurements)+len(h.Measurements) > MaxMeasurements || ValidateHTTPSSnapshot(*h) != nil {
+			return invalid()
+		}
+	}
+	ids := map[string]bool{}
+	externalRefs := map[string]bool{}
+	for _, t := range a.Targets {
+		if t.Layer == LayerExternal {
+			externalRefs[t.ID] = true
+		}
+		if t.Layer == LayerDNS || t.Method == MethodHTTPS {
+			return invalid()
+		}
+	} // DNS and HTTPS must retain specialized response/expectation semantics.
+	if in.HTTPS != nil {
+		for _, selection := range in.HTTPS.Selections {
+			if externalRefs[selection.ID] {
+				return invalid()
+			}
+		}
+	}
 	for _, m := range a.Measurements {
 		if !resolverTime(m.StartedAt) || !resolverTime(m.CompletedAt) {
 			return invalid()
@@ -268,6 +321,14 @@ func validateCorroboration(in CorroborationInput) error {
 			return invalid()
 		}
 		ids[m.ID] = true
+	}
+	if in.HTTPS != nil {
+		for _, m := range in.HTTPS.Measurements {
+			if ids[m.ID] {
+				return invalid()
+			}
+			ids[m.ID] = true
+		}
 	}
 	return nil
 }
@@ -294,6 +355,11 @@ func latestDiscontinuity(in CorroborationInput) (string, time.Time, GapReason) {
 	}
 	for _, m := range in.Resolvers.Measurements {
 		consider(m.ID, m.CompletedAt, m.Gap)
+	}
+	if in.HTTPS != nil {
+		for _, m := range in.HTTPS.Measurements {
+			consider(m.ID, m.CompletedAt, m.Gap)
+		}
 	}
 	return id, at, gap
 }
