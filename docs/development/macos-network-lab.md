@@ -206,7 +206,12 @@ installation/removal and isolated-interface setup use sudo.
 
 Before adding trust, the test records the public certificate and its SHA-256 hash
 in mode-0600 files. Cleanup exports current administrative trust, removes only the entry matching
-that certificate, imports it, and verifies every other entry is unchanged. It
+that certificate, and verifies every other entry is unchanged. During removal only,
+it saves the administrative trust authorization rule in a private journal and
+selects macOS’s existing `is-root` rule to avoid an unattended authentication
+dialog. A finally block restores the original rule and verifies its contents
+(excluding authd’s modification timestamps); an interrupted invocation restores
+that journal before proceeding. This occurs only on disposable hosted VMs. It
 then deletes exactly that certificate by hash and verifies the identity is no
 longer trusted. Each security-tool child has a ten-second bound and is joined
 by its privileged supervisor.
