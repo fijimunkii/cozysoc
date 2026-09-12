@@ -64,7 +64,7 @@ func (c *Candidate) verifyRoute(ctx context.Context, s httpsroute.Selection) err
 		}
 	}
 	now := time.Now()
-	if !s.Plan.SameSelection(fresh.Plan) || !fresh.Plan.Current(now) || fresh.RouteObservedAt.Before(start) || fresh.RouteObservedAt.After(now) || !fresh.RouteFreshUntil.Equal(fresh.RouteObservedAt.Add(httpsplan.ReviewLifetime)) || !now.Before(fresh.RouteFreshUntil) || !s.Plan.Current(now) {
+	if !s.Plan.SameSelection(fresh.Plan) || !fresh.Plan.Current(now) || fresh.RouteObservedAt.Before(start) || fresh.RouteObservedAt.After(now) || !fresh.RouteFreshUntil.Equal(fresh.RouteObservedAt.Add(httpsplan.ReviewLifetime)) || !now.Before(fresh.RouteFreshUntil) || !now.Before(s.RouteFreshUntil) || !s.Plan.Current(now) {
 		return ErrBinding
 	}
 	return ctx.Err()
@@ -95,11 +95,24 @@ func (c *Candidate) Execute(ctx context.Context, s httpsroute.Selection) (r http
 	if d.ExpiresAt.Before(deadline) {
 		deadline = d.ExpiresAt
 	}
+	if s.RouteFreshUntil.Before(deadline) {
+		deadline = s.RouteFreshUntil
+	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	if err := c.verifyRoute(ctx, s); err != nil {
 		return r, safeError(err)
 	}
+	connectStarted := time.Now().Round(0).UTC()
+	// Keep the connect start even when the TLS exchange replaces r. Completion
+	// includes final attribution checks; response receipt stays at the header.
+	defer func() {
+		r.StartedAt = connectStarted
+		r.CompletedAt = time.Now().Round(0).UTC()
+		if r.Exchange != nq.HTTPSResponseReceived {
+			r.ResponseReceivedAt = time.Time{}
+		}
+	}()
 	r.Stage = nq.HTTPSConnect
 	r.Request = nq.HTTPSRequestNotSent
 	r.Exchange = nq.HTTPSIncomplete
@@ -131,6 +144,11 @@ func (c *Candidate) Execute(ctx context.Context, s httpsroute.Selection) (r http
 	}
 	guarded := &routeConn{Conn: conn, check: func() error { return c.verifyRoute(ctx, s) }}
 	r, err = c.exchange(ctx, s.Plan, guarded)
+	if r.Stage == "" {
+		r.Stage = nq.HTTPSTLS
+		r.Request = nq.HTTPSRequestNotSent
+		r.Exchange = nq.HTTPSIncomplete
+	}
 	if guarded.failure != nil {
 		r.Exchange = nq.HTTPSIncomplete
 		r.StatusCode = 0

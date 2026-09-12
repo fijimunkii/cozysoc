@@ -48,8 +48,9 @@ TLS read-ahead may already contain body bytes and counts toward the transport
 ceiling. The underlying connection is closed directly, without a further TLS
 close-notify write outside the exchange budget.
 
-Results contain stage, request acceptance, normalized outcome/status and byte/call
-counts. Raw TLS errors, certificates, headers, locations, request data and bodies
+Results contain stage, request acceptance, normalized outcome/status, byte/call
+counts, and separate start/completion/final-header timestamps. The TCP candidate
+retains the earlier connect start for end-to-end response timing. Raw TLS errors, certificates, headers, locations, request data and bodies
 are excluded. TLS identity/protocol errors, stream failures, malformed HTTP,
 timeouts, cancellation and budget exhaustion remain distinct. A response alone
 is not an internet-availability or security claim.

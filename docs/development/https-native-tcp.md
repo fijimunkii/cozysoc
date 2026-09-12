@@ -10,7 +10,7 @@ scheduler or consent flow invokes it yet.
 The caller must supply the original absolute run deadline and a current immutable
 selection from controller-owned preflight. The candidate rejects stale or extended
 route evidence, revalidates the route before connection, and caps the entire
-operation to eight seconds or the earlier caller/review deadline. Connect has a
+operation to eight seconds or the earlier caller, original route or review deadline. Connect has a
 two-second ceiling inside that original deadline. Fresh inspections never refresh
 the reviewed selection or run deadline. A per-instance guard rejects concurrent
 execution; durable cooldown and audited one-shot admission remain future run-control
@@ -41,8 +41,31 @@ fail closed. Other operating systems return unsupported without dialing.
 Every path closes an opened connection. TLS/HTTP byte, call, header and phase
 limits remain enforced by the exchange. The candidate retains connect-stage
 failure separately from TLS/request stages, normalizes errors, and clears status
-attribution if binding changes during the exchange. It does not yet allocate
-measurement identities or write durable run evidence.
+attribution if binding changes during the exchange.
+
+## Normalized measurements
+
+`ExecuteHTTPS` accepts a controller-allocated 128-bit hexadecimal measurement ID
+and immutable selection. It validates the resulting evidence with the same HTTPS
+snapshot contract used by assessment. Invalid identities fail before inspection;
+rejected preflight/admission yields no measurement. The future coordinator must
+retain its own rejection reason without inventing a connection failure.
+
+A connection attempt records its start immediately before the connector runs.
+Final-header receipt is captured by the TLS/HTTP exchange before parsing and final
+route revalidation. Completion includes the attribution checks, but response time
+ends at final-header receipt: it includes connect/TLS time without charging later
+route validation as network latency. This is end-to-end elapsed time, including
+local binding checks before receipt, not pure network RTT. Missing, reversed or out-of-window response
+timestamps fail instead of producing an invented duration. Binding loss clears
+status and response timing. Connect, TLS, partial-request, protocol and timeout
+failures retain their distinct stage/request state with no response latency.
+
+Normalized output contains only measurement and immutable selection references,
+observer identity, timestamps, outcome and status. It contains no endpoint, TLS
+name, request target, raw errors or response content. IDs and durable run audits
+remain the responsibility of future run control; this method does not persist or
+schedule measurements.
 
 ## Evidence and remaining integration
 
