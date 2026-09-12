@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/url"
-	"path/filepath"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
@@ -192,12 +190,11 @@ func (s *Store) ReadGatewayHistory(ctx context.Context, q GatewayHistoryQuery) (
 // read connection per Store, with context-bounded queueing. Never use immutable=1:
 // the writer remains live and normal SQLite snapshot/locking semantics apply.
 func openGatewayHistoryDB(path string) (*sql.DB, error) {
-	absolute, err := filepath.Abs(path)
+	dsn, err := sqliteFileURI(path)
 	if err != nil {
 		return nil, err
 	}
-	dsn := (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=ro"}).String()
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", dsn+"?mode=ro")
 	if err != nil {
 		return nil, err
 	}

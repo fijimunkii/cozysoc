@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -19,6 +18,11 @@ import (
 func historyStore(t *testing.T) (*Store, GatewayHistoryQuery, []gatewayrun.Event) {
 	t.Helper()
 	store, _ := gatewayAuditStore(t)
+	return seedHistoryStore(t, store)
+}
+
+func seedHistoryStore(t *testing.T, store *Store) (*Store, GatewayHistoryQuery, []gatewayrun.Event) {
+	t.Helper()
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	store.now = func() time.Time { return now }
 	scope := domain.NetworkScope{ID: "scope.history", Kind: "lan", EnrolledAt: now.Add(-7 * 24 * time.Hour), Metadata: json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.50.0/24"]}}`)}
@@ -321,22 +325,12 @@ func TestHistoryReadTransactionCannotAbsorbOrUndoAuditWrites(t *testing.T) {
 }
 
 func TestHistoryReadPoolIsBoundedAndUsesLiteralPaths(t *testing.T) {
-	// Seed with the existing writer, then move our closed fixture. This test
-	// verifies the new read-only pool's literal path handling, not the writer's
-	// pre-existing DSN handling for special-character state directories.
-	root := t.TempDir()
-	seed := filepath.Join(root, "seed")
-	s, err := Open(seed, DefaultLimits())
+	dir := filepath.Join(t.TempDir(), "history ?#%literal")
+	s, err := Open(dir, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Join(root, "history?#literal")
-	if err := os.Rename(seed, dir); err != nil {
-		t.Fatal(err)
-	}
+	defer s.Close()
 	reader, err := openGatewayHistoryDB(filepath.Join(dir, Filename))
 	if err != nil {
 		t.Fatal(err)
