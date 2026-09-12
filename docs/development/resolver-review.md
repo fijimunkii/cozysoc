@@ -78,3 +78,7 @@ IPv4/IPv6 host boundaries, canonicalization, private-copy ownership, redaction a
 freshness. They do not establish live networking, VPN/split-DNS behavior, socket
 binding, consent enforcement, durability or hardware support. #14 and #29 remain
 open.
+
+The [one-shot run controller](resolver-run-control.md) now consumes process-local
+reviews and commits lifecycle/measurement audits through SQLite. It remains
+disconnected from product endpoints and live DNS execution.
