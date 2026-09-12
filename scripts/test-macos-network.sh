@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Explicit disposable macOS VM lab. Product code runs as the normal user in
-# Terminal, not under sudo. Scoped test-certificate trust is removed on teardown.
+# Terminal, not under sudo. Scoped test-certificate trust is revoked on teardown.
 set -euo pipefail
 [[ $(uname -s) == Darwin && ${COZYSOC_MACOS_LAB:-} == 1 ]]
 [[ $(id -u) != 0 ]]
@@ -27,7 +27,7 @@ cleanup() {
       status=1
     fi
   fi
-  if [[ -f "$work/https-trust.pem" && ! -f "$work/https-trust-removed" ]]; then
+  if [[ -f "$work/https-trust.pem" && ! -f "$work/https-trust-revoked" ]]; then
     sudo -n /usr/bin/python3 "$work/trust-cleanup.py" || status=1
   fi
   if (( right )); then sudo -n /sbin/ifconfig feth43 destroy || status=1; fi

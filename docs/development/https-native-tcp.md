@@ -90,5 +90,5 @@ TCP peer forwarding only to an owned Unix-socket TLS server. Its required
 `https-native-tls-rejection` case checks production route/socket binding and
 system-trust rejection of an ephemeral self-signed certificate before HTTP.
 The trusted-response case uses a unique SSL-scoped identity on disposable hosted
-CI and verifies trust removal afterward. Controller/PTY consent integration remains
+CI and verifies trust revocation afterward. Controller/PTY consent integration remains
 unproven.

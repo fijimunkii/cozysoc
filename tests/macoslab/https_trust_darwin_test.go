@@ -37,10 +37,10 @@ func trustHTTPSFixture(t *testing.T, work string, der []byte, name string) {
 		return exec.CommandContext(ctx, "/usr/bin/sudo", append([]string{"-n", "/usr/bin/python3", "-c", "import subprocess,sys; sys.exit(subprocess.run(['/usr/bin/security',*sys.argv[1:]],timeout=10).returncode)"}, args...)...).Run()
 	}
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		if err := exec.CommandContext(ctx, "/usr/bin/sudo", "-n", "/usr/bin/python3", filepath.Join(work, "trust-cleanup.py")).Run(); err != nil {
-			t.Error("remove fixture trust/certificate failed")
+			t.Error("revoke fixture trust/delete certificate failed")
 			return
 		}
 		cert, err := x509.ParseCertificate(der)
@@ -52,7 +52,7 @@ func trustHTTPSFixture(t *testing.T, work string, der []byte, name string) {
 			t.Error("fixture remained trusted after cleanup")
 			return
 		}
-		if err := os.WriteFile(filepath.Join(work, "https-trust-removed"), []byte("1\n"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(work, "https-trust-revoked"), []byte("1\n"), 0600); err != nil {
 			t.Error(err)
 		}
 	})

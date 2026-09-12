@@ -205,19 +205,20 @@ those checks. Existing native code remains unprivileged; only narrow certificate
 installation/removal and isolated-interface setup use sudo.
 
 Before adding trust, the test records the public certificate and its SHA-256 hash
-in mode-0600 files. Cleanup exports current administrative trust, removes only the entry matching
-that certificate, and verifies every other entry is unchanged. During removal only,
-it saves the administrative trust authorization rule in a private journal and
-selects macOS’s existing `is-root` rule to avoid an unattended authentication
-dialog. A finally block restores the original rule and verifies its contents
-(excluding authd’s modification timestamps); an interrupted invocation restores
-that journal before proceeding. This occurs only on disposable hosted VMs. It
-then deletes exactly that certificate by hash and verifies the identity is no
-longer trusted. Each security-tool child has a ten-second bound and is joined
-by its privileged supervisor.
+in mode-0600 files. Cleanup exports current administrative trust, replaces the
+fixture's exact SSL grant with an explicit deny policy, and verifies every other
+entry is unchanged. It then deletes exactly that certificate by hash and verifies
+that normal system trust rejects the identity. Each security-tool child has a
+ten-second bound and is joined by its privileged supervisor.
+
+The deny record remains until the hosted VM is disposed. This is verified trust
+revocation and certificate deletion, not deletion of all trust metadata. Removing
+the last administrative trust entry hangs waiting for authorization on the tested
+runners; changing the authorization rule is rejected. The harness changes no
+authorization rules and does not weaken production verification to work around it.
 Only confirmed cleanup writes the completion marker. If the test is interrupted,
-the outer harness attempts the same removal from the journal and fails on an
-unconfirmed operation. No existing certificates or trust settings are replaced.
+the outer harness attempts the same revocation from the journal and fails on an
+unconfirmed operation. No unrelated certificates or trust settings are replaced.
 A forced VM termination relies on disposal of the hosted runner.
 
 This is trusted native TCP/TLS/HTTP evidence for the isolated fixture, not yet
