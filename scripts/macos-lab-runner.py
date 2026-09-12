@@ -60,7 +60,7 @@ def run_controller(work: Path, input_fd: int = 0, timeout: float = 120.0) -> int
             return 1
         with (work / "controller.log").open("wb") as log:
             process = subprocess.Popen(
-                [str(work / "cozysoc"), "serve", "--experimental-gateway-checks",
+                [str(work / "cozysoc"), "serve", "--experimental-gateway-checks", "--experimental-resolver-checks",
                  "--state-dir", str(work / "controller-state")],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=log, cwd=work)
             until = time.monotonic() + timeout

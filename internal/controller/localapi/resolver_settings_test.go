@@ -76,7 +76,7 @@ func TestResolverNativeMethodsAndExactParameters(t *testing.T) {
 	if h.calls.Load() != 4 {
 		t.Fatal("invalid parameters reached handler")
 	}
-	for _, method := range []string{"network-quality.resolver-check", "network-quality.resolver-run", "network-quality.resolver-approve"} {
+	for _, method := range []string{"network-quality.resolver-run", "network-quality.resolver-approve"} {
 		if _, err := client.Call(ctx, method); err == nil || !strings.Contains(err.Error(), "method_not_found") {
 			t.Fatal("implicit execution endpoint", err)
 		}

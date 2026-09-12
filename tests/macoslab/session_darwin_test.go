@@ -17,6 +17,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/resolverrun"
 	_ "modernc.org/sqlite"
 )
 
@@ -143,6 +144,8 @@ func nativeConsentSession(t *testing.T) {
 			t.Fatal("check enabled Device Watch")
 		}
 	}
+	var dnsRunID string
+	t.Run("resolver-native-session", func(t *testing.T) { dnsRunID = nativeResolverCLI(t, ctx, client, work, python) })
 	stop() // Join the actual controller before reading its persisted evidence.
 	if t.Failed() {
 		return // Never read SQLite after an unconfirmed child shutdown.
@@ -152,6 +155,18 @@ func nativeConsentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	var dnsRaw string
+	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.resolver-run."+dnsRunID+".finished").Scan(&dnsRaw); err != nil {
+		t.Fatal(err)
+	}
+	var dnsEvent resolverrun.Event
+	if json.Unmarshal([]byte(dnsRaw), &dnsEvent) != nil || resolverrun.ValidateEvent(dnsEvent) != nil || dnsEvent.Outcome != "completed" || dnsEvent.Measurement == nil || dnsEvent.Measurement.Reply == nil || dnsEvent.Measurement.Reply.RCode != 0 {
+		t.Fatal("native resolver audit missing")
+	}
+	var dnsCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind='resolver-run'`).Scan(&dnsCount); err != nil || dnsCount != 3 {
+		t.Fatal("resolver declines admitted work or phases duplicated", err)
+	}
 	var rawAudit string
 	if err := db.QueryRowContext(ctx, `SELECT payload FROM audit_events WHERE id=?`, "audit.gateway-run."+runID+".finished").Scan(&rawAudit); err != nil {
 		t.Fatal(err)
@@ -174,9 +189,10 @@ func nativeConsentSession(t *testing.T) {
 
 // The helper owns/reaps one CLI child. Its stdin pipe is lifetime authority only:
 // parent crash/EOF aborts the helper's child; it never supplies approval input.
-func interactiveGatewayCLI(t *testing.T, ctx context.Context, work, python, mode string) string {
+func interactiveGatewayCLI(t *testing.T, ctx context.Context, work, python, mode string, selection ...string) string {
 	t.Helper()
-	command := exec.Command(python, filepath.Join(work, "cli-driver.py"), mode)
+	args := append([]string{filepath.Join(work, "cli-driver.py"), mode}, selection...)
+	command := exec.Command(python, args...)
 	input, err := command.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -236,4 +252,55 @@ func assertNativeGatewayHistory(t *testing.T, ctx context.Context, client *local
 	if err != nil || json.Unmarshal(out, &history) != nil || len(history.Runs) != 1 || history.Runs[0].RunID != runID {
 		t.Fatalf("built history command failed: %v", err)
 	}
+}
+
+func nativeResolverCLI(t *testing.T, ctx context.Context, client *localapi.Client, work, python string) string {
+	t.Helper()
+	raw, err := client.CallWithParams(ctx, api.MethodResolverSave, api.ResolverSettingsParams{Endpoint: target + ":53", Name: "test.example.", Family: "ipv4", Transport: "udp", QueryType: "A", Expect: "answer", DestinationScope: "enrolled-prefix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings api.ResolverSettingsResult
+	if json.Unmarshal(raw, &settings) != nil || len(settings.Items) != 1 || settings.ConsentGranted {
+		t.Fatal("resolver settings failed")
+	}
+	id := settings.Items[0].SelectionID
+	peer := startPeer(t, "dns-answer")
+	for _, mode := range []string{"redirected-input", "redirected-output", "decline", "preloaded", "overlong", "eof", "interrupt"} {
+		interactiveGatewayCLI(t, ctx, work, python, "dns-"+mode, id)
+	}
+	output := interactiveGatewayCLI(t, ctx, work, python, "dns-approve", id)
+	match := regexp.MustCompile(`(?m)^Run: ([0-9a-f]{32})$`).FindStringSubmatch(output)
+	if len(match) != 2 {
+		t.Fatal("resolver CLI lost run reference")
+	}
+	peer.stop(t)
+	queries, summaries := 0, 0
+	for _, e := range peer.events {
+		switch e.Event {
+		case "ready":
+		case "query":
+			queries++
+			if e.Bytes != 30 {
+				t.Fatal("DNS question size changed")
+			}
+		case "summary":
+			summaries++
+			if e.Queries != 1 || e.Echoes != 0 {
+				t.Fatal("unexpected probe traffic")
+			}
+		default:
+			t.Fatal("unexpected peer evidence")
+		}
+	}
+	if queries != 1 || summaries != 1 {
+		t.Fatal("missing DNS wire evidence")
+	}
+	if _, err := client.CheckResolver(ctx, id, func(context.Context, api.ResolverCheckReview) (bool, error) {
+		t.Error("resolver cooldown issued review")
+		return true, nil
+	}); err == nil {
+		t.Fatal("resolver cooldown disappeared")
+	}
+	return match[1]
 }

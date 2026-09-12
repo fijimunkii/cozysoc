@@ -47,6 +47,7 @@ type controllerAPIHandler struct {
 	gatewayRuns            gatewayRunLifecycle
 	resolverRuns           resolverRunLifecycle
 	resolverRouteInspector resolverroute.Inspector
+	resolverChecksEnabled  bool
 	gatewayChecksEnabled   bool // Immutable after server startup; experimental native opt-in only.
 	store                  controllerStore
 	deviceWatch            deviceWatchAPIControl
