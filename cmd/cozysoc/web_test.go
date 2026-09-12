@@ -165,6 +165,9 @@ func TestWebHandlerRejectsInvalidBrowserRequests(t *testing.T) {
 		{name: "mutation method", method: http.MethodPost, url: "http://" + host + "/api/coverage", authenticated: true, want: http.StatusMethodNotAllowed},
 		{name: "query parameters", method: http.MethodGet, url: "http://" + host + "/api/coverage?scope=other", authenticated: true, want: http.StatusBadRequest},
 		{name: "get body", method: http.MethodGet, url: "http://" + host + "/api/coverage", body: strings.NewReader("unexpected"), authenticated: true, want: http.StatusBadRequest},
+		{name: "resolver settings absent", method: http.MethodPost, url: "http://" + host + "/api/resolver-save", authenticated: true, want: http.StatusNotFound},
+		{name: "resolver preview absent", method: http.MethodGet, url: "http://" + host + "/api/resolver-plan", authenticated: true, want: http.StatusNotFound},
+		{name: "resolver consent absent", method: http.MethodPost, url: "http://" + host + "/api/resolver-check", authenticated: true, want: http.StatusNotFound},
 		{name: "generic rpc absent", method: http.MethodPost, url: "http://" + host + "/api/call", want: http.StatusNotFound},
 	}
 	for _, tt := range tests {

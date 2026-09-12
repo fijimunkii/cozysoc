@@ -61,6 +61,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDevicesList, args[1:], stdout, stderr)
 	case "networks":
 		return runReadCommand(ctx, api.MethodNetworksList, args[1:], stdout, stderr)
+	case "resolver-save", "resolver-list", "resolver-retire", "resolver-plan":
+		return runResolverCommand(ctx, args[0], args[1:], stdout, stderr)
 	case "network-quality-check":
 		return runGatewayCheckCommand(ctx, args[1:], stdout, stderr)
 	case "network-quality-history":
@@ -106,6 +108,10 @@ Usage:
   cozysoc networks [--state-dir PATH]
   cozysoc network-quality [--state-dir PATH]
   cozysoc network-quality-history [--state-dir PATH] [RUN_ID]
+  cozysoc resolver-save [--state-dir PATH] --endpoint IP:53 --name FQDN. --family ipv4|ipv6 --transport udp --query-type A|AAAA --expect answer|nxdomain|no-data --destination-scope enrolled-prefix|exact-endpoint
+  cozysoc resolver-list [--state-dir PATH]
+  cozysoc resolver-retire [--state-dir PATH] SELECTION_ID
+  cozysoc resolver-plan [--state-dir PATH] SELECTION_ID
   cozysoc network-quality-plan [--state-dir PATH] TARGET_IPV4
   cozysoc network-quality-check [--state-dir PATH] TARGET_IPV4  (experimental, interactive macOS only)
   cozysoc device-watch-coverage [--state-dir PATH]
@@ -241,6 +247,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 			logger.Warn("gateway_runs_shutdown_failed")
 		}
 		logger.Info("gateway_runs_drained")
+	}()
+
+	if err := apiHandler.startResolverRuns(store); err != nil {
+		return err
+	}
+	defer func() {
+		if err := apiHandler.resolverRuns.shutdown(context.Background()); err != nil {
+			logger.Warn("resolver_runs_shutdown_failed")
+		}
+		logger.Info("resolver_runs_drained")
 	}()
 
 	logger.Info("controller_started",

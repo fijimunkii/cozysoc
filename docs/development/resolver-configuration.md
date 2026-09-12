@@ -1,8 +1,9 @@
 # Durable selected-resolver settings
 
 Issue #14 now has controller-owned SQLite settings for the bounded UDP profile.
-This is a storage API, with no CLI/browser mutation or product execution endpoint
-yet. Saving settings sends no traffic, enables no capability, grants no consent,
+The [native controller commands](resolver-controller.md) now expose explicit
+save/list/retire and preview operations. No browser mutation or product execution
+endpoint is available yet. Saving settings sends no traffic, enables no capability, grants no consent,
 and stores no ticket, source address or route freshness. The product coordinator
 must still perform fresh enrollment/route checks and one-shot review/consent.
 
