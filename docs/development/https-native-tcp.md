@@ -14,7 +14,7 @@ operation to eight seconds or the earlier caller, original route or review deadl
 two-second ceiling inside that original deadline. Fresh inspections never refresh
 the reviewed selection or run deadline. A per-instance guard rejects concurrent
 execution; cooldown and audited one-shot admission are provided by the internal
-[run coordinator](https-run-control.md), which is not yet installed in the product controller. Possessing a plan or invoking this internal API is not consent.
+[run coordinator](https-run-control.md), now owned once by the product controller. Possessing a plan or invoking this internal API is not consent.
 
 The route inspector must reproduce the exact selection, interface, source and
 prefixes. Rechecks occur before connection, after connection, before every TLS
@@ -81,6 +81,6 @@ These tests establish socket-option behavior, not physical NIC, routed external,
 VPN, packaged-permission or full HTTPS run support. TLS exchange has separate real
 loopback evidence; route inspection has separate isolated native lab evidence.
 The internal measurement/audit coordinator now supplies one-shot admission and
-cooldown. Controller lifecycle integration, an integrated native HTTPS lab and
+cooldown. An integrated native HTTPS lab and
 interactive one-shot consent remain required before enabling product traffic.
 #14 and #29 remain open.

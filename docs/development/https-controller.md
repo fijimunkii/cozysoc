@@ -77,8 +77,9 @@ current route validity or network reachability. The [route inspector](https-rout
 is used for native preview. A [native TCP candidate](https-native-tcp.md) combines
 socket verification and the bounded exchange internally. Internal
 [audited run control](https-run-control.md) now enforces one-shot admission and
-cooldown. Controller lifecycle integration, one-shot consent and end-to-end lab
-evidence remain required before execution.
+cooldown. The controller installs one coordinator after acquiring the protected
+Unix socket and drains active work before storage closes. One-shot consent and
+end-to-end lab evidence remain required before execution.
 
 Tests cover exact-field and authority rejection, authenticated socket/CLI round
 trips, unavailable enrollment, retirement, and absent browser routes. A real
@@ -90,3 +91,23 @@ limits, exact reference/authority rejection and the full socket/CLI disclosure.
 The required macOS 15/26 native-process lab saves a selection and runs the real
 `https-plan` command against its isolated network without a TLS server. Synthetic enrollment is sufficient:
 this evidence does not certify actual HTTPS traffic, TLS or packaged permissions.
+
+## Controller run ownership
+
+The HTTPS coordinator is shared across all settings and requests, independent of
+Device Watch enablement. Construction performs no lookup or probe. Duplicate
+installation and replacement during/after shutdown fail closed; restart starts a
+new quiet minute without recovering tickets from audits. Native settings and
+preview never prepare a run ticket or reset cooldown.
+
+Internal run preflight uses the same bounded settings/enrollment reload around
+route collection as preview. Retirement or changed scope between review and run
+blocks admission. The TCP candidate and SQLite auditor are compiled dependencies,
+not caller-supplied transports. No command, browser route or opt-in execution flag
+exposes this owner yet.
+
+Lifecycle tests cover inert startup/preview, singleton ownership, retirement after
+review and shutdown joining a canceled executor before storage closes. The real
+settings process test verifies the HTTPS owner drains on shutdown and restart,
+while execution methods remain unavailable. These are lifecycle evidence, not
+proof of integrated HTTPS traffic or interactive consent.

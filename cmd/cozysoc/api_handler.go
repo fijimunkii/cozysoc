@@ -47,6 +47,7 @@ type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
 	resolverRuns           resolverRunLifecycle
+	httpsRuns              httpsRunLifecycle
 	httpsRouteInspector    httpsroute.Inspector
 	resolverRouteInspector resolverroute.Inspector
 	resolverChecksEnabled  bool
