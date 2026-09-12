@@ -74,7 +74,8 @@ The earlier standalone generic `Assess` fixture contract remains available.
 The [explicit HTTPS review plan](https-review-plan.md) now specifies pinned
 configuration, exact request encoding, disclosure and required executor ceilings.
 It remains pure. [Durable HTTPS settings](https-configuration.md) now preserve
-explicit configuration separately; neither path enables a collector.
+explicit configuration separately and expose [native save/list/retire commands](https-controller.md).
+These paths do not enable a collector.
 
 Before external traffic is exposed, a collector must implement explicit immutable
 destination configuration and local disclosure of the exact endpoint, TLS identity,
