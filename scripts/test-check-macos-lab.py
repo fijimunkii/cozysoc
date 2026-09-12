@@ -28,6 +28,13 @@ class EvidenceGateTests(unittest.TestCase):
             with self.subTest(action=action), self.assertRaises(ValueError):
                 self.check(without_resolver + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
 
+    def test_dns_cases_are_required(self):
+        for mode in ("dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss"):
+            name = "TestMACOSGatewayLab/" + mode
+            self.assertIn(name, checker.EXPECTED)
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                self.check([e for e in self.evidence() if e.get("Test") != name])
+
     def test_missing_skipped_failed_or_foreign(self):
         for events in ([], self.evidence()[1:], self.evidence()[:-1],
                        self.evidence() + [dict(Package=checker.PACKAGE, Action="skip")],

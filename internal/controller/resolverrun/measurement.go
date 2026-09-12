@@ -83,7 +83,7 @@ func validateSample(s nq.ResolverMeasurement, executionErr error, selection Sele
 	}
 	d := selection.Plan.Disclosure()
 	if s.ID != id || s.Selection != d.Configuration.Selection || s.Observer != d.Binding.Observer || s.StartedAt.Before(started) ||
-		s.StartedAt.Before(selection.RouteObservedAt) || !s.StartedAt.Before(expires) || !s.CompletedAt.Before(expires) ||
+		s.StartedAt.Before(selection.RouteObservedAt) || !s.StartedAt.Before(expires) || (complete(s) && !s.CompletedAt.Before(expires)) ||
 		(executionErr == nil && !complete(s)) || validateMeasurement(s, returned) != nil {
 		return nil, ErrExecution
 	}

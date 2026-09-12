@@ -71,12 +71,13 @@ func labRequest(t *testing.T) gatewayicmp.Request {
 }
 
 type peerEvent struct {
-	Event  string `json:"event"`
-	UID    int    `json:"uid"`
-	Seq    int    `json:"seq"`
-	Bytes  int    `json:"bytes"`
-	AtUS   int64  `json:"at_us"`
-	Echoes int    `json:"echoes"`
+	Event   string `json:"event"`
+	UID     int    `json:"uid"`
+	Seq     int    `json:"seq"`
+	Bytes   int    `json:"bytes"`
+	AtUS    int64  `json:"at_us"`
+	Echoes  int    `json:"echoes"`
+	Queries int    `json:"queries"`
 }
 type peer struct {
 	input  io.WriteCloser
@@ -135,7 +136,7 @@ func startPeer(t *testing.T, mode string) *peer {
 				default:
 				}
 			}
-			if e.Event == "echo" && !first {
+			if (e.Event == "echo" || e.Event == "query") && !first {
 				first = true
 				close(p.first)
 			}
@@ -254,6 +255,9 @@ func TestMACOSGatewayLab(t *testing.T) {
 			t.Fatal("resolver accepted wrong interface")
 		}
 	})
+	for _, mode := range []string{"dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss"} {
+		t.Run(mode, func(t *testing.T) { runDNSLab(t, mode) })
+	}
 	for _, mode := range []string{"reply", "silent", "wrong-nonce"} {
 		t.Run(mode, func(t *testing.T) {
 			p := startPeer(t, mode)

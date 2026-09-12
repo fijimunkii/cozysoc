@@ -4,8 +4,9 @@ Related work: #14 and #29. `internal/controller/resolverrun` coordinates the
 selected-resolver review and evidence contracts with trusted, compiled preflight,
 executor and auditor collaborators. `storage.Store` implements its auditor using
 the existing pinned SQLite writer, audit retention and quota controls. No schema
-migration, live sender, controller instance, CLI/browser execution endpoint or
+migration, product controller instance, CLI/browser execution endpoint or
 background worker is added. Missing collaborators leave admission unavailable.
+The native UDP candidate is exercised through this controller in the isolated lab.
 
 ## Admission and consent
 
@@ -52,8 +53,10 @@ window. Classic-UDP response codes are limited to 0–15; matched response timin
 required, including measured zero, and remains below the exchange timeout.
 
 Executor evidence must match the admitted observer, selection and generated
-measurement ID, lie inside the execution/original-review window and satisfy the
-normalized contract. Invalid evidence is omitted from the result and audit.
+measurement ID, start inside the execution/original-review window and satisfy the
+normalized contract. Completed replies/timeouts must finish before original review
+expiry. Incomplete cleanup may finish afterward, without extending send authority.
+Invalid evidence is omitted from the result and audit.
 Valid partial evidence can accompany execution failure or cancellation. A cleanup
 failure can retain a valid response without claiming clean run completion.
 Returned samples, terminal audit attachments and sender-owned samples are copied
@@ -92,10 +95,11 @@ Synthetic unit/race and real SQLite tests cover replay/concurrency, changed
 selection, stale route evidence, original deadlines, clock rollback, malformed
 measurements, uncertain sends, panics, cancellation, shutdown joining and storage
 failure. They prove no physical DNS traffic, native routing/socket behavior,
-production consent UI or resolver reachability. The live sender, route adapter,
-immutable persisted configuration and product lifecycle/consent integration remain
-required. #14 and #29 stay open.
+production consent UI or resolver reachability. Separate native route and UDP
+lab tests provide their own bounded evidence. Immutable persisted configuration
+and product lifecycle/consent integration remain required. #14 and #29 stay open.
 
 The [native route inspector](resolver-route-inspection.md) now produces fresh
-source-bound plan selections on macOS. Live DNS sending and product integration
-remain pending.
+source-bound plan selections on macOS. The [bounded UDP candidate](resolver-udp-sender.md)
+now executes through this controller in the isolated lab; product integration
+remains pending.

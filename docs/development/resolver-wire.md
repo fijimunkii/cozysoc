@@ -24,7 +24,7 @@ response opcode, echoed recursion-desired bit, one matching IN question and vali
 bounded framing. Question/name comparisons are case insensitive. A complete
 question is required even for truncation; a matched TC response retains only its
 response code and truncation flag, since the remaining message can be partial.
-A future sender must supply kernel-reported peer identity, an unpredictable ID,
+A sender must supply kernel-reported peer identity, an unpredictable ID,
 source-port entropy, route/source/interface checks, cancellation and budgets.
 These checks are not cryptographic authentication or DNSSEC validation.
 

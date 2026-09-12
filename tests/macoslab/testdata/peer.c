@@ -1,5 +1,5 @@
 /* Test-only peer for one isolated feth pair; never installed with Cozy SOC.
- * System libpcap handles BPF. Only fixed synthetic ARP/ICMP traffic is accepted.
+ * System libpcap handles BPF. Only fixed synthetic ARP/ICMP/DNS traffic is accepted.
  * Open BPF with sudo, then permanently drop privilege before processing frames.
  */
 #include <arpa/inet.h>
@@ -80,7 +80,10 @@ int main(int argc, char **argv) {
     if (argc != 2) die("expected fixed peer mode");
     int check_only = !strcmp(argv[1], "check");
     int silent = !strcmp(argv[1], "silent"), wrong = !strcmp(argv[1], "wrong-nonce");
-    if (!check_only && !silent && !wrong && strcmp(argv[1], "reply")) die("unknown mode");
+    int dns_answer = !strcmp(argv[1], "dns-answer"), dns_negative = !strcmp(argv[1], "dns-nxdomain");
+    int dns_silent = !strcmp(argv[1], "dns-silent"), dns_wrong = !strcmp(argv[1], "dns-wrong-id");
+    int dns = dns_answer || dns_negative || dns_silent || dns_wrong;
+    if (!check_only && !silent && !wrong && !dns && strcmp(argv[1], "reply")) die("unknown mode");
     interfaces(check_only);
     if (check_only) return 0;
     if (geteuid() != 0) die("BPF setup requires sudo");
@@ -92,13 +95,13 @@ int main(int argc, char **argv) {
         pcap_set_timeout(pc, 50) || pcap_set_immediate_mode(pc, 1) || pcap_activate(pc) < 0 ||
         pcap_datalink(pc) != DLT_EN10MB || pcap_setnonblock(pc, 1, error)) die("BPF setup failed");
     struct bpf_program filter;
-    if (pcap_compile(pc, &filter, "arp or (icmp and src host 192.168.250.2 and dst host 192.168.250.1)", 1, PCAP_NETMASK_UNKNOWN)) die("filter compilation failed");
+    if (pcap_compile(pc, &filter, "arp or ((icmp or (udp and dst port 53)) and src host 192.168.250.2 and dst host 192.168.250.1)", 1, PCAP_NETMASK_UNKNOWN)) die("filter compilation failed");
     if (pcap_setfilter(pc, &filter)) die("filter installation failed");
     pcap_freecode(&filter);
     if (setgroups(0, NULL) || setgid(gid) || setuid(uid) || geteuid() == 0 || getuid() != uid) die("privilege drop failed");
     setvbuf(stdout, NULL, _IOLBF, 0);
     printf("{\"event\":\"ready\",\"uid\":%u}\n", (unsigned)geteuid());
-    unsigned frames = 0, echoes = 0, arps = 0;
+    unsigned frames = 0, echoes = 0, arps = 0, queries = 0;
     for (;;) {
         struct pollfd input = {STDIN_FILENO, POLLIN | POLLHUP, 0};
         if (poll(&input, 1, 0) < 0) die("lifetime input failed");
@@ -126,6 +129,35 @@ int main(int argc, char **argv) {
             inject(pc, out, sizeof(out));
             continue;
         }
+        if (dns) {
+            if (word(frame + 12) != 0x0800 || header->caplen < 42 || memcmp(frame, peer_mac, 6)) continue;
+            const uint8_t *ip = frame + 14, *udp = frame + 34, *q = frame + 42;
+            if (ip[0] != 0x45 || ip[9] != 17 || memcmp(ip + 12, source_ip, 4) ||
+                memcmp(ip + 16, peer_ip, 4) || word(udp + 2) != 53) continue;
+            if (++queries > 1) die("DNS send budget exceeded");
+            static const uint8_t question[18] = {4,'t','e','s','t',7,'e','x','a','m','p','l','e',0,0,1,0,1};
+            if (header->caplen != 72 || word(ip + 2) != 58 || (word(ip + 6) & 0x3fff) ||
+                checksum(ip,20) || word(udp) < 49152 || word(udp + 4) != 38 || !word(udp + 6) ||
+                word(q + 2) != 0x0100 || word(q + 4) != 1 || word(q + 6) || word(q + 8) || word(q + 10) ||
+                memcmp(q + 12, question, sizeof(question))) die("unexpected DNS question");
+            uint8_t pseudo[50] = {0}; memcpy(pseudo, ip + 12, 8); pseudo[9] = 17; put(pseudo + 10, 38); memcpy(pseudo + 12, udp, 38);
+            if (checksum(pseudo, sizeof(pseudo))) die("invalid UDP checksum");
+            printf("{\"event\":\"query\",\"bytes\":30}\n");
+            if (dns_silent) continue;
+            uint8_t out[88] = {0}; size_t n = dns_answer ? 88 : 72;
+            memcpy(out, source_mac, 6); memcpy(out + 6, peer_mac, 6); put(out + 12, 0x0800);
+            out[14] = 0x45; put(out + 16, (uint16_t)(n - 14)); out[22] = 64; out[23] = 17;
+            memcpy(out + 26, peer_ip, 4); memcpy(out + 30, source_ip, 4); put(out + 24, checksum(out + 14,20));
+            put(out + 34,53); put(out + 36,word(udp)); put(out + 38,(uint16_t)(n - 34));
+            /* IPv4 permits an omitted response checksum; request checksums are verified above. */
+            memcpy(out + 42,q,30); put(out + 44,dns_answer ? 0x8180 : 0x8183);
+            if (dns_wrong) out[42] ^= 1;
+            if (dns_answer) {
+                static const uint8_t answer[16] = {0xc0,12,0,1,0,1,0,0,0,60,0,4,192,0,2,1};
+                put(out + 48,1); memcpy(out + 72,answer,sizeof(answer));
+            }
+            inject(pc,out,n); continue;
+        }
         if (word(frame + 12) != 0x0800 || header->caplen != 74 || memcmp(frame, peer_mac, 6)) continue;
         const uint8_t *ip = frame + 14, *icmp = frame + 34;
         if (ip[0] != 0x45 || word(ip + 2) != 60 || (word(ip + 6) & 0x3fff) || ip[8] != 1 || ip[9] != 1 ||
@@ -145,7 +177,7 @@ int main(int argc, char **argv) {
         put(out + 36, checksum(out + 34, 40));
         inject(pc, out, sizeof(out));
     }
-    printf("{\"event\":\"summary\",\"echoes\":%u,\"arps\":%u}\n", echoes, arps);
+    printf("{\"event\":\"summary\",\"echoes\":%u,\"arps\":%u,\"queries\":%u}\n", echoes, arps, queries);
     pcap_close(pc);
     return 0;
 }
