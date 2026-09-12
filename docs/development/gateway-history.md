@@ -115,3 +115,11 @@ Next: shared frontend history presentation and broader corroborated assessments.
 The active check stays experimentally gated. Packaged Local Network permissions,
 physical Wi-Fi/NIC behavior and actual sleep/resume still require their separate
 evidence; this read feature does not close #14 or #29.
+
+## Shared browser history
+
+Overview's **Recent network checks** panel performs a manual, authenticated read of `GET /api/network-quality/history`. The route takes no query parameters or body and exposes only the recent list for the controller-selected enrolled scope. It has no execution or consent path. The browser projection omits native guidance, scope IDs, audit payloads and approval material.
+
+The list retains the original 24-hour window, 20-run limit and 256-audit scan bound, with separate truncation notices. Each expandable record shows its original sample/audit time, historical source/interface, execution outcome, retained phases, assessment confidence and safe next step. Complete ICMP samples may show reply loss and measured RTT; partial and absent samples keep these metrics unknown. Legacy execution-only records and missing terminal records remain explicit. A run reference can still be used with the native history command to read an older retained run; the browser list does not extend retention.
+
+Reading or refreshing history sends no probes and never turns an earlier result into current connectivity. Requests are bounded and canceled when the panel unmounts; synthetic demo mode performs no live history read. Malformed data and controller/session failures produce a local unavailable state without exposing raw errors or replacing other evidence views.
