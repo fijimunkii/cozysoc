@@ -28,6 +28,7 @@ type webQualityDiagnosis struct {
 	Confidence    string                          `json:"confidence"`
 }
 type webDiagnosisRun struct {
+	HTTPS            *webHTTPSHistoryRun           `json:"https,omitempty"`
 	Kind             string                        `json:"kind"`
 	RunID            string                        `json:"run_id"`
 	InterfaceName    string                        `json:"interface_name"`
@@ -64,11 +65,12 @@ func diagnosisTimeCopy(at *time.Time) *time.Time {
 }
 
 // Check the typed controller interpretation and its context, not a new collection
-// or recomputation of raw DNS/ICMP measurements. Native prose is not published.
+// or recomputation of raw DNS/ICMP measurements. HTTPS detail is validated by
+// the retained-history boundary. Native prose is not published.
 func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, error) {
 	invalid := func() (webQualityDiagnosis, error) { return webQualityDiagnosis{}, errWebDiagnosis }
-	if v.SchemaVersion != 1 || v.Mode != "retained-comparison" || !webHistoryTime(v.ReadAt) || !webHistoryTime(v.Since) || !v.Since.Equal(v.ReadAt.Add(-24*time.Hour)) ||
-		v.RunLimitPerLayer != 20 || v.ScanLimitPerLayer != 256 || v.MaxCompletionSkewMS != 30000 || v.FreshnessMS != 30000 || v.Selected == nil || len(v.Selected) > 2 || v.Compared == nil || len(v.Compared) > 2 {
+	if v.SchemaVersion != 2 || v.Mode != "retained-comparison" || !webHistoryTime(v.ReadAt) || !webHistoryTime(v.Since) || !v.Since.Equal(v.ReadAt.Add(-24*time.Hour)) ||
+		v.RunLimitPerLayer != 20 || v.ScanLimitPerLayer != 256 || v.MaxCompletionSkewMS != 30000 || v.FreshnessMS != 30000 || v.Selected == nil || len(v.Selected) > 3 || v.Compared == nil || len(v.Compared) > 3 {
 		return invalid()
 	}
 	if v.Enrolled != (v.ScopeID != "") || (!v.Enrolled && (len(v.Selected) > 0 || v.Truncated || v.ScanTruncated)) {
@@ -79,7 +81,7 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 	selected := map[string]api.QualityDiagnosisRun{}
 	var anchor, start, end time.Time
 	for _, r := range v.Selected {
-		if (r.Kind != "gateway" && r.Kind != "resolver") || selected[r.Kind].Kind != "" || !resolverrun.ValidRunID(r.RunID) || !qualityWebInterfacePattern.MatchString(r.InterfaceName) || r.InterfaceIndex < 1 || r.InterfaceIndex > 2147483647 ||
+		if (r.Kind != "gateway" && r.Kind != "resolver" && r.Kind != "https") || selected[r.Kind].Kind != "" || !resolverrun.ValidRunID(r.RunID) || !qualityWebInterfacePattern.MatchString(r.InterfaceName) || r.InterfaceIndex < 1 || r.InterfaceIndex > 2147483647 ||
 			!webHistoryTime(r.LastAuditAt) || r.LastAuditAt.Before(v.Since) || r.LastAuditAt.After(v.ReadAt) {
 			return invalid()
 		}
@@ -106,10 +108,10 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 			if r.CompletedAt != nil && (!webHistoryTime(*r.CompletedAt) || r.CompletedAt.Before(*r.StartedAt) || r.CompletedAt.After(r.LastAuditAt)) {
 				return invalid()
 			}
-			if (r.SampleStatus == "recorded" || r.Kind == "resolver") && r.CompletedAt == nil {
+			if (r.SampleStatus == "recorded" || r.Kind != "gateway") && r.CompletedAt == nil {
 				return invalid()
 			}
-			if r.CompletedAt != nil && r.CompletedAt.Sub(*r.StartedAt) >= 5*time.Second {
+			if r.Kind != "https" && r.CompletedAt != nil && r.CompletedAt.Sub(*r.StartedAt) >= 5*time.Second {
 				return invalid()
 			}
 			if r.Kind == "gateway" && r.SampleStatus == "recorded" && (r.ExecutionOutcome == "failed" || r.CompletedAt.Sub(*r.StartedAt) < 2*time.Second) {
@@ -126,6 +128,34 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 		} else if r.Selection != nil {
 			return invalid()
 		}
+		var https *webHTTPSHistoryRun
+		if r.Kind == "https" {
+			if r.HTTPS == nil {
+				return invalid()
+			}
+			projected, err := projectWebHTTPSHistory(api.HTTPSHistory{SchemaVersion: 1, Mode: "retained-history", Enrolled: v.Enrolled, ScopeID: v.ScopeID, AsOf: v.ReadAt, Since: &v.Since, Limit: 20, ScanLimit: 256, Runs: []api.HTTPSHistoryRun{*r.HTTPS}})
+			if err != nil {
+				return invalid()
+			}
+			https = &projected.Runs[0]
+			status := "no-measurement"
+			if !https.TerminalRetained {
+				status = "missing-terminal"
+			} else if m := https.Measurement; m != nil {
+				status = "recorded"
+				if m.Exchange == "incomplete" || m.Exchange == "not-measured" {
+					status = "incomplete"
+				}
+				if r.StartedAt == nil || r.CompletedAt == nil || !r.StartedAt.Equal(m.StartedAt) || !r.CompletedAt.Equal(m.CompletedAt) {
+					return invalid()
+				}
+			}
+			if r.RunID != https.RunID || r.InterfaceName != https.InterfaceName || r.InterfaceIndex != https.InterfaceIndex || !r.LastAuditAt.Equal(https.LastAuditAt) || r.ExecutionOutcome != https.Outcome || r.SampleStatus != status {
+				return invalid()
+			}
+		} else if r.HTTPS != nil {
+			return invalid()
+		}
 		selected[r.Kind] = r
 		if r.LastAuditAt.After(anchor) {
 			anchor = r.LastAuditAt
@@ -136,7 +166,7 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 		if r.CompletedAt != nil && r.CompletedAt.After(end) {
 			end = *r.CompletedAt
 		}
-		item := webDiagnosisRun{Kind: r.Kind, RunID: r.RunID, InterfaceName: r.InterfaceName, InterfaceIndex: r.InterfaceIndex, LastAuditAt: r.LastAuditAt.UTC(), ExecutionOutcome: r.ExecutionOutcome, SampleStatus: r.SampleStatus, StartedAt: diagnosisTimeCopy(r.StartedAt), CompletedAt: diagnosisTimeCopy(r.CompletedAt)}
+		item := webDiagnosisRun{HTTPS: https, Kind: r.Kind, RunID: r.RunID, InterfaceName: r.InterfaceName, InterfaceIndex: r.InterfaceIndex, LastAuditAt: r.LastAuditAt.UTC(), ExecutionOutcome: r.ExecutionOutcome, SampleStatus: r.SampleStatus, StartedAt: diagnosisTimeCopy(r.StartedAt), CompletedAt: diagnosisTimeCopy(r.CompletedAt)}
 		if r.Selection != nil {
 			copy := *r.Selection
 			item.Selection = &copy
@@ -147,34 +177,28 @@ func projectWebQualityDiagnosis(v api.QualityDiagnosis) (webQualityDiagnosis, er
 		return invalid()
 	}
 	expected := ""
-	g, d := selected["gateway"], selected["resolver"]
 	switch {
 	case !v.Enrolled:
 		expected = "not-enrolled"
 	case v.Truncated || v.ScanTruncated:
 		expected = "history-incomplete"
-	case len(selected) < 2:
-		expected = "insufficient-evidence"
-	case g.SampleStatus != "recorded" || d.SampleStatus != "recorded":
-		expected = "latest-run-unmeasured"
-	case g.InterfaceName != d.InterfaceName || g.InterfaceIndex != d.InterfaceIndex || d.Selection.Family != "ipv4":
-		expected = "observation-context-mismatch"
-	case anchor.Sub(start) > 24*time.Hour:
-		expected = "observations-too-far-apart"
-	case anchor.Sub(*g.CompletedAt) >= 30*time.Second || anchor.Sub(*d.CompletedAt) >= 30*time.Second:
-		expected = "insufficient-evidence"
+	default:
+		expected = qualityDiagnosisPrecondition(v.Selected, anchor)
 	}
 	if expected != "" {
 		if v.Conclusion != expected || v.Confidence != "unknown" || len(v.Compared) != 0 || v.EvidenceStart != nil || v.EvidenceEnd != nil {
 			return invalid()
 		}
 	} else {
+		if (v.Conclusion == "external-check-issue-with-responses" && selected["https"].Kind == "") || (v.Conclusion == "dns-query-issue-with-responses" && selected["resolver"].Kind == "") || (v.Conclusion == "icmp-misses-with-responses" && selected["gateway"].Kind == "") {
+			return invalid()
+		}
 		switch v.Conclusion {
-		case "dns-query-issue-with-responses", "icmp-misses-with-responses", "problems-across-selected-layers", "selected-checks-matched", "mixed-or-limited-evidence":
+		case "dns-query-issue-with-responses", "icmp-misses-with-responses", "problems-across-selected-layers", "selected-checks-matched", "mixed-or-limited-evidence", "external-check-issue-with-responses":
 		default:
 			return invalid()
 		}
-		if v.Confidence != "limited" || len(v.Compared) != 2 || v.EvidenceStart == nil || v.EvidenceEnd == nil || !v.EvidenceStart.Equal(start) || !v.EvidenceEnd.Equal(end) {
+		if v.Confidence != "limited" || len(v.Compared) != len(v.Selected) || v.EvidenceStart == nil || v.EvidenceEnd == nil || !v.EvidenceStart.Equal(start) || !v.EvidenceEnd.Equal(end) {
 			return invalid()
 		}
 		seen := map[string]bool{}

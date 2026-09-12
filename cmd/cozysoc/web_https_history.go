@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
-	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
@@ -86,29 +84,8 @@ func projectWebHTTPSHistory(native api.HTTPSHistory) (webHTTPSHistory, error) {
 			return invalid()
 		}
 		seen[r.RunID] = true
-		// Revalidate only the latest retained phase. Earlier phase times are not in
-		// this DTO and must never be reconstructed from the read time.
-		e := httpsrun.Event{SchemaVersion: r.AuditSchemaVersion, RunID: r.RunID, Profile: r.Profile, At: r.LastAuditAt,
-			Selection: nq.HTTPSSelection{ID: r.Selection.ID, EndpointID: r.Selection.EndpointID, RequestID: r.Selection.RequestID, Family: nq.AddressFamily(r.Selection.Family), Method: r.Selection.Method, ExpectedStatus: r.Selection.ExpectedStatus},
-			Observer:  nq.Observer{ScopeID: r.Observer.ScopeID, SensorID: r.Observer.SensorID, InterfaceName: r.Observer.InterfaceName, InterfaceIndex: r.Observer.InterfaceIndex}}
-		if r.TerminalRetained {
-			e.State, e.Outcome, e.Reason = "finished", r.Outcome, r.Reason
-			if r.Measurement != nil {
-				m := httpsrun.Measurement(*r.Measurement)
-				e.Measurement = &m
-			}
-		} else {
-			if r.Outcome != "unknown" || r.Reason != "" || r.Measurement != nil {
-				return invalid()
-			}
-			e.State = "authorized"
-			if r.AdmissionRetained {
-				e.State = "admitted"
-			}
-		}
-		derived, err := httpsrun.DescribeRetainedRun([]httpsrun.Event{e}, native.AsOf)
-		if err != nil || r.Assessment.State != derived.Assessment.State || r.Assessment.Confidence != derived.Assessment.Confidence ||
-			!reflect.DeepEqual(r.Assessment.ExpectationMatched, derived.Assessment.ExpectationMatched) {
+		derived, err := validatedHTTPSHistoryRun(r, native.AsOf)
+		if err != nil {
 			return invalid()
 		}
 		item := webHTTPSHistoryRun{RunID: r.RunID, Selection: r.Selection, InterfaceName: r.Observer.InterfaceName, InterfaceIndex: r.Observer.InterfaceIndex,

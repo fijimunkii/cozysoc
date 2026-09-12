@@ -14,6 +14,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
 	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverrun"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
@@ -54,15 +55,23 @@ func TestQualityDiagnosisProcessUsesRetainedEvidenceWithoutExecution(t *testing.
 	d := resolverrun.Event{SchemaVersion: 1, RunID: strings.Repeat("b", 32), Profile: resolverrun.Profile, At: end,
 		Selection: nq.ResolverSelection{ID: "selection.test", ResolverID: "resolver.test", QueryID: "query.test", Family: nq.FamilyIPv4, Transport: nq.DNSUDP, QueryType: nq.DNSQueryAAAA, Expect: nq.DNSExpectNXDOMAIN},
 		Observer:  nq.Observer{ScopeID: scope.ID, SensorID: "resolver-audit", InterfaceName: "fixture0", InterfaceIndex: 7}}
+	https := httpsrun.Event{SchemaVersion: 1, RunID: strings.Repeat("c", 32), Profile: httpsrun.Profile, At: end, Observer: d.Observer,
+		Selection: nq.HTTPSSelection{ID: "selection.https", EndpointID: "endpoint.test", RequestID: "request.test", Family: nq.FamilyIPv4, Method: "HEAD", ExpectedStatus: 503}}
 	for _, phase := range []string{"authorized", "admitted", "finished"} {
-		g.State, d.State = phase, phase
+		g.State, d.State, https.State = phase, phase, phase
 		if phase == "finished" {
+			https.At, https.Outcome = dend, "completed"
+			https.Measurement = &httpsrun.Measurement{StartedAt: end, CompletedAt: dend, Exchange: nq.HTTPSResponseReceived, Request: nq.HTTPSRequestAccepted, Stage: nq.HTTPSRequest, StatusCode: 503, ResponseTimeNanoseconds: &zero}
 			g.At = end
 			g.Outcome = "completed"
 			g.Measurement = &gatewayrun.Measurement{StartedAt: now, CompletedAt: &end, SendCalls: 3, AcceptedRequests: 3, Timeouts: 3, Complete: true}
 			d.At = dend
 			d.Outcome = "completed"
 			d.Measurement = &resolverrun.Measurement{StartedAt: end, CompletedAt: dend, Exchange: nq.DNSResponseReceived, Request: nq.DNSRequestAccepted, Reply: &nq.DNSReply{RCode: 3}, ResponseTimeNanoseconds: &zero}
+		}
+		if err := s.InsertHTTPSRunAudit(context.Background(), https); err != nil {
+			s.Close()
+			t.Fatal(err)
 		}
 		if err := s.InsertGatewayRunAudit(context.Background(), g); err != nil {
 			s.Close()
@@ -80,10 +89,14 @@ func TestQualityDiagnosisProcessUsesRetainedEvidenceWithoutExecution(t *testing.
 	waitForReady(t, binary, dir, controller)
 	assertGatewayExecutionDisabled(t, dir)
 	assertResolverExecutionDisabled(t, dir)
+	assertHTTPSExecutionDisabled(t, dir)
 	first := runCLIJSONArgs[api.QualityDiagnosis](t, binary, "network-quality-diagnosis", "--state-dir", dir)
 	second := runCLIJSONArgs[api.QualityDiagnosis](t, binary, "network-quality-diagnosis", "--state-dir", dir)
-	if first.Mode != "retained-comparison" || first.Conclusion != "icmp-misses-with-responses" || first.Confidence != "limited" || len(first.Compared) != 2 || first.AssessmentAt == nil || !first.AssessmentAt.Equal(dend) || first.EvidenceStart == nil || !first.EvidenceStart.Equal(now) || len(first.Selected) != 2 || first.Selected[1].Selection.Expect != "nxdomain" {
+	if first.Mode != "retained-comparison" || first.Conclusion != "icmp-misses-with-responses" || first.Confidence != "limited" || len(first.Compared) != 3 || first.AssessmentAt == nil || !first.AssessmentAt.Equal(dend) || first.EvidenceStart == nil || !first.EvidenceStart.Equal(now) || len(first.Selected) != 3 || first.Selected[1].Selection.Expect != "nxdomain" {
 		t.Fatalf("changed historical diagnosis: %+v", first)
+	}
+	if first.Selected[2].HTTPS.Measurement.StatusCode != 503 || first.Selected[2].HTTPS.Assessment.ExpectationMatched == nil || !*first.Selected[2].HTTPS.Assessment.ExpectationMatched {
+		t.Fatal("lost HTTPS expectation")
 	}
 	if !reflect.DeepEqual(first.Selected, second.Selected) || !first.AssessmentAt.Equal(*second.AssessmentAt) || first.Conclusion != second.Conclusion || !first.ReadAt.Before(second.ReadAt) {
 		t.Fatal("read changed original evidence")
@@ -103,8 +116,8 @@ func TestQualityDiagnosisProcessUsesRetainedEvidenceWithoutExecution(t *testing.
 		t.Fatal(err)
 	}
 	defer s.Close()
-	page, err := s.ReadQualityHistory(context.Background(), scope.ID, time.Now().UTC())
-	if err != nil || len(page.Gateway.Runs) != 1 || len(page.Resolver.Runs) != 1 || !page.Gateway.Runs[0].TerminalRetained || !page.Resolver.Runs[0].TerminalRetained {
+	page, err := s.ReadQualityHistoryWithHTTPS(context.Background(), scope.ID, time.Now().UTC())
+	if err != nil || len(page.Gateway.Runs) != 1 || len(page.Resolver.Runs) != 1 || len(page.HTTPS.Runs) != 1 || !page.Gateway.Runs[0].TerminalRetained || !page.Resolver.Runs[0].TerminalRetained {
 		t.Fatal("read changed retained runs", err)
 	}
 	if count, err := s.ObservationCount(context.Background()); err != nil || count != 0 {

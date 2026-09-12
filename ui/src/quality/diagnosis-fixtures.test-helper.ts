@@ -1,3 +1,4 @@
+import { httpsHistoryFixture } from "./https-history-fixtures.test-helper";
 import type { DiagnosisConclusion, QualityDiagnosis } from "./quality-diagnosis";
 export function diagnosisFixture(conclusion: DiagnosisConclusion = "selected-checks-matched"): QualityDiagnosis {
   const out: QualityDiagnosis = { enrolled: true, read_at: "2026-09-12T12:00:00Z", since: "2026-09-11T12:00:00Z", truncated: false, scan_truncated: false,
@@ -17,4 +18,13 @@ export function diagnosisFixture(conclusion: DiagnosisConclusion = "selected-che
     }
   }
   return out;
+}
+
+export function httpsDiagnosisFixture(): QualityDiagnosis {
+ const out = diagnosisFixture();
+ const h = httpsHistoryFixture().runs[0]!;
+ h.run_id = "c".repeat(32); h.selection.expected_status = 503; h.measurement!.status_code = 503;
+ out.selected.push({ kind: "https", run_id: h.run_id, interface_name: h.interface_name, interface_index: h.interface_index, last_audit_at: h.last_audit_at, execution_outcome: h.outcome, sample_status: "recorded", started_at: h.measurement!.started_at, completed_at: h.measurement!.completed_at, https: h });
+ out.compared.push({kind: "https", run_id: h.run_id});
+ return out;
 }

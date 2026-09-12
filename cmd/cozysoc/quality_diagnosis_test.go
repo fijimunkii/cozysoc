@@ -17,7 +17,7 @@ import (
 
 type diagnosisStoreStub struct {
 	*fakeDeviceStore
-	page  storage.QualityHistoryPage
+	page  storage.QualityHistoryWithHTTPSPage
 	scope string
 	at    time.Time
 	calls int
@@ -25,7 +25,7 @@ type diagnosisStoreStub struct {
 	after func()
 }
 
-func (s *diagnosisStoreStub) ReadQualityHistory(_ context.Context, scope string, at time.Time) (storage.QualityHistoryPage, error) {
+func (s *diagnosisStoreStub) ReadQualityHistoryWithHTTPS(_ context.Context, scope string, at time.Time) (storage.QualityHistoryWithHTTPSPage, error) {
 	s.calls++
 	s.scope, s.at = scope, at
 	if s.after != nil {
@@ -45,7 +45,7 @@ func diagnosisFixture(t *testing.T) (*controllerAPIHandler, *diagnosisStoreStub)
 	d := resolverrun.RetainedRun{RunID: strings.Repeat("b", 32), Profile: resolverrun.Profile, SchemaVersion: 1, Observer: nq.Observer{ScopeID: "scope.home", SensorID: "resolver-audit", InterfaceName: "en0", InterfaceIndex: 7}, LastAuditAt: dend, AuthorizationRetained: true, AdmissionRetained: true, TerminalRetained: true, Outcome: "completed",
 		Selection:   nq.ResolverSelection{ID: "selection.test", ResolverID: "resolver.test", QueryID: "query.test", Family: nq.FamilyIPv4, Transport: nq.DNSUDP, QueryType: nq.DNSQueryAAAA, Expect: nq.DNSExpectNXDOMAIN},
 		Measurement: &resolverrun.Measurement{StartedAt: end, CompletedAt: dend, Exchange: nq.DNSResponseReceived, Request: nq.DNSRequestAccepted, Reply: &nq.DNSReply{RCode: 3}, ResponseTimeNanoseconds: &zero}}
-	store := &diagnosisStoreStub{fakeDeviceStore: base, page: storage.QualityHistoryPage{Gateway: storage.GatewayHistoryPage{Runs: []gatewayrun.RetainedRun{g}}, Resolver: storage.ResolverHistoryPage{Runs: []resolverrun.RetainedRun{d}}}}
+	store := &diagnosisStoreStub{fakeDeviceStore: base, page: storage.QualityHistoryWithHTTPSPage{QualityHistoryPage: storage.QualityHistoryPage{Gateway: storage.GatewayHistoryPage{Runs: []gatewayrun.RetainedRun{g}}, Resolver: storage.ResolverHistoryPage{Runs: []resolverrun.RetainedRun{d}}}}}
 	h.store = store
 	return h, store
 }
@@ -107,7 +107,7 @@ func TestDiagnosisHonestGapsAndContextBoundaries(t *testing.T) {
 		edit       func(*controllerAPIHandler, *diagnosisStoreStub)
 	}{
 		{"unenrolled", "not-enrolled", func(h *controllerAPIHandler, s *diagnosisStoreStub) { s.activeScopes = nil }},
-		{"empty", "insufficient-evidence", func(h *controllerAPIHandler, s *diagnosisStoreStub) { s.page = storage.QualityHistoryPage{} }},
+		{"empty", "insufficient-evidence", func(h *controllerAPIHandler, s *diagnosisStoreStub) { s.page = storage.QualityHistoryWithHTTPSPage{} }},
 		{"truncated", "history-incomplete", func(h *controllerAPIHandler, s *diagnosisStoreStub) { s.page.Gateway.Truncated = true }},
 		{"scan limited", "history-incomplete", func(h *controllerAPIHandler, s *diagnosisStoreStub) { s.page.Resolver.ScanTruncated = true }},
 		{"different family", "observation-context-mismatch", func(h *controllerAPIHandler, s *diagnosisStoreStub) {
@@ -145,7 +145,7 @@ func TestDiagnosisHonestGapsAndContextBoundaries(t *testing.T) {
 	}
 }
 func TestDiagnosisRejectsChangedEnrollmentInvalidOrAmbiguousHistory(t *testing.T) {
-	for _, mode := range []string{"store-error", "scope-changed", "wrong-scope", "duplicate", "latest-tie", "future", "invalid-measurement"} {
+	for _, mode := range []string{"store-error", "scope-changed", "wrong-scope", "duplicate", "latest-tie", "future", "invalid-measurement", "missing-end"} {
 		t.Run(mode, func(t *testing.T) {
 			h, s := diagnosisFixture(t)
 			switch mode {
@@ -163,6 +163,8 @@ func TestDiagnosisRejectsChangedEnrollmentInvalidOrAmbiguousHistory(t *testing.T
 				s.page.Gateway.Runs = append(s.page.Gateway.Runs, r)
 			case "future":
 				s.page.Gateway.Runs[0].LastAuditAt = h.now().Add(time.Second)
+			case "missing-end":
+				s.page.Gateway.Runs[0].Measurement.CompletedAt = nil
 			case "invalid-measurement":
 				s.page.Gateway.Runs[0].Measurement.Replies = 4
 			}
