@@ -37,6 +37,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 /usr/bin/clang -std=c11 -O2 -Wall -Wextra -Werror tests/macoslab/testdata/peer.c -lpcap -o "$work/peer"
 "$work/peer" check
+# Test-only TCP stack, never linked into the product. Version changes need review.
+[[ $(pkg-config --modversion slirp) == 4.9.4 ]]
+/usr/bin/clang -std=c11 -O2 -Wall -Wextra -Werror $(pkg-config --cflags slirp) tests/macoslab/testdata/https-peer.c -lpcap $(pkg-config --libs slirp) -o "$work/https-peer"
+"$work/https-peer" check
 if /sbin/ifconfig feth42 >/dev/null 2>&1 || /sbin/ifconfig feth43 >/dev/null 2>&1; then
   echo 'refusing to replace existing lab interfaces' >&2
   exit 1

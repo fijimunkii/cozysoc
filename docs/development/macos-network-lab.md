@@ -153,3 +153,36 @@ without signaling a PID read from a file. The dedicated lab test timeout is 150
 seconds and its monitor ceiling is 160 seconds; these changes do not alter any
 production probe or consent budget. See the native consent document for claims
 and remaining packaged/hardware limits.
+
+## Restricted HTTPS TCP peer
+
+The HTTPS lab adds a test-only [libslirp](https://gitlab.freedesktop.org/slirp/libslirp)
+peer, baseline version 4.9.4 (BSD-3-Clause), supplied by Homebrew with pkgconf.
+It is compiled only into the disposable lab helper and is not linked into or
+installed with Cozy SOC. CI rejects a changed version until the baseline is
+reviewed. This is test infrastructure, not a new product security engine or
+runtime dependency. libslirp owns TCP state, checksums and retransmissions; the
+fixture does not implement a TCP stack.
+
+The helper opens BPF only on the existing isolated `feth43`, then drops all root
+and supplementary-group authority before creating the TCP stack or processing
+frames. Its only service is `192.168.250.1:443`, forwarded by libslirp to the
+invoking user's mode-0600 `https.sock` in the private lab directory. Restricted
+networking is enabled; IPv6, DNS, DHCP, host-loopback access and emulation are
+disabled. No external address, command execution or host forwarding is configured.
+The virtual `.254` address is used only for libslirp neighbor resolution.
+
+Ingress admits only fixed-source ARP and unfragmented IPv4 TCP to the fixed
+service. Frame sizes/counts, poll sockets and lifetime are bounded. EOF on the
+owned input pipe stops the helper; the parent joins it before teardown. The
+existing harness checks fixture conflicts before changing isolated interfaces.
+
+`https-native-tls-rejection` exercises native route collection, the production
+bound TCP candidate and a real TLS handshake through this peer. An ephemeral
+self-signed certificate is generated in memory by the owned Unix-socket TLS
+server. Production system trust must reject it, with TLS-stage error, no HTTP
+request accepted, no status and no response latency. No trust store is modified.
+This establishes native TCP/TLS rejection through the isolated peer, not trusted
+HTTPS success, real physical NICs or complete controller/PTY consent support.
+Trusted-response and integrated controller/consent cases remain gates before
+product HTTPS execution is enabled.
