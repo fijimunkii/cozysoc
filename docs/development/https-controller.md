@@ -75,8 +75,8 @@ macOS and Linux. No browser route, HTTPS check/run/approval command, consent
 ticket or collector is exposed. Enrollment and saved settings cannot establish
 current route validity or network reachability. The [route inspector](https-route-inspection.md)
 is used for native preview. Actual HTTPS socket binding,
-TLS/HTTP execution, enforced byte/deadline budgets and one-shot consent remain
-future work.
+[bounded TLS/HTTP exchange](https-bounded-exchange.md) integration and one-shot
+consent remain future work.
 
 Tests cover exact-field and authority rejection, authenticated socket/CLI round
 trips, unavailable enrollment, retirement, and absent browser routes. A real

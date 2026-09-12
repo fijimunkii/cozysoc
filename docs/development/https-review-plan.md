@@ -92,5 +92,6 @@ TLS, public-endpoint, packaged permission or hardware behavior.
 [Durable settings](https-configuration.md) and [native settings commands](https-controller.md) are now available.
 [Native route inspection](https-route-inspection.md) is available internally.
 [Native preview](https-controller.md) now reloads settings and enrollment around
-inspection. Remaining work includes socket binding, actual byte/deadline
-enforcement, one-shot consent and durable audit/recovery.
+inspection. The [bounded TLS/HTTP exchange](https-bounded-exchange.md) implements
+stream and header ceilings on a supplied connection. Remaining work includes
+native socket binding, one-shot consent and durable audit/recovery.
