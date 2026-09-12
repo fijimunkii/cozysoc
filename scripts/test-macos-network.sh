@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Explicit disposable macOS VM lab. Product code runs as the normal user in
-# Terminal, not under sudo. No privacy, firewall or default-route settings change.
+# Terminal, not under sudo. Scoped test-certificate trust is revoked on teardown.
 set -euo pipefail
 [[ $(uname -s) == Darwin && ${COZYSOC_MACOS_LAB:-} == 1 ]]
 [[ $(id -u) != 0 ]]
+[[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]]
 cd "$(git rev-parse --show-toplevel)"
 umask 077
 work=$(mktemp -d "$HOME/.czlab.XXXXXX")
 left=0; right=0
+printf 'github-hosted\n' > "$work/disposable-trust-allowed"
 cleanup() {
   status=$?
   trap - EXIT
@@ -24,6 +26,9 @@ cleanup() {
       echo 'lab monitor did not confirm shutdown' >&2
       status=1
     fi
+  fi
+  if [[ -f "$work/https-trust.pem" && ! -f "$work/https-trust-revoked" ]]; then
+    sudo -n /usr/bin/python3 "$work/trust-cleanup.py" || status=1
   fi
   if (( right )); then sudo -n /sbin/ifconfig feth43 destroy || status=1; fi
   if (( left )); then sudo -n /sbin/ifconfig feth42 destroy || status=1; fi
@@ -49,6 +54,7 @@ fi
 go test -c -o "$work/lab.test" ./tests/macoslab
 go build -o "$work/cozysoc" ./cmd/cozysoc
 cp scripts/macos-lab-runner.py "$work/run.py"
+cp scripts/macos-lab-trust.py "$work/trust-cleanup.py"
 cp tests/macoslab/testdata/cli_driver.py "$work/cli-driver.py"
 printf '#!/bin/bash\nexec %q %q\n' "$(command -v python3)" "$work/run.py" > "$work/run.command"
 chmod 700 "$work/run.command"

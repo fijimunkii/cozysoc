@@ -279,6 +279,7 @@ func TestMACOSGatewayLab(t *testing.T) {
 		}
 	})
 	t.Run("https-native-tls-rejection", runHTTPSNativeLab)
+	t.Run("https-native-trusted-response", runHTTPSTrustedLab)
 	for _, mode := range []string{"dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss"} {
 		t.Run(mode, func(t *testing.T) { runDNSLab(t, mode) })
 	}

@@ -89,4 +89,6 @@ The [isolated native lab](macos-network-lab.md) now includes a restricted libsli
 TCP peer forwarding only to an owned Unix-socket TLS server. Its required
 `https-native-tls-rejection` case checks production route/socket binding and
 system-trust rejection of an ephemeral self-signed certificate before HTTP.
-Trusted responses and controller/PTY consent integration remain unproven.
+The trusted-response case uses a unique SSL-scoped identity on disposable hosted
+CI and verifies trust revocation afterward. Controller/PTY consent integration remains
+unproven.

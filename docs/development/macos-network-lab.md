@@ -186,3 +186,41 @@ This establishes native TCP/TLS rejection through the isolated peer, not trusted
 HTTPS success, real physical NICs or complete controller/PTY consent support.
 Trusted-response and integrated controller/consent cases remain gates before
 product HTTPS execution is enabled.
+
+## Trusted HTTPS response and trust cleanup
+
+The required `https-native-trusted-response` case adds a unique, short-lived
+self-signed test identity to the disposable runner's system keychain, with trust
+restricted to SSL for that exact hostname. The private key remains in memory.
+The production candidate uses normal system trust: no custom root pool or
+verification bypass is supplied. The owned TLS server validates the HEAD target,
+Host and fixed user agent, rejects cookies/authorization headers, and returns 204.
+The candidate must retain request acceptance, status and measured response timing.
+
+This trust-changing suite now requires both `GITHUB_ACTIONS=true` and
+`RUNNER_ENVIRONMENT=github-hosted` before creating its private work directory. It
+must not be run on a developer workstation or a persistent/self-hosted runner.
+The shell creates a private marker for the Terminal-launched process only after
+those checks. Existing native code remains unprivileged; only narrow certificate
+installation/removal and isolated-interface setup use sudo.
+
+Before adding trust, the test records the public certificate and its SHA-256 hash
+in mode-0600 files. Cleanup exports current administrative trust, replaces the
+fixture's exact SSL grant with an explicit deny policy, and verifies every other
+entry is unchanged. It then deletes exactly that certificate by hash and verifies
+that normal system trust rejects the identity. Each security-tool child has a
+ten-second bound and is joined by its privileged supervisor.
+
+The deny record remains until the hosted VM is disposed. This is verified trust
+revocation and certificate deletion, not deletion of all trust metadata. Removing
+the last administrative trust entry hangs waiting for authorization on the tested
+runners; changing the authorization rule is rejected. The harness changes no
+authorization rules and does not weaken production verification to work around it.
+Only confirmed cleanup writes the completion marker. If the test is interrupted,
+the outer harness attempts the same revocation from the journal and fails on an
+unconfirmed operation. No unrelated certificates or trust settings are replaced.
+A forced VM termination relies on disposal of the hosted runner.
+
+This is trusted native TCP/TLS/HTTP evidence for the isolated fixture, not yet
+controller admission, terminal approval, persistent audit or physical NIC evidence.
+The integrated controller/PTY consent gate remains open before product execution.

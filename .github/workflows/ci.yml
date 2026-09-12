@@ -57,6 +57,7 @@ jobs:
           go test -race -count=1 ./internal/controller/httpsrun ./internal/controller/httpstcp ./internal/controller/httpsexchange ./internal/controller/checkroute ./internal/controller/httpsroute ./internal/controller/resolverroute ./internal/controller/gatewayroute ./internal/controller/gatewayicmp ./internal/controller/gatewayrun ./internal/controller/localapi
           python3 scripts/test-check-macos-lab.py
           python3 scripts/test-macos-lab-runner.py
+          python3 scripts/test-macos-lab-trust.py
 
       - name: Run real isolated networking in normal-user Terminal context
         env:
@@ -88,6 +89,7 @@ jobs:
           bash scripts/check-repo.sh
           python3 scripts/test-check-macos-lab.py
           python3 scripts/test-macos-lab-runner.py
+          python3 scripts/test-macos-lab-trust.py
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
