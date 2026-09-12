@@ -46,7 +46,7 @@ jobs:
           test -z "$(gofmt -l cmd internal tests)"
           go vet ./...
           go test -count=1 ./...
-          go test -race -count=1 ./internal/controller/httpstcp ./internal/controller/httpsexchange ./internal/controller/checkroute ./internal/controller/httpsroute ./internal/controller/resolverroute ./internal/controller/gatewayroute ./internal/controller/gatewayicmp ./internal/controller/gatewayrun ./internal/controller/localapi
+          go test -race -count=1 ./internal/controller/httpsrun ./internal/controller/httpstcp ./internal/controller/httpsexchange ./internal/controller/checkroute ./internal/controller/httpsroute ./internal/controller/resolverroute ./internal/controller/gatewayroute ./internal/controller/gatewayicmp ./internal/controller/gatewayrun ./internal/controller/localapi
           python3 scripts/test-check-macos-lab.py
           python3 scripts/test-macos-lab-runner.py
 

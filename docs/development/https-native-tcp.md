@@ -13,8 +13,8 @@ route evidence, revalidates the route before connection, and caps the entire
 operation to eight seconds or the earlier caller, original route or review deadline. Connect has a
 two-second ceiling inside that original deadline. Fresh inspections never refresh
 the reviewed selection or run deadline. A per-instance guard rejects concurrent
-execution; durable cooldown and audited one-shot admission remain future run-control
-responsibilities. Possessing a plan or invoking this internal API is not consent.
+execution; cooldown and audited one-shot admission are provided by the internal
+[run coordinator](https-run-control.md), which is not yet installed in the product controller. Possessing a plan or invoking this internal API is not consent.
 
 The route inspector must reproduce the exact selection, interface, source and
 prefixes. Rechecks occur before connection, after connection, before every TLS
@@ -48,7 +48,7 @@ attribution if binding changes during the exchange.
 `ExecuteHTTPS` accepts a controller-allocated 128-bit hexadecimal measurement ID
 and immutable selection. It validates the resulting evidence with the same HTTPS
 snapshot contract used by assessment. Invalid identities fail before inspection;
-rejected preflight/admission yields no measurement. The future coordinator must
+rejected preflight/admission yields no measurement. The coordinator must
 retain its own rejection reason without inventing a connection failure.
 
 A connection attempt records its start immediately before the connector runs.
@@ -64,7 +64,7 @@ failures retain their distinct stage/request state with no response latency.
 Normalized output contains only measurement and immutable selection references,
 observer identity, timestamps, outcome and status. It contains no endpoint, TLS
 name, request target, raw errors or response content. IDs and durable run audits
-remain the responsibility of future run control; this method does not persist or
+remain the responsibility of run control; this method does not persist or
 schedule measurements.
 
 ## Evidence and remaining integration
@@ -80,6 +80,7 @@ retain plan and route validation that excludes loopback destinations/interfaces.
 These tests establish socket-option behavior, not physical NIC, routed external,
 VPN, packaged-permission or full HTTPS run support. TLS exchange has separate real
 loopback evidence; route inspection has separate isolated native lab evidence.
-An integrated native HTTPS lab, measurement/audit coordinator, durable cooldown
-and interactive one-shot consent remain required before enabling product traffic.
+The internal measurement/audit coordinator now supplies one-shot admission and
+cooldown. Controller lifecycle integration, an integrated native HTTPS lab and
+interactive one-shot consent remain required before enabling product traffic.
 #14 and #29 remain open.
