@@ -14,6 +14,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
@@ -42,15 +43,17 @@ type deviceWatchOperationalControl interface {
 type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
 type controllerAPIHandler struct {
-	controller            *core.Controller
-	gatewayRuns           gatewayRunLifecycle
-	gatewayChecksEnabled  bool // Immutable after server startup; experimental native opt-in only.
-	store                 controllerStore
-	deviceWatch           deviceWatchAPIControl
-	gatewayRouteInspector gatewayroute.Inspector
-	networkInspector      devicewatch.InterfaceInspector
-	listScopeCandidates   scopeCandidateLister
-	now                   func() time.Time
+	controller             *core.Controller
+	gatewayRuns            gatewayRunLifecycle
+	resolverRuns           resolverRunLifecycle
+	resolverRouteInspector resolverroute.Inspector
+	gatewayChecksEnabled   bool // Immutable after server startup; experimental native opt-in only.
+	store                  controllerStore
+	deviceWatch            deviceWatchAPIControl
+	gatewayRouteInspector  gatewayroute.Inspector
+	networkInspector       devicewatch.InterfaceInspector
+	listScopeCandidates    scopeCandidateLister
+	now                    func() time.Time
 }
 
 func newControllerAPIHandler(controller *core.Controller, store controllerStore, deviceWatch deviceWatchAPIControl) (*controllerAPIHandler, error) {
@@ -61,13 +64,14 @@ func newControllerAPIHandler(controller *core.Controller, store controllerStore,
 		return nil, fmt.Errorf("controller API handler requires storage and Device Watch control")
 	}
 	return &controllerAPIHandler{
-		controller:            controller,
-		store:                 store,
-		deviceWatch:           deviceWatch,
-		gatewayRouteInspector: gatewayroute.NewInspector(),
-		networkInspector:      devicewatch.NewSystemInterfaceInspector(),
-		listScopeCandidates:   devicewatch.ListScopeCandidates,
-		now:                   time.Now,
+		controller:             controller,
+		store:                  store,
+		deviceWatch:            deviceWatch,
+		gatewayRouteInspector:  gatewayroute.NewInspector(),
+		resolverRouteInspector: resolverroute.NewInspector(),
+		networkInspector:       devicewatch.NewSystemInterfaceInspector(),
+		listScopeCandidates:    devicewatch.ListScopeCandidates,
+		now:                    time.Now,
 	}, nil
 }
 

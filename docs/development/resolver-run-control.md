@@ -103,3 +103,8 @@ The [native route inspector](resolver-route-inspection.md) now produces fresh
 source-bound plan selections on macOS. The [bounded UDP candidate](resolver-udp-sender.md)
 now executes through this controller in the isolated lab; product integration
 remains pending.
+
+The [controller owner](resolver-controller.md) now installs this coordinator once
+following socket acquisition and drains it before storage shutdown. Internal
+preflight resolves durable configuration and enrollment around route collection.
+Native settings and preview commands remain separate from execution consent.
