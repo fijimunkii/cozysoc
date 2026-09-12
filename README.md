@@ -4,7 +4,7 @@
 
 Cozy SOC is a friendly, local-first home network security hub. The goal is to make useful network visibility and security capabilities approachable without requiring someone to become a security analyst or network administrator first.
 
-> **Status:** Foundation architecture and feasibility. Cozy SOC does not have a released or functional build yet. Capabilities described below are roadmap targets, not current protection claims.
+> **Status:** Active v0.1 development, with a working local controller, CLI and browser UI. There is no released desktop alpha or supported installer yet. Developer and lab evidence does not establish whole-home protection, packaged platform support, or continuous service operation.
 
 ## Product direction
 
@@ -17,6 +17,28 @@ The product should help a household answer three questions:
 3. **What should I do next?**
 
 Planned capability areas include device discovery and presence, DNS protection, traffic analysis, explainable suspicious-activity detection, network quality checks, optional wireless monitoring with tested USB adapters, and integrations with specialist open-source security tools.
+
+## What works in the developer build
+
+- One `cozysoc` executable provides independent controller (`serve`), authenticated CLI, local browser (`web`), and development orchestration (`dev`) modes.
+- Controller-owned SQLite stores bounded local evidence and settings behind an authenticated Unix-socket API. The browser has a separate session and narrowly typed endpoints.
+- Network enrollment, explicit Device Watch enablement, device/evidence views, and coverage reporting distinguish observed data from missing or stale coverage.
+- Experimental macOS gateway and selected-resolver checks require controller opt-in and interactive one-shot approval. Retained history and plain-language diagnosis preserve evidence age and uncertainty.
+- HTTPS settings and native review disclose the exact request, identity, route, data limits and privacy impact. Internal TLS/HTTP and native TCP candidates are implemented; HTTPS execution remains disabled pending audited run control, consent and integrated lab evidence.
+
+See [frontend and local web](docs/development/frontend.md), [Device Watch](docs/development/device-watch.md), [gateway checks](docs/development/interactive-gateway-check.md), [resolver checks](docs/development/resolver-consent.md), [retained diagnosis](docs/development/retained-quality-diagnosis.md), and [HTTPS review](docs/development/https-controller.md).
+
+## Run the developer UI
+
+From the repository root, with Go 1.27.1 and Node 24.20.x (the versions pinned by this repository):
+
+```sh
+npm --prefix ui ci --ignore-scripts --no-audit --no-fund
+npm --prefix ui run build
+go run ./cmd/cozysoc dev
+```
+
+Open the authenticated loopback URL printed by the command. `dev` can start a temporary controller and stops only the controller it owns when it exits. Use separate `serve` and `web` processes when exercising independent lifetimes; this is not an installer or proof of reboot/sleep behavior. Starting the UI does not enable Device Watch or authorize active checks. See the [command guide](docs/development/unified-cli.md) and [controller guide](docs/development/controller.md) for explicit enrollment and capability commands.
 
 ## A core design rule: coverage must be honest
 
@@ -60,18 +82,15 @@ Still provisional pending Foundation validation:
 - **macOS 13+ Apple Silicon** as the first desktop reference candidate; and
 - **Ubuntu Server 26.04 LTS** on tested amd64/arm64 hardware as the initial headless hub/advanced-sensor candidate.
 
-These are not current support claims. Issue #5 must prove real service lifetime, packet visibility, USB Wi-Fi behavior, packaging, permissions, sleep/restart behavior, and resource budgets; issue #6 validates engine compatibility and redistribution terms.
+These are not current support claims. Issues #5/#56 must prove real service lifetime, packet visibility, USB Wi-Fi behavior, packaging, permissions, sleep/restart behavior, and resource budgets; issue #6 validates engine compatibility and redistribution terms.
 
 ## Roadmap
 
 The canonical roadmap is [GitHub issue #1](https://github.com/fijimunkii/cozysoc/issues/1).
 
-Repository bootstrap is complete. Current Foundation work is intentionally concentrated in:
+Foundation architecture, threat-model and integration decisions, the controller/IPC/storage baseline, and unified entrypoints have landed. Current implementation work is in v0.1, especially network quality (#14), with capability, Device Watch, coverage and frontend work (#9, #11–#13) still open.
 
-- [#3 — architecture and product boundaries](https://github.com/fijimunkii/cozysoc/issues/3);
-- [#4 — threat model](https://github.com/fijimunkii/cozysoc/issues/4);
-- [#5 — real service/capture/USB feasibility experiments](https://github.com/fijimunkii/cozysoc/issues/5); and
-- [#6 — integration, license, packaging, and minimum-engine evaluation](https://github.com/fijimunkii/cozysoc/issues/6).
+Release gates remain open: [hardware evidence #56](https://github.com/fijimunkii/cozysoc/issues/56), [installers and updates #28](https://github.com/fijimunkii/cozysoc/issues/28), [lab and performance gates #29](https://github.com/fijimunkii/cozysoc/issues/29), and [privacy/recovery #30](https://github.com/fijimunkii/cozysoc/issues/30). CI exercises macOS 15/26 native labs and Linux controller/frontend/process checks; those scoped results do not promote every architecture candidate to a supported platform.
 
 The first software release line is **v0.1**, the desktop alpha. Later roadmap stages use v0.2–v0.5, with v1.0 reserved for the first broadly ready release.
 
