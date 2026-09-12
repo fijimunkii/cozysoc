@@ -8,6 +8,8 @@ The database is an implementation detail of the controller. Renderers, engines, 
 
 The store uses one dedicated controller connection and rollback journaling. This is a correctness baseline, not a claim that rollback mode will always outperform WAL. #29 owns workload measurements before a journal-mode change.
 
+State-directory arguments are literal filesystem paths, including relative paths and names containing spaces, `?`, `#`, or `%`. Both the writer and the separately owned read-only gateway-history pool encode an absolute file URI at the SQLite boundary. State-directory text cannot supply SQLite connection options; the history pool adds its own fixed `mode=ro` option.
+
 ## Logical model
 
 The v1 schema persists:

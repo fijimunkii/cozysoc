@@ -67,7 +67,11 @@ func Open(stateDir string, limits Limits) (*Store, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", path)
+	dsn, err := sqliteFileURI(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve SQLite path: %w", err)
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open SQLite store: %w", err)
 	}
