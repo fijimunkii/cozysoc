@@ -271,7 +271,7 @@ func TestResolverConfigurationMigratesV1AndPreservesRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if version, err := s.SchemaVersion(ctx); err != nil || version != 2 {
+	if version, err := s.SchemaVersion(ctx); err != nil || version != schemaVersion {
 		t.Fatalf("migration: %d %v", version, err)
 	}
 	if settingsCount(t, s, "network_scopes") != 1 {

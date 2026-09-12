@@ -4,7 +4,7 @@ Related issues: #14 and #29. `networkquality.AssessHTTPS` validates and interpre
 bounded normalized evidence from one explicitly selected endpoint/request at a
 known observing interface. `Corroborate` can consume this specialized snapshot
 alongside ICMP, local-link and DNS evidence. This is a pure evidence contract:
-there is no external collector, configuration storage, CLI/browser execution,
+there is no external collector, CLI/browser execution,
 DNS resolution, TLS connection, HTTP request, scheduling or new consent path.
 The existing retained diagnosis continues to compare its gateway/DNS pair only.
 
@@ -73,7 +73,8 @@ The earlier standalone generic `Assess` fixture contract remains available.
 
 The [explicit HTTPS review plan](https-review-plan.md) now specifies pinned
 configuration, exact request encoding, disclosure and required executor ceilings.
-It remains pure and does not store settings or enable a collector.
+It remains pure. [Durable HTTPS settings](https-configuration.md) now preserve
+explicit configuration separately; neither path enables a collector.
 
 Before external traffic is exposed, a collector must implement explicit immutable
 destination configuration and local disclosure of the exact endpoint, TLS identity,
