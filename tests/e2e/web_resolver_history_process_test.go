@@ -41,12 +41,8 @@ func TestWebProcessResolverHistoryReadsRetainedAuditsWithoutExecution(t *testing
 	}
 	// t.TempDir includes the long test name and a variable-length suffix, which
 	// can reach Linux's 108-byte sockaddr_un limit before the socket terminator.
-	root, err := os.MkdirTemp("", "cz-web-history-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	stateDir := filepath.Join(root, "state ?#%")
+	fixtureRoot := shortProcessTempDir(t)
+	stateDir := filepath.Join(fixtureRoot, "state ?#%")
 	// Seed only synthetic durable events before the real controller owns SQLite.
 	// No actual route, neighbor-cache or DNS work is needed to read old records.
 	s, err := storage.Open(stateDir, storage.DefaultLimits())

@@ -32,11 +32,7 @@ func TestQualityDiagnosisProcessUsesRetainedEvidenceWithoutExecution(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.MkdirTemp("", "cz-diagnosis-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	root := shortProcessTempDir(t)
 	dir := filepath.Join(root, "state ?#%")
 	s, err := storage.Open(dir, storage.DefaultLimits())
 	if err != nil {

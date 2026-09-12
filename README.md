@@ -103,7 +103,7 @@ Please read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Do not 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Changes should be tied to a scoped GitHub issue, use conventional commit subjects, and keep implementation claims aligned with tested behavior.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [testing guide](docs/development/testing.md) for fixture isolation, cleanup and the limits of CI evidence. Changes should be tied to a scoped GitHub issue, use conventional commit subjects, and keep implementation claims aligned with tested behavior.
 
 ## License
 
