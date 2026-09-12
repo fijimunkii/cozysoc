@@ -57,3 +57,7 @@ support. A real sender still needs explicit endpoint/name disclosure and immutab
 configuration, admitted scope, one-shot consent, durable audit, retention,
 cooldown/concurrency control and bounded request/deadline behavior. #14 and #29
 remain open.
+
+The [selected-resolver review plan](resolver-review.md) now pins explicit
+endpoint/query/scope disclosure and proposed one-shot budgets. It grants no
+consent and is not yet connected to a sender.
