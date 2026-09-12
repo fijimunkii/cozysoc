@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/fijimunkii/cozysoc/internal/controller/httpsroute"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsrun"
 	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 )
 
@@ -13,10 +13,9 @@ var measurementID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Request is trusted controller-owned input after consumed admission, not a wire
 // format or consent ticket. The run coordinator must allocate a fresh identity.
-type Request struct {
-	MeasurementID string
-	Selection     httpsroute.Selection
-}
+type Request = httpsrun.Request
+
+var _ httpsrun.Executor = (*Candidate)(nil)
 
 // ExecuteHTTPS produces normalized evidence for a connection attempt. Rejected
 // preflight/admission returns no measurement; the coordinator must preserve its

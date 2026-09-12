@@ -75,8 +75,10 @@ macOS and Linux. No browser route, HTTPS check/run/approval command, consent
 ticket or collector is exposed. Enrollment and saved settings cannot establish
 current route validity or network reachability. The [route inspector](https-route-inspection.md)
 is used for native preview. A [native TCP candidate](https-native-tcp.md) combines
-socket verification and the bounded exchange internally. Audited run control,
-one-shot consent and end-to-end lab evidence remain required before execution.
+socket verification and the bounded exchange internally. Internal
+[audited run control](https-run-control.md) now enforces one-shot admission and
+cooldown. Controller lifecycle integration, one-shot consent and end-to-end lab
+evidence remain required before execution.
 
 Tests cover exact-field and authority rejection, authenticated socket/CLI round
 trips, unavailable enrollment, retirement, and absent browser routes. A real
