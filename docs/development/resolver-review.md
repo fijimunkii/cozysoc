@@ -83,3 +83,7 @@ The [one-shot run controller](resolver-run-control.md) now consumes process-loca
 reviews and commits lifecycle/measurement audits through SQLite. The
 [bounded UDP candidate](resolver-udp-sender.md) is exercised through it in the
 isolated lab. Product execution endpoints remain pending.
+
+[Durable settings](resolver-configuration.md) now allocate and retain immutable
+configuration references across restarts. Product preflight wiring and explicit
+one-shot consent remain separate from saving those settings.

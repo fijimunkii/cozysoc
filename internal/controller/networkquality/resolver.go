@@ -120,6 +120,14 @@ func validResolverSelection(s ResolverSelection) bool {
 		(s.Expect == DNSExpectAnswer || s.Expect == DNSExpectNXDOMAIN || s.Expect == DNSExpectNoData)
 }
 
+// ValidateResolverSelection validates an immutable reference, not execution authority.
+func ValidateResolverSelection(s ResolverSelection) error {
+	if !validResolverSelection(s) {
+		return fmt.Errorf("resolver selection is invalid")
+	}
+	return nil
+}
+
 // ValidateResolverSnapshot validates normalized evidence, not network authority,
 // wire authenticity or DNSSEC. Bounds apply before map allocation and iteration.
 func ValidateResolverSnapshot(s ResolverSnapshot) error {

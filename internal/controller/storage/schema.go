@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -158,4 +158,49 @@ CREATE TABLE storage_events (
 ) STRICT;
 CREATE INDEX storage_events_time_idx ON storage_events(occurred_at_ns DESC, id);
 CREATE INDEX storage_events_expiry_idx ON storage_events(expires_at_ns, id);
+`
+
+// Configuration changes and their audits use one SQLite statement. This avoids
+// opening a transaction on the pinned connection that could absorb other writes.
+const migrationV2 = `
+CREATE TABLE resolver_configurations (
+ id TEXT PRIMARY KEY,
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id) ON DELETE RESTRICT,
+ resolver_id TEXT NOT NULL UNIQUE,
+ query_id TEXT NOT NULL UNIQUE,
+ configuration TEXT NOT NULL CHECK (length(configuration) <= 4096 AND json_valid(configuration)),
+ created_at_ns INTEGER NOT NULL,
+ retired_at_ns INTEGER CHECK (retired_at_ns IS NULL OR retired_at_ns >= created_at_ns),
+ audit_expires_at_ns INTEGER NOT NULL
+) STRICT;
+CREATE TRIGGER resolver_configuration_insert_guard BEFORE INSERT ON resolver_configurations BEGIN
+ SELECT CASE WHEN (SELECT count(*) FROM resolver_configurations) >= 256
+ OR (SELECT count(*) FROM resolver_configurations WHERE retired_at_ns IS NULL) >= 16
+ OR EXISTS (SELECT 1 FROM resolver_configurations WHERE id = NEW.id OR resolver_id = NEW.resolver_id OR query_id = NEW.query_id)
+ OR NEW.retired_at_ns IS NOT NULL
+ OR NOT EXISTS (SELECT 1 FROM network_scopes WHERE id = NEW.scope_id AND kind = 'lan' AND retired_at_ns IS NULL)
+ THEN RAISE(ABORT, 'resolver configuration unavailable') END;
+END;
+CREATE TRIGGER resolver_configuration_update_guard BEFORE UPDATE ON resolver_configurations BEGIN
+ SELECT CASE WHEN NEW.id != OLD.id OR NEW.scope_id != OLD.scope_id
+ OR NEW.resolver_id != OLD.resolver_id OR NEW.query_id != OLD.query_id
+ OR NEW.configuration != OLD.configuration OR NEW.created_at_ns != OLD.created_at_ns
+ OR OLD.retired_at_ns IS NOT NULL OR NEW.retired_at_ns IS NULL
+ THEN RAISE(ABORT, 'resolver configuration is immutable') END;
+END;
+CREATE TRIGGER resolver_configuration_delete_guard BEFORE DELETE ON resolver_configurations BEGIN
+ SELECT RAISE(ABORT, 'resolver configuration is immutable');
+END;
+CREATE TRIGGER resolver_configuration_created AFTER INSERT ON resolver_configurations BEGIN
+ INSERT INTO audit_events (id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
+ VALUES ('audit.resolver-configuration.' || NEW.id || '.created', 'resolver-configuration', 'local-os-user', NEW.created_at_ns, 1,
+ json_object('schema_version', 1, 'state', 'created', 'selection_id', NEW.id, 'resolver_id', NEW.resolver_id, 'query_id', NEW.query_id, 'scope_id', NEW.scope_id),
+ 'audit', NEW.audit_expires_at_ns);
+END;
+CREATE TRIGGER resolver_configuration_retired AFTER UPDATE ON resolver_configurations BEGIN
+ INSERT INTO audit_events (id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
+ VALUES ('audit.resolver-configuration.' || NEW.id || '.retired', 'resolver-configuration', 'local-os-user', NEW.retired_at_ns, 1,
+ json_object('schema_version', 1, 'state', 'retired', 'selection_id', NEW.id, 'resolver_id', NEW.resolver_id, 'query_id', NEW.query_id, 'scope_id', NEW.scope_id),
+ 'audit', NEW.audit_expires_at_ns);
+END;
 `
