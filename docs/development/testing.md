@@ -98,3 +98,21 @@ Those hardware/filesystem/performance-dependent claims require the named real-ha
 Add deterministic black-box scenarios as product surfaces become real. Next useful expansions include real source-specific permission transitions, the first non-Device-Watch coverage producer, multi-observation-point aggregation once real evidence exists, named-workload latency/overload calibration, real disposable-volume low-disk/full-disk lab evidence, identity correction flows, and installation/service lifecycle once those product flows exist.
 
 Keep the normal PR E2E suite deterministic, isolated, and reasonably fast. Longer sustained runs, deliberately exhausted filesystems, packet labs, and hardware matrices belong in dedicated release/lab jobs rather than making routine PR CI depend on physical devices or household traffic.
+
+## Process fixture ownership
+
+History and diagnosis process tests allocate short private directories through
+`shortProcessTempDir`. This leaves space for the Unix socket beneath a short,
+canonical `TMPDIR` (use `/private/tmp` on macOS). The helper owns the original
+path in its cleanup callback, so a caller cannot redirect cleanup by reusing a
+variable for a browser URL. Later controller/web/storage cleanup callbacks run
+first; removal errors fail the test instead of being silently ignored.
+
+The regression checks directory privacy, nested state cleanup, resource-close
+ordering and preservation of unrelated fixtures. The resolver browser test
+previously passed while leaving its database directory behind because the
+captured filesystem variable had become the HTTP root URL; gateway history had
+the same defect. Repeated real resolver, HTTPS and diagnosis process reads now
+leave an isolated temporary parent empty on macOS; Linux CI also runs the gateway
+case. This is fixture ownership evidence, not a CPU, memory, disk-growth or
+sustained-run budget result. Existing leftovers are not searched for or removed.
