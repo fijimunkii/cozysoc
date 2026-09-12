@@ -103,8 +103,8 @@ preview never prepare a run ticket or reset cooldown.
 Internal run preflight uses the same bounded settings/enrollment reload around
 route collection as preview. Retirement or changed scope between review and run
 blocks admission. The TCP candidate and SQLite auditor are compiled dependencies,
-not caller-supplied transports. No command, browser route or opt-in execution flag
-exposes this owner yet. The typed `network-quality.https-check` session now exists
+not caller-supplied transports. The foreground `https-check` client is present, but no opt-in execution flag or
+browser route exposes this owner yet. The typed `network-quality.https-check` session now exists
 in the local API, but the product handler does not supply its execution control;
 it returns unavailable before preparing a review.
 
@@ -116,5 +116,6 @@ proof of integrated HTTPS traffic or interactive consent.
 
 The [HTTPS consent protocol](https-consent.md) now defines the authenticated
 review/decision/result exchange and verifies exact request, policy and privacy
-disclosures. Terminal presentation and integrated native traffic evidence remain
-required before the product handler can enable it.
+disclosures. The terminal client now presents that disclosure and requires exact one-shot
+approval. Integrated native traffic/PTY evidence remains required before the
+product handler can enable it.
