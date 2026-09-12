@@ -430,6 +430,7 @@ func nativeHTTPSCLI(t *testing.T, ctx context.Context, client *localapi.Client, 
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
+	assertNativeHTTPSHistory(t, ctx, client, work, id, match[1])
 	peer.stop(t)
 	if _, err := client.CheckHTTPS(ctx, id, func(context.Context, api.HTTPSCheckReview) (bool, error) {
 		t.Error("HTTPS cooldown issued review")
@@ -443,4 +444,40 @@ func nativeHTTPSCLI(t *testing.T, ctx context.Context, client *localapi.Client, 
 		}
 	}
 	return match[1]
+}
+
+// Retiring settings does not discard retained evidence or restore approval.
+func assertNativeHTTPSHistory(t *testing.T, ctx context.Context, client *localapi.Client, work, selectionID, runID string) {
+	t.Helper()
+	if _, err := client.CallWithParams(ctx, api.MethodHTTPSRetire, api.HTTPSIDParams{SelectionID: selectionID}); err != nil {
+		t.Fatal(err)
+	}
+	var original *api.HTTPSRunMeasurement
+	for _, id := range []string{"", runID, runID} {
+		var raw json.RawMessage
+		var err error
+		if id == "" {
+			raw, err = client.Call(ctx, api.MethodHTTPSHistory)
+		} else {
+			raw, err = client.CallWithParams(ctx, api.MethodHTTPSHistory, api.HTTPSHistoryParams{RunID: id})
+		}
+		var history api.HTTPSHistory
+		if err != nil || json.Unmarshal(raw, &history) != nil || history.Mode != "retained-history" || !history.Enrolled || len(history.Runs) != 1 || history.Truncated || history.ScanTruncated {
+			t.Fatal("HTTPS history unavailable", err)
+		}
+		r := history.Runs[0]
+		if r.RunID != runID || r.Selection.ID != selectionID || r.Outcome != "completed" || r.Measurement == nil || r.Measurement.StatusCode != 204 || r.Measurement.ResponseTimeNanoseconds == nil || r.Assessment.State != "status-response" || r.Assessment.ExpectationMatched == nil || !*r.Assessment.ExpectationMatched || !r.AuthorizationRetained || !r.AdmissionRetained || !r.TerminalRetained {
+			t.Fatal("HTTPS history lost provenance/evidence")
+		}
+		if original != nil && (!original.StartedAt.Equal(r.Measurement.StartedAt) || !original.CompletedAt.Equal(r.Measurement.CompletedAt)) {
+			t.Fatal("HTTPS history refreshed original timestamps")
+		}
+		original = r.Measurement
+	}
+	command := exec.CommandContext(ctx, filepath.Join(work, "cozysoc"), "https-history", "--state-dir", filepath.Join(work, "controller-state"), runID)
+	out, err := command.Output()
+	var history api.HTTPSHistory
+	if err != nil || json.Unmarshal(out, &history) != nil || len(history.Runs) != 1 || history.Runs[0].RunID != runID {
+		t.Fatal("HTTPS history CLI unavailable", err)
+	}
 }

@@ -227,6 +227,8 @@ quiet time, disclosure, redirected-I/O rejection, default/type-ahead decline,
 overlong input, EOF, Ctrl-C, original review expiry, an approved HEAD/204 response,
 response timing and cooldown. After joining the controller it checks exactly
 three persisted HTTPS audit phases and no monitoring observations/coverage.
+After HTTPS configuration retirement, it reads list/exact/CLI retained history,
+verifying immutable timestamps, response status/timing and phase provenance.
 The controller session has a 170-second deadline and a 180-second owner ceiling;
 the outer Terminal launcher waits at most 240 seconds. These bounds allow the
 real HTTPS review expiry in addition to the existing gateway/resolver cases.
