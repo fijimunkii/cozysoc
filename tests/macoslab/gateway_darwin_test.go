@@ -20,6 +20,8 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayicmp"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayrun"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsplan"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/networkquality"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverplan"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
@@ -253,6 +255,21 @@ func TestMACOSGatewayLab(t *testing.T) {
 		enrollment.Observer.InterfaceIndex++
 		if _, err := resolverroute.NewInspector().Inspect(context.Background(), enrollment, config); err == nil {
 			t.Fatal("resolver accepted wrong interface")
+		}
+	})
+
+	t.Run("https-route", func(t *testing.T) {
+		r := labRequest(t)
+		b := r.Plan.Binding
+		e := httpsroute.Enrollment{Observer: networkquality.Observer{ScopeID: b.ScopeID, SensorID: "fixture", InterfaceName: b.InterfaceName, InterfaceIndex: b.InterfaceIndex}, Prefixes: b.Prefixes}
+		c := httpsplan.Configuration{Selection: networkquality.HTTPSSelection{ID: "https1", EndpointID: "endpoint1", RequestID: "request1", Family: networkquality.FamilyIPv4, Method: "HEAD", ExpectedStatus: 204}, Endpoint: netip.AddrPortFrom(r.Plan.Target, 443), ServerName: "test.example", RequestTarget: "/check", DestinationPolicy: httpsplan.ExactEndpoint}
+		selected, err := httpsroute.NewInspector().Inspect(context.Background(), e, c)
+		if err != nil || selected.Plan.Disclosure().Binding.Source != r.Source {
+			t.Fatalf("HTTPS route: %v", err)
+		}
+		e.Observer.InterfaceIndex++
+		if _, err := httpsroute.NewInspector().Inspect(context.Background(), e, c); err == nil {
+			t.Fatal("HTTPS accepted wrong interface")
 		}
 	})
 	for _, mode := range []string{"dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss"} {

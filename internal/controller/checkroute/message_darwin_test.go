@@ -1,4 +1,4 @@
-package resolverroute
+package checkroute
 
 import (
 	"context"

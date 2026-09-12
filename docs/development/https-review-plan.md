@@ -89,6 +89,7 @@ redaction/explicit disclosure, ownership, stale/reversed clocks, changed selecti
 IPv4/IPv6 membership and hostile inputs. Existing resolver plan/route/coordinator
 tests exercise the extracted shared validation. No test here demonstrates actual
 TLS, public-endpoint, packaged permission or hardware behavior.
-[Durable settings](https-configuration.md) and [native settings commands](https-controller.md) are now available. Before traffic is
-exposed, remaining work includes native route/socket binding, actual byte/deadline
+[Durable settings](https-configuration.md) and [native settings commands](https-controller.md) are now available.
+[Native route inspection](https-route-inspection.md) is available internally.
+Remaining work includes controller preflight, socket binding, actual byte/deadline
 enforcement, one-shot consent and durable audit/recovery.

@@ -1,6 +1,6 @@
 //go:build !darwin
 
-package resolverroute
+package checkroute
 
 import (
 	"context"

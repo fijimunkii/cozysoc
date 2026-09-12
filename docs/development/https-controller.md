@@ -50,7 +50,8 @@ return normalized messages without database details or private settings.
 These commands are available on supported Unix controller platforms, including
 macOS and Linux. No browser route, HTTPS plan/check/run/approval command, consent
 ticket or collector is exposed. Enrollment and saved settings cannot establish
-current route validity or network reachability. Actual HTTPS socket binding,
+current route validity or network reachability. An internal [route inspector](https-route-inspection.md)
+is available for future controller preflight. Actual HTTPS socket binding,
 TLS/HTTP execution, enforced byte/deadline budgets and one-shot consent remain
 future work.
 

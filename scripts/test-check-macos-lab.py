@@ -28,6 +28,16 @@ class EvidenceGateTests(unittest.TestCase):
             with self.subTest(action=action), self.assertRaises(ValueError):
                 self.check(without_resolver + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
 
+    def test_https_route_is_required(self):
+        name = "TestMACOSGatewayLab/https-route"
+        self.assertIn(name, checker.EXPECTED)
+        without_https = [e for e in self.evidence() if e.get("Test") != name]
+        with self.assertRaises(ValueError):
+            self.check(without_https)
+        for action in ("skip", "fail"):
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                self.check(without_https + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
+
     def test_dns_cases_are_required(self):
         for mode in ("dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "native-session/resolver-native-session"):
             name = "TestMACOSGatewayLab/" + mode
