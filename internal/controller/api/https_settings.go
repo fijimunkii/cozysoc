@@ -3,6 +3,7 @@ package api
 import "time"
 
 const (
+	MethodHTTPSPlan   = "network-quality.https-plan"
 	MethodHTTPSSave   = "network-quality.https-save"
 	MethodHTTPSList   = "network-quality.https-list"
 	MethodHTTPSRetire = "network-quality.https-retire"

@@ -13,6 +13,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
@@ -46,6 +47,7 @@ type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
 	resolverRuns           resolverRunLifecycle
+	httpsRouteInspector    httpsroute.Inspector
 	resolverRouteInspector resolverroute.Inspector
 	resolverChecksEnabled  bool
 	gatewayChecksEnabled   bool // Immutable after server startup; experimental native opt-in only.
@@ -70,6 +72,7 @@ func newControllerAPIHandler(controller *core.Controller, store controllerStore,
 		deviceWatch:            deviceWatch,
 		gatewayRouteInspector:  gatewayroute.NewInspector(),
 		resolverRouteInspector: resolverroute.NewInspector(),
+		httpsRouteInspector:    httpsroute.NewInspector(),
 		networkInspector:       devicewatch.NewSystemInterfaceInspector(),
 		listScopeCandidates:    devicewatch.ListScopeCandidates,
 		now:                    time.Now,

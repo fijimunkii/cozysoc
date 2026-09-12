@@ -16,6 +16,7 @@ func ValidHTTPSSelectionID(id string) bool { return httpsSelectionID.MatchString
 type HTTPSSettingsHandler interface {
 	SaveHTTPS(context.Context, api.HTTPSSettingsParams) (api.HTTPSSettingsResult, error)
 	ListHTTPSSettings(context.Context) (api.HTTPSSettingsResult, error)
+	PreviewHTTPS(context.Context, api.HTTPSIDParams) (api.HTTPSPlan, error)
 	RetireHTTPS(context.Context, api.HTTPSIDParams) (api.HTTPSRetireResult, error)
 }
 
@@ -33,11 +34,11 @@ func (s *Server) httpsSettings(ctx context.Context, conn net.Conn, request api.R
 	switch request.Method {
 	case api.MethodHTTPSSave:
 		fields = map[string]any{"endpoint": &p.Endpoint, "server_name": &p.ServerName, "request_target": &p.RequestTarget, "family": &p.Family, "method": &p.Method, "expected_status": &p.ExpectedStatus, "destination_policy": &p.DestinationPolicy}
-	case api.MethodHTTPSRetire:
+	case api.MethodHTTPSRetire, api.MethodHTTPSPlan:
 		fields = map[string]any{"selection_id": &id.SelectionID}
 	}
 	if decodeGatewayObject(request.Params, fields) != nil ||
-		(request.Method == api.MethodHTTPSRetire && !ValidHTTPSSelectionID(id.SelectionID)) {
+		((request.Method == api.MethodHTTPSRetire || request.Method == api.MethodHTTPSPlan) && !ValidHTTPSSelectionID(id.SelectionID)) {
 		s.writeError(conn, request.ID, "invalid_request", "https method requires exact settings or an opaque selection reference")
 		return nil, false
 	}
@@ -50,6 +51,8 @@ func (s *Server) httpsSettings(ctx context.Context, conn net.Conn, request api.R
 		result, err = handler.SaveHTTPS(ctx, p)
 	case api.MethodHTTPSList:
 		result, err = handler.ListHTTPSSettings(ctx)
+	case api.MethodHTTPSPlan:
+		result, err = handler.PreviewHTTPS(ctx, id)
 	case api.MethodHTTPSRetire:
 		result, err = handler.RetireHTTPS(ctx, id)
 	}
@@ -58,7 +61,11 @@ func (s *Server) httpsSettings(ctx context.Context, conn net.Conn, request api.R
 		if errors.Is(err, ErrInvalidRead) {
 			code = "invalid_request"
 		}
-		s.writeError(conn, request.ID, code, "HTTPS settings unavailable; reload settings before retrying a mutation")
+		message := "HTTPS settings unavailable; reload settings before retrying a mutation"
+		if request.Method == api.MethodHTTPSPlan {
+			message = "HTTPS review unavailable; verify current enrollment and saved settings"
+		}
+		s.writeError(conn, request.ID, code, message)
 		return nil, false
 	}
 	return result, true

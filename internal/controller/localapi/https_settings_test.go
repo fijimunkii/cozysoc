@@ -82,7 +82,7 @@ func TestHTTPSNativeMethodsAndExactParameters(t *testing.T) {
 func TestHTTPSAuthentication(t *testing.T) {
 	h := &httpsSettingsTestHandler{}
 	s := startMutationTestServer(t, h)
-	for _, method := range []string{api.MethodHTTPSSave, api.MethodHTTPSList, api.MethodHTTPSRetire} {
+	for _, method := range []string{api.MethodHTTPSSave, api.MethodHTTPSList, api.MethodHTTPSRetire, api.MethodHTTPSPlan} {
 		conn, err := net.Dial("unix", s.SocketPath())
 		if err != nil {
 			t.Fatal(err)
@@ -147,5 +147,29 @@ func TestHTTPSSettingsRejectNullAndWrongTypedFields(t *testing.T) {
 	}
 	if h.calls.Load() != 0 {
 		t.Fatal("invalid settings reached handler")
+	}
+}
+
+func (h *httpsSettingsTestHandler) PreviewHTTPS(ctx context.Context, p api.HTTPSIDParams) (api.HTTPSPlan, error) {
+	h.hit(ctx)
+	return api.HTTPSPlan{SchemaVersion: 1, Mode: "preview-only"}, h.err
+}
+
+func TestHTTPSPreviewExactReferenceAndAuthentication(t *testing.T) {
+	h := &httpsSettingsTestHandler{}
+	s := startMutationTestServer(t, h)
+	c := NewClient(s.stateDir)
+	ctx := context.Background()
+	id := "https-selection." + strings.Repeat("a", 32)
+	if _, err := c.CallWithParams(ctx, api.MethodHTTPSPlan, api.HTTPSIDParams{SelectionID: id}); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{`null`, `{}`, `{"selection_id":null}`, `{"selection_id":"` + id + `","approve":true}`, `{"selection_id":"` + id + `","source":"192.0.2.10"}`, `{"selection_id":"` + id + `","selection_id":"` + id + `"}`, `{"Selection_ID":"` + id + `"}`, `{"selection_id":"192.0.2.1"}`} {
+		if _, err := c.CallWithParams(ctx, api.MethodHTTPSPlan, json.RawMessage(raw)); err == nil {
+			t.Fatal("accepted preview authority")
+		}
+	}
+	if h.calls.Load() != 1 {
+		t.Fatal("invalid preview reached handler")
 	}
 }

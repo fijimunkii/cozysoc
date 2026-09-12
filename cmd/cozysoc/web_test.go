@@ -165,6 +165,7 @@ func TestWebHandlerRejectsInvalidBrowserRequests(t *testing.T) {
 		{name: "mutation method", method: http.MethodPost, url: "http://" + host + "/api/coverage", authenticated: true, want: http.StatusMethodNotAllowed},
 		{name: "query parameters", method: http.MethodGet, url: "http://" + host + "/api/coverage?scope=other", authenticated: true, want: http.StatusBadRequest},
 		{name: "get body", method: http.MethodGet, url: "http://" + host + "/api/coverage", body: strings.NewReader("unexpected"), authenticated: true, want: http.StatusBadRequest},
+		{name: "HTTPS preview absent", method: http.MethodGet, url: "http://" + host + "/api/https-plan", authenticated: true, want: http.StatusNotFound},
 		{name: "HTTPS save absent", method: http.MethodPost, url: "http://" + host + "/api/https-save", authenticated: true, want: http.StatusNotFound},
 		{name: "HTTPS list absent", method: http.MethodGet, url: "http://" + host + "/api/https-list", authenticated: true, want: http.StatusNotFound},
 		{name: "HTTPS retire absent", method: http.MethodPost, url: "http://" + host + "/api/network-quality/https-retire", authenticated: true, want: http.StatusNotFound},

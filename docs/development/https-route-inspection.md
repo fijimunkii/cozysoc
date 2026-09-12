@@ -3,8 +3,8 @@
 Related issues: #14 and #29. `httpsroute.NewInspector` verifies the current local
 route and source for an explicitly configured numeric HTTPS endpoint on macOS.
 It builds the existing [HTTPS review plan](https-review-plan.md) from verified
-metadata. This is an internal component; no HTTPS preview, approval or execution
-command is exposed yet.
+metadata for the [native preview command](https-controller.md). No HTTPS approval
+or execution command is exposed.
 
 ## Shared metadata checks
 

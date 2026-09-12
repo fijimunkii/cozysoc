@@ -4,7 +4,7 @@ import sys
 
 EXPECTED = {"TestMACOSGatewayLab"} | {
     "TestMACOSGatewayLab/" + name
-    for name in ("route", "resolver-route", "https-route", "dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "reply", "silent", "wrong-nonce", "cancel", "source-loss", "shutdown", "native-session", "native-session/resolver-native-session")
+    for name in ("route", "resolver-route", "https-route", "dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "reply", "silent", "wrong-nonce", "cancel", "source-loss", "shutdown", "native-session", "native-session/resolver-native-session", "native-session/https-native-review")
 }
 PACKAGE = "github.com/fijimunkii/cozysoc/tests/macoslab"
 

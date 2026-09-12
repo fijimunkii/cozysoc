@@ -49,11 +49,12 @@ func TestHTTPSSettingsProcessPersistsWithoutExecution(t *testing.T) {
 	if !localapi.ValidHTTPSSelectionID(id) {
 		t.Fatal("invalid reference")
 	}
-	for _, method := range []string{"network-quality.https-run", "network-quality.https-check", "network-quality.https-approve", "network-quality.https-plan"} {
+	for _, method := range []string{"network-quality.https-run", "network-quality.https-check", "network-quality.https-approve"} {
 		if _, err := localapi.NewClient(dir).Call(context.Background(), method); err == nil || !strings.Contains(err.Error(), "method_not_found") {
 			t.Fatal("settings exposed execution/route authority")
 		}
 	}
+	assertCLIErrorContains(t, binary, "unavailable", "https-plan", "--state-dir", dir, id)
 	assertGatewayExecutionDisabled(t, dir)
 	assertResolverExecutionDisabled(t, dir)
 	coverage := runCLIJSONArgs[map[string]any](t, binary, "device-watch-coverage", "--state-dir", dir)
