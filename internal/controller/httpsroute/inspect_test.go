@@ -1,4 +1,4 @@
-package resolverroute
+package httpsroute
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/checkroute"
+	"github.com/fijimunkii/cozysoc/internal/controller/httpsplan"
 	nq "github.com/fijimunkii/cozysoc/internal/controller/networkquality"
-	"github.com/fijimunkii/cozysoc/internal/controller/resolverplan"
 )
 
 type metadataFunc func(context.Context, checkroute.Enrollment, netip.Addr) (checkroute.Evidence, error)
@@ -18,8 +18,8 @@ type metadataFunc func(context.Context, checkroute.Enrollment, netip.Addr) (chec
 func (f metadataFunc) Inspect(ctx context.Context, e checkroute.Enrollment, a netip.Addr) (checkroute.Evidence, error) {
 	return f(ctx, e, a)
 }
-func fixture() (Enrollment, resolverplan.Configuration) {
-	return Enrollment{Observer: nq.Observer{ScopeID: "home", SensorID: "local", InterfaceName: "fixture0", InterfaceIndex: 7}, Prefixes: []string{"192.0.2.0/24"}}, resolverplan.Configuration{Selection: nq.ResolverSelection{ID: "dns1", ResolverID: "resolver1", QueryID: "query1", Family: nq.FamilyIPv4, Transport: nq.DNSUDP, QueryType: nq.DNSQueryA, Expect: nq.DNSExpectAnswer}, Endpoint: netip.MustParseAddrPort("198.51.100.53:53"), Name: "test.example.", DestinationScope: resolverplan.ExactEndpoint}
+func fixture() (Enrollment, httpsplan.Configuration) {
+	return Enrollment{Observer: nq.Observer{ScopeID: "home", SensorID: "local", InterfaceName: "fixture0", InterfaceIndex: 7}, Prefixes: []string{"192.0.2.0/24"}}, httpsplan.Configuration{Selection: nq.HTTPSSelection{ID: "https1", EndpointID: "endpoint1", RequestID: "request1", Family: nq.FamilyIPv4, Method: "HEAD", ExpectedStatus: 204}, Endpoint: netip.MustParseAddrPort("198.51.100.53:443"), ServerName: "test.example", RequestTarget: "/check", DestinationPolicy: httpsplan.ExactEndpoint}
 }
 func TestReviewPreservesSelectionAndRouteAge(t *testing.T) {
 	e, c := fixture()
@@ -38,7 +38,7 @@ func TestReviewPreservesSelectionAndRouteAge(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := selected.Plan.Disclosure()
-	if resolverplan.Configuration(d.Configuration) != c || calls != 1 || d.Binding.Source != netip.MustParseAddr("192.0.2.10") || d.Binding.Observer != e.Observer || !d.CreatedAt.Equal(completed) || !selected.RouteObservedAt.Equal(observed) || !selected.RouteFreshUntil.Equal(observed.Add(checkroute.Freshness)) {
+	if httpsplan.Configuration(d.Configuration) != c || calls != 1 || d.Binding.Source != netip.MustParseAddr("192.0.2.10") || d.Binding.Observer != e.Observer || !d.CreatedAt.Equal(completed) || !selected.RouteObservedAt.Equal(observed) || !selected.RouteFreshUntil.Equal(observed.Add(checkroute.Freshness)) {
 		t.Fatal("lost selection or refreshed route age")
 	}
 	e.Prefixes[0] = "198.51.100.0/24"
@@ -54,7 +54,7 @@ func TestInvalidConfigurationAndCancellationDoNotInspect(t *testing.T) {
 		return checkroute.Evidence{}, ErrUnavailable
 	})}
 	bad := c
-	c.DestinationScope = ""
+	c.DestinationPolicy = ""
 	if _, err := i.Inspect(context.Background(), e, c); !errors.Is(err, ErrMismatch) {
 		t.Fatal(err)
 	}

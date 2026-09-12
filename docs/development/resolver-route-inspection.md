@@ -7,6 +7,10 @@ unscoped `RTM_GET` over an `AF_ROUTE` socket. It sends no IP/DNS packets, change
 routes and does not choose a resolver through host DNS. Other platforms return
 unsupported. No product endpoint or controller-owned instance is added.
 
+The metadata inspector and Darwin decoder now live in `internal/controller/checkroute`,
+shared with [HTTPS route inspection](https-route-inspection.md). `resolverroute`
+retains the resolver-specific configuration and review adapter.
+
 ## Enrollment, source and next hop
 
 The controller must supply its current authorized enrollment and immutable
