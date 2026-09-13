@@ -276,3 +276,27 @@ func TestPrototypeBatchRollover(t *testing.T) {
 		t.Fatal("prototype durability settings changed")
 	}
 }
+
+func TestPrototypeBatchIndexKeysPreserveIDs(t *testing.T) {
+	ids := []string{"obs.dw.0123456789abcdef0123456789abcdef", "obs.dw.0123456789ABCDEF0123456789ABCDEF", "obs.custom", "obs.dw.not-a-digest"}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		key := prototypeIndexKey(id)
+		if seen[string(key)] {
+			t.Fatal("different IDs share key")
+		}
+		seen[string(key)] = true
+		decoded, err := prototypeIndexID(key)
+		if err != nil || decoded != id {
+			t.Fatal("index key changed ID", err)
+		}
+	}
+	if len(prototypeIndexKey(ids[0])) != 17 {
+		t.Fatal("canonical ID was not packed")
+	}
+	for _, key := range [][]byte{nil, {1}, {1, 2}, {2, 3}} {
+		if _, err := prototypeIndexID(key); err == nil {
+			t.Fatal("invalid key accepted")
+		}
+	}
+}

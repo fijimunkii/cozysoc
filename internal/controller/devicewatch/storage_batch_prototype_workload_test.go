@@ -106,9 +106,13 @@ func TestPrototypeBatchDailyPersistence(t *testing.T) {
 		}
 		n := 0
 		for indexes.Next() {
-			var evidenceID string
+			var key []byte
 			var slot int
-			if err := indexes.Scan(&evidenceID, &slot); err != nil {
+			if err := indexes.Scan(&key, &slot); err != nil {
+				t.Fatal(err)
+			}
+			evidenceID, err := prototypeIndexID(key)
+			if err != nil {
 				t.Fatal(err)
 			}
 			if slot != n || n >= len(entries) || entries[n].Observation.ID != evidenceID {

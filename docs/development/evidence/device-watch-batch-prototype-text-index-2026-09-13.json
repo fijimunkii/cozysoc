@@ -1,0 +1,48 @@
+{
+  "recorded_at_utc": "2026-09-13T13:36:50.463465+00:00",
+  "source_commit": "cdcdfffd5e91a697f436f99d16677481cf850ac0",
+  "command": "TMPDIR=/private/tmp COZYSOC_BATCH_PROTOTYPE=1 go test ./internal/controller/devicewatch -run '^TestPrototypeBatchDailyPersistence$' -count=1 -timeout=35m -v",
+  "test_exit_code": 0,
+  "report": {
+    "kind": "standalone-persistence-prototype-not-controller-budget",
+    "observations": 144000,
+    "batches": 1440,
+    "database_bytes": 27140096,
+    "wall_ms": 340395,
+    "reopened_evidence_sha256": "f0d9b8fd7a6198b886042d0422e9ba45d8797fa74dcf2bead1bc88c75eafec24",
+    "allocation": {
+      "page_size": 4096,
+      "page_count": 6626,
+      "free_pages": 2,
+      "objects": [
+        {
+          "name": "batches",
+          "table": "batches",
+          "kind": "table",
+          "pages": 4324,
+          "bytes": 17711104,
+          "payload_bytes": 15024592,
+          "unused_bytes": 2637766
+        },
+        {
+          "name": "evidence_index",
+          "table": "evidence_index",
+          "kind": "table",
+          "pages": 2299,
+          "bytes": 9416704,
+          "payload_bytes": 7904320,
+          "unused_bytes": 1052800
+        },
+        {
+          "name": "sqlite_schema",
+          "table": "sqlite_schema",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 400,
+          "unused_bytes": 3578
+        }
+      ]
+    }
+  }
+}

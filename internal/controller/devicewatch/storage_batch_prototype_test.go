@@ -5,11 +5,13 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,7 +165,7 @@ func openPrototypeBatchStore(t *testing.T, dir string) *prototypeBatchStore {
 	})
 	_, err = db.Exec(`PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;
  CREATE TABLE IF NOT EXISTS batches(id INTEGER PRIMARY KEY, entries INTEGER NOT NULL CHECK(entries BETWEEN 1 AND 100), data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 1048576));
- CREATE TABLE IF NOT EXISTS evidence_index(id TEXT PRIMARY KEY, batch_id INTEGER NOT NULL REFERENCES batches(id), slot INTEGER NOT NULL, expires_at_ns INTEGER NOT NULL) WITHOUT ROWID;`)
+ CREATE TABLE IF NOT EXISTS evidence_index(id BLOB PRIMARY KEY, batch_id INTEGER NOT NULL REFERENCES batches(id), slot INTEGER NOT NULL, expires_at_ns INTEGER NOT NULL) WITHOUT ROWID;`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +189,7 @@ func (s *prototypeBatchStore) Put(ctx context.Context, e compressionEvidence, ex
 	var oldData []byte
 	var oldSlot int
 	var oldExpiry int64
-	err = tx.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=1048576 THEN b.data ELSE NULL END,i.slot,i.expires_at_ns FROM evidence_index i JOIN batches b ON b.id=i.batch_id WHERE i.id=?`, e.Observation.ID).Scan(&oldData, &oldSlot, &oldExpiry)
+	err = tx.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=1048576 THEN b.data ELSE NULL END,i.slot,i.expires_at_ns FROM evidence_index i JOIN batches b ON b.id=i.batch_id WHERE i.id=?`, prototypeIndexKey(e.Observation.ID)).Scan(&oldData, &oldSlot, &oldExpiry)
 	if err == nil {
 		entries, err := decodePrototypeBatch(oldData)
 		if err != nil {
@@ -249,15 +251,18 @@ func (s *prototypeBatchStore) Put(ctx context.Context, e compressionEvidence, ex
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO evidence_index(id,batch_id,slot,expires_at_ns) VALUES(?,?,?,?)`, e.Observation.ID, batchID, len(entries)-1, expiry.UnixNano()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO evidence_index(id,batch_id,slot,expires_at_ns) VALUES(?,?,?,?)`, prototypeIndexKey(e.Observation.ID), batchID, len(entries)-1, expiry.UnixNano()); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 func (s *prototypeBatchStore) Get(ctx context.Context, id string, now time.Time) (compressionEvidence, error) {
+	if len(id) == 0 || len(id) > 128 {
+		return compressionEvidence{}, fmt.Errorf("invalid lookup ID length")
+	}
 	var blob []byte
 	var slot int
-	err := s.db.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=1048576 THEN b.data ELSE NULL END,i.slot FROM evidence_index i JOIN batches b ON b.id=i.batch_id WHERE i.id=? AND i.expires_at_ns>?`, id, now.UnixNano()).Scan(&blob, &slot)
+	err := s.db.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=1048576 THEN b.data ELSE NULL END,i.slot FROM evidence_index i JOIN batches b ON b.id=i.batch_id WHERE i.id=? AND i.expires_at_ns>?`, prototypeIndexKey(id), now.UnixNano()).Scan(&blob, &slot)
 	if err != nil {
 		return compressionEvidence{}, err
 	}
@@ -269,4 +274,34 @@ func (s *prototypeBatchStore) Get(ctx context.Context, id string, now time.Time)
 		return compressionEvidence{}, fmt.Errorf("corrupt indexed evidence")
 	}
 	return entries[slot], nil
+}
+
+// Tagged, reversible index keys. Full IDs never collide with packed canonical
+// IDs; noncanonical spelling (including uppercase hex) is preserved verbatim.
+func prototypeIndexKey(id string) []byte {
+	if strings.HasPrefix(id, "obs.dw.") && len(id) == 39 {
+		raw, err := hex.DecodeString(id[7:])
+		if err == nil && hex.EncodeToString(raw) == id[7:] {
+			return append([]byte{1}, raw...)
+		}
+	}
+	return append([]byte{0}, []byte(id)...)
+}
+func prototypeIndexID(key []byte) (string, error) {
+	if len(key) < 2 || len(key) > 129 {
+		return "", fmt.Errorf("invalid index key")
+	}
+	switch key[0] {
+	case 0:
+		id := string(key[1:])
+		if !bytes.Equal(prototypeIndexKey(id), key) {
+			return "", fmt.Errorf("noncanonical index key")
+		}
+		return id, nil
+	case 1:
+		if len(key) == 17 {
+			return "obs.dw." + hex.EncodeToString(key[1:]), nil
+		}
+	}
+	return "", fmt.Errorf("invalid index key")
 }
