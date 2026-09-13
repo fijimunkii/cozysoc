@@ -18,11 +18,16 @@ const (
 	claimValidity        = 10 * time.Minute
 )
 
+// IdentityReader can be backed by the same snapshot that will commit a batch.
+type IdentityReader interface {
+	FindRecentDevicesByClaim(context.Context, string, domain.ClaimKind, string, time.Time, time.Time) ([]domain.Device, error)
+}
+
 type IdentityStore interface {
+	IdentityReader
 	EnsureDevice(context.Context, domain.Device) error
 	EnsureIdentityClaim(context.Context, domain.IdentityClaim) (string, error)
 	EnsureDeviceClaimLink(context.Context, domain.DeviceClaimLink) error
-	FindRecentDevicesByClaim(context.Context, string, domain.ClaimKind, string, time.Time, time.Time) ([]domain.Device, error)
 }
 
 type Reconciler struct {
@@ -53,20 +58,35 @@ func NewReconciler(store IdentityStore) (*Reconciler, error) {
 	return &Reconciler{store: store}, nil
 }
 
-func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domain.Observation) (ReconciliationResult, error) {
-	if r == nil || r.store == nil {
-		return ReconciliationResult{}, fmt.Errorf("device watch reconciler is unavailable")
+// ReconciliationPlan holds the original decision and complete claim/link values.
+// It is provisional until its owner persists it. Planning never writes records,
+// assigns retention expiry, or acknowledges ingestion. A transactional caller
+// must check replay before planning and use one snapshot through commit; plans
+// must not be queued for later application against potentially changed identity.
+type ReconciliationPlan struct {
+	Result    ReconciliationResult
+	NewDevice *domain.Device
+	Claims    []domain.IdentityClaim
+	Links     []domain.DeviceClaimLink
+}
+
+// PlanReconciliation separates identity decisions from persistence so a batch
+// owner can commit the observation, claims, links, device and indexes together.
+// Ambiguity retains both claims and deliberately creates no device or links.
+func PlanReconciliation(ctx context.Context, reader IdentityReader, observation domain.Observation) (ReconciliationPlan, error) {
+	if reader == nil {
+		return ReconciliationPlan{}, fmt.Errorf("device watch identity reader is required")
 	}
 	if observation.Kind != "device-neighbor-seen" {
-		return ReconciliationResult{}, fmt.Errorf("unsupported device watch observation kind %q", observation.Kind)
+		return ReconciliationPlan{}, fmt.Errorf("unsupported device watch observation kind %q", observation.Kind)
 	}
 	if err := domain.ValidateObservation(observation); err != nil {
-		return ReconciliationResult{}, err
+		return ReconciliationPlan{}, err
 	}
 
 	_, address, hardware, err := decodeNeighborIdentity(observation.Payload)
 	if err != nil {
-		return ReconciliationResult{}, err
+		return ReconciliationPlan{}, err
 	}
 	observedAt := observation.IngestedAt.UTC()
 	if observation.SourceTime != nil {
@@ -111,24 +131,15 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 		Retention:           domain.RetentionStandard,
 	}
 
-	macClaimID, err := r.store.EnsureIdentityClaim(ctx, macClaim)
-	if err != nil {
-		return ReconciliationResult{}, fmt.Errorf("reconcile MAC claim: %w", err)
-	}
-	ipClaimID, err := r.store.EnsureIdentityClaim(ctx, ipClaim)
-	if err != nil {
-		return ReconciliationResult{}, fmt.Errorf("reconcile IP claim: %w", err)
-	}
-	result := ReconciliationResult{Claims: 2}
-
-	candidates, err := r.store.FindRecentDevicesByClaim(ctx, observation.ScopeID, domain.ClaimMAC, macValue,
+	plan := ReconciliationPlan{Claims: []domain.IdentityClaim{macClaim, ipClaim}, Result: ReconciliationResult{Claims: 2}}
+	candidates, err := reader.FindRecentDevicesByClaim(ctx, observation.ScopeID, domain.ClaimMAC, macValue,
 		observedAt.Add(-macContinuityHorizon), observedAt)
 	if err != nil {
-		return result, fmt.Errorf("find MAC continuity candidate: %w", err)
+		return ReconciliationPlan{}, fmt.Errorf("find MAC continuity candidate: %w", err)
 	}
 	if len(candidates) > 1 {
-		result.Ambiguous = true
-		return result, nil
+		plan.Result.Ambiguous = true
+		return plan, nil
 	}
 
 	var device domain.Device
@@ -139,12 +150,10 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 			ID:        "device.dw." + stableDigest("device-v1", observation.ScopeID, observation.ID, macValue),
 			CreatedAt: observedAt,
 		}
-		if err := r.store.EnsureDevice(ctx, device); err != nil {
-			return result, fmt.Errorf("create device candidate: %w", err)
-		}
-		result.Created = true
+		plan.NewDevice = &device
+		plan.Result.Created = true
 	}
-	result.DeviceID = device.ID
+	plan.Result.DeviceID = device.ID
 
 	reason := "device-watch:new-mac-candidate"
 	if len(candidates) == 1 {
@@ -155,8 +164,8 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 		confidence float64
 		suffix     string
 	}{
-		{claimID: macClaimID, confidence: macConfidence, suffix: "mac"},
-		{claimID: ipClaimID, confidence: ipConfidence, suffix: "ip"},
+		{claimID: macClaim.ID, confidence: macConfidence, suffix: "mac"},
+		{claimID: ipClaim.ID, confidence: ipConfidence, suffix: "ip"},
 	} {
 		confidence := item.confidence
 		link := domain.DeviceClaimLink{
@@ -171,6 +180,41 @@ func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domai
 			EvidenceObservationID: observation.ID,
 			CreatedAt:             observedAt,
 		}
+		plan.Links = append(plan.Links, link)
+	}
+	return plan, nil
+}
+
+func (r *Reconciler) ReconcileObservation(ctx context.Context, observation domain.Observation) (ReconciliationResult, error) {
+	if r == nil || r.store == nil {
+		return ReconciliationResult{}, fmt.Errorf("device watch reconciler is unavailable")
+	}
+	plan, err := PlanReconciliation(ctx, r.store, observation)
+	if err != nil {
+		return ReconciliationResult{}, err
+	}
+	// The legacy path may already contain a claim under another ID for the same
+	// observation/kind/value. Preserve that ID and derive links from the resolved
+	// value, rather than replacing the original claim or linking to a missing ID.
+	resolved := make(map[string]string, len(plan.Claims))
+	for _, claim := range plan.Claims {
+		id, err := r.store.EnsureIdentityClaim(ctx, claim)
+		if err != nil {
+			return ReconciliationResult{}, fmt.Errorf("reconcile %s claim: %w", claim.Kind, err)
+		}
+		resolved[claim.ID] = id
+	}
+	result := ReconciliationResult{Claims: len(plan.Claims), Ambiguous: plan.Result.Ambiguous}
+	if plan.NewDevice != nil {
+		if err := r.store.EnsureDevice(ctx, *plan.NewDevice); err != nil {
+			return result, fmt.Errorf("create device candidate: %w", err)
+		}
+		result.Created = true
+	}
+	result.DeviceID = plan.Result.DeviceID
+	for _, link := range plan.Links {
+		link.ClaimID = resolved[link.ClaimID]
+		link.ID = "link.dw." + stableDigest("link-v1", link.DeviceID, link.ClaimID)
 		if err := r.store.EnsureDeviceClaimLink(ctx, link); err != nil {
 			return result, fmt.Errorf("link device identity claim: %w", err)
 		}

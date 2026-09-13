@@ -70,6 +70,29 @@ bounds and no-partial-result behavior. Fuzz targets exercise compressed bytes an
 raw frame mutations followed by valid gzip wrapping; accepted records must always
 encode and decode again without change.
 
+## Reconciliation staging
+
+Device Watch's `PlanReconciliation` accepts an identity reader and returns the
+complete provisional claims, links, optional new device and reconciliation result.
+It performs one scoped recent-MAC lookup without writing evidence or assigning
+storage expiry. The seven-day continuity horizon, source-time fallback, ten-minute
+validity, confidence values and versioned IDs remain the existing producer rules.
+Ambiguous continuity retains claims without inventing a device or links. Failed
+validation or lookup returns no partial plan.
+
+The live reconciler uses this planner before its existing individual storage writes.
+It preserves original claim IDs returned by legacy idempotent insertion and derives
+links from those resolved IDs. A lookup failure now occurs before any new claim
+write. This refactor does not make live ingestion atomic or activate batch storage.
+A batch transaction owner must check source-key replay first, plan against that
+same transaction's identity snapshot, assign each stored expiry, persist all related
+changes, and acknowledge only after commit. Plans must not be queued and applied
+against a later identity state. Query integration and migration remain required.
+
+Tests exercise read-only new/continuous/ambiguous decisions, IPv4/IPv6 normalization,
+original evidence and codec round trips, lookup failure, and legacy partial-write
+recovery/replay with noncanonical claim IDs.
+
 ## SQL transaction primitives
 
 `evidence_batch_sql.go` supplies internal append and scoped point-read primitives
