@@ -24,7 +24,7 @@ Planned capability areas include device discovery and presence, DNS protection, 
 - Controller-owned SQLite stores bounded local evidence and settings behind an authenticated Unix-socket API. The browser has a separate session and narrowly typed endpoints.
 - Network enrollment, explicit Device Watch enablement, device/evidence views, and coverage reporting distinguish observed data from missing or stale coverage.
 - Experimental macOS gateway and selected-resolver checks require controller opt-in and interactive one-shot approval. Retained history and plain-language diagnosis preserve evidence age and uncertainty.
-- HTTPS settings and reviews disclose the exact request, TLS policy, traffic limits and privacy impact. The controller owns audited one-shot run control, and the foreground macOS `https-check` client requires explicit approval. macOS controllers started with `--experimental-https-checks` expose the native one-shot protocol. Isolated native tests cover trust rejection, an owned 204 response, terminal approval/decline/expiry, cooldown and persisted audits; ordinary controllers leave execution disabled. Read-only `https-history` and the browser’s Recent HTTPS checks card retain status, timing and incomplete-audit evidence without private endpoints or requests. Browser refreshes only read saved evidence.
+- Experimental HTTPS checks require `--experimental-https-checks` and explicit foreground approval through `https-check`. Settings and review disclose the request, TLS policy, traffic limits and privacy impact. Read-only CLI and browser history preserve original status, timing and missing-audit evidence; refreshing saved evidence never sends a probe.
 - Retained diagnosis compares the latest available gateway, resolver and HTTPS runs from one bounded snapshot. Native and browser views preserve HTTP expectations, failure stages and original times; mismatched context, stale samples and newer unknowns prevent comparison. At least two layers are required, and no conclusion declares the internet up or down.
 
 See [frontend and local web](docs/development/frontend.md), [Device Watch](docs/development/device-watch.md), [gateway checks](docs/development/interactive-gateway-check.md), [resolver checks](docs/development/resolver-consent.md), [retained diagnosis](docs/development/retained-quality-diagnosis.md), and [HTTPS review](docs/development/https-controller.md) and [HTTPS history](docs/development/https-history.md).
@@ -67,7 +67,7 @@ The interface should never turn "zero alerts" into an unqualified "fully protect
 
 ## Architecture
 
-The current architecture baseline is documented in [`docs/architecture/`](docs/architecture/README.md).
+The [documentation](docs/README.md) is the canonical product reference. The [architecture contract](docs/architecture/README.md) defines system boundaries and accepted/provisional choices.
 
 Accepted direction:
 
@@ -83,19 +83,15 @@ Still provisional pending Foundation validation:
 - **macOS 13+ Apple Silicon** as the first desktop reference candidate; and
 - **Ubuntu Server 26.04 LTS** on tested amd64/arm64 hardware as the initial headless hub/advanced-sensor candidate.
 
-These are not current support claims. Issues #5/#56 must prove real service lifetime, packet visibility, USB Wi-Fi behavior, packaging, permissions, sleep/restart behavior, and resource budgets; issue #6 validates engine compatibility and redistribution terms.
+These are candidate platforms, not current support claims. Support requires the [validation gates](docs/architecture/validation-gates.md), [support matrix](docs/architecture/support-matrix.md) and [integration requirements](docs/integrations/README.md).
 
 ## Roadmap
 
-The canonical roadmap is [GitHub issue #1](https://github.com/fijimunkii/cozysoc/issues/1).
+The canonical [product roadmap](docs/roadmap.md) defines release scope, product invariants and acceptance gates. v0.1 is the desktop alpha; later v0.x stages cover an always-on hub, traffic analysis, wireless monitoring and optional capabilities. There is no release date or platform-support promise implied by that progression.
 
-Foundation architecture, threat-model and integration decisions, the controller/IPC/storage baseline, and unified entrypoints have landed. Current implementation work is in v0.1, especially network quality (#14), with capability, Device Watch, coverage and frontend work (#9, #11–#13) still open.
-
-Release gates remain open: [hardware evidence #56](https://github.com/fijimunkii/cozysoc/issues/56), [installers and updates #28](https://github.com/fijimunkii/cozysoc/issues/28), [lab and performance gates #29](https://github.com/fijimunkii/cozysoc/issues/29), and [privacy/recovery #30](https://github.com/fijimunkii/cozysoc/issues/30). CI exercises macOS 15/26 native labs and Linux controller/frontend/process checks; those scoped results do not promote every architecture candidate to a supported platform.
+Installation and updates, hardware/service validation, resource budgets, privacy and recovery remain release requirements. [Issue #1](https://github.com/fijimunkii/cozysoc/issues/1) tracks execution against the documented roadmap.
 
 Device Watch currently exceeds the [storage budget](docs/architecture/resource-budgets.md): the reference workload measured **474.50 MiB** against the **25 MiB/day** target. Storage reduction remains a release requirement. See the [workload and evidence](docs/development/device-watch-storage-workload.md) for measurement scope and limitations. Prototype and codec results do not establish production resource budgets or 24-hour reliability.
-
-The first software release line is **v0.1**, the desktop alpha. Later roadmap stages use v0.2–v0.5, with v1.0 reserved for the first broadly ready release.
 
 ## Security and privacy
 

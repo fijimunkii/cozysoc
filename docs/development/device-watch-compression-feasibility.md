@@ -64,8 +64,8 @@ The prototype is not a production decoder or a safe interface for arbitrary inpu
 
 ## Production prototype requirements
 
-The next #150 step is a bounded persistent representation, not switching existing
-tables to gzip wholesale. Keep the prior acceptance criteria and demonstrate:
+Production use requires a bounded persistent representation that preserves the
+existing storage contract. Required properties include:
 
 - Exact original evidence, identifiers, ambiguity and validity windows across old
   and new records. Store original reconciliation outcomes; never infer continuity

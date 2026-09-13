@@ -2,16 +2,20 @@
 
 Thanks for helping build Cozy SOC.
 
-The project is intentionally starting with a small, reviewable foundation. Please prefer focused changes tied to an existing GitHub issue over broad speculative infrastructure.
+Prefer focused, reviewable changes tied to a scoped GitHub issue.
 
 ## Before you start
 
-1. Read the canonical roadmap in [issue #1](https://github.com/fijimunkii/cozysoc/issues/1).
+1. Read the canonical [documentation](docs/README.md) and [product roadmap](docs/roadmap.md). Issue #1 coordinates execution, not the product specification.
 2. Pick or open a scoped issue before substantial implementation work.
 3. Confirm that dependencies and architectural assumptions have been accepted when the issue depends on a P0 decision.
 4. Read [SECURITY.md](SECURITY.md) before sharing logs, captures, credentials, or household-network details.
 
 For large changes, use the issue discussion to align scope before writing the implementation. Small fixes can proceed directly when the intent is clear.
+
+## Documentation
+
+README.md and docs/ are the product source of truth. Update current behavior, operating instructions, constraints and release requirements in the relevant documents when they change. Clearly distinguish current functionality, planned requirements and validated support. Use issues and PRs for implementation progress and discussion; do not append a PR-by-PR narrative to feature guides. Preserve dated benchmark evidence and ADR rationale separately, with their scope and provenance intact.
 
 ## Branches
 

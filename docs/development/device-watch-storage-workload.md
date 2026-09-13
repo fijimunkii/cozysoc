@@ -97,11 +97,6 @@ budget **failed**. [Issue #150](https://github.com/fijimunkii/cozysoc/issues/150
 tracks attribution and reduction without weakening evidence or silently changing
 the reference workload. This result does not complete #29 or the resource profile.
 
-An earlier attempt with a ten-minute internal deadline stopped before completion
-and is excluded from daily evidence. The completed run used the documented
-thirty-minute deadline. Subsequent harness edits shorten only the smoke deadline
-and rename the unused within-budget result label; the recorded source above is
-the exact version that produced this baseline.
 
 ## Page attribution (report schema 2)
 
@@ -156,6 +151,6 @@ ambiguity and query behavior. Any proposed reduction still needs migration and
 correctness tests and a completed unchanged-workload rerun. No storage policy
 or budget is changed by this measurement.
 
-The follow-up [compression feasibility experiment](device-watch-compression-feasibility.md)
+The [compression feasibility experiment](device-watch-compression-feasibility.md)
 compares bounded lossless batch encodings. Its payload-only results do not replace
 the persisted measurements above.

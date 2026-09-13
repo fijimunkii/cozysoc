@@ -4,7 +4,9 @@ These instructions apply to automated and human-assisted coding agents working i
 
 ## Source of truth
 
-- The canonical product roadmap is GitHub issue #1.
+- README.md and docs/ are the canonical sources for current product behavior, requirements, architecture, support and release gates. The product roadmap is docs/roadmap.md.
+- GitHub issue #1 coordinates the execution backlog; issues and PRs do not replace product documentation or establish support through completion status.
+- Maintain documentation as current-state reference material, not an implementation diary. Update the relevant contract when behavior changes; keep dated benchmark evidence and ADR rationale separately identified.
 - Work from a scoped issue. Respect its dependencies, acceptance criteria, and explicit non-goals.
 - Do not turn roadmap candidates into committed dependencies without the relevant P0 decision.
 

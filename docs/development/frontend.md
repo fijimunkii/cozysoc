@@ -2,7 +2,7 @@
 
 Issue #13 owns the first user-facing Cozy SOC experience. ADR 0003 is **Accepted** for a shared TypeScript/React UI. ADR 0004 remains **Proposed** for Tauri v2, so the shared UI remains browser-capable and does not depend on native renderer privileges.
 
-The canonical roadmap now uses one user-facing **`cozysoc` executable with multiple explicit modes**. A single executable does not imply a single process lifetime: production service management owns `cozysoc serve`; closing `cozysoc web` or a future desktop window must not stop that controller process.
+The [product roadmap](../roadmap.md) specifies one user-facing **`cozysoc` executable with multiple explicit modes**. A single executable does not imply a single process lifetime: production service management owns `cozysoc serve`; closing `cozysoc web` or a future desktop window must not stop that controller process.
 
 ## Workspace
 
@@ -41,7 +41,7 @@ The cookie is intentionally scoped to loopback HTTP for this local v0.1 surface,
 
 `cozysoc web` can run while the controller is unavailable. After an authenticated browser session is established, a controller read failure returns a bounded `503 controller_unavailable` response and the UI presents an actionable unavailable state. The web process does **not** spawn, supervise, restart, or stop the controller.
 
-State-changing browser endpoints now use an additional mutation guard rather than treating the SameSite cookie as sufficient CSRF protection. `GET /api/session` requires the HttpOnly web-session cookie and returns only the process-local CSRF value. A mutation is accepted only when all of the following hold:
+State-changing browser endpoints require an additional mutation guard; the SameSite cookie alone is insufficient CSRF protection. `GET /api/session` requires the HttpOnly web-session cookie and returns only the process-local CSRF value. A mutation is accepted only when all of the following hold:
 
 - the HttpOnly web-session cookie authenticates;
 - the request method is `POST`;
@@ -51,7 +51,7 @@ State-changing browser endpoints now use an additional mutation guard rather tha
 
 The CSRF value is designed for in-memory frontend use only. It is not stored in a URL, localStorage, controller configuration, or the UDS credential file. Cross-origin requests cannot obtain it through a readable response, and unknown `/api/*` routes remain unavailable.
 
-The initial allowlisted mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to the pre-existing typed controller methods. No arbitrary method name, command, file path, or network destination enters the native bridge. The UI does not call these mutations yet; the next #13 slice can build onboarding on this already-tested boundary.
+The onboarding mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to typed controller methods. No arbitrary method name, command, file path, or network destination enters the native bridge. The setup UI uses these routes for network enrollment and Device Watch enable/disable.
 
 Expected typed controller mutation errors are mapped to bounded HTTP outcomes (`400`, `404`, `409`, `412`, `501`); transport/internal failures remain a generic `503 controller_unavailable` without copying controller diagnostic strings into the browser.
 
@@ -109,7 +109,7 @@ Demo data remains source code only; it is not written into controller storage or
 
 ## Static asset boundary
 
-This PR does not commit Vite build output and does not add a second bridge binary. `cozysoc web` serves a built UI directory so development and process E2E can exercise the real browser path now. #28 owns the release-packaging decision for whether final installers embed or co-install those static assets.
+Vite build output is not committed. `cozysoc web` serves a built UI directory through the unified executable. Release packaging must define whether installers embed or co-install those assets; developer serving does not establish installer support.
 
 Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root. A regression fixture creates a symlink from the UI tree to an outside file and requires a 404 without serving the target.
 

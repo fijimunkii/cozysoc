@@ -2,7 +2,7 @@
 
 This directory describes the **current architecture contract** for Cozy SOC. Architectural decision records in [`../adr/`](../adr/) explain why significant choices were made and which choices remain provisional.
 
-The canonical roadmap remains [issue #1](https://github.com/fijimunkii/cozysoc/issues/1). This architecture baseline advances [issue #3](https://github.com/fijimunkii/cozysoc/issues/3); it does **not** close it. Hardware, platform, threat-model, and integration assumptions require the Foundation evidence defined in issues [#4](https://github.com/fijimunkii/cozysoc/issues/4), [#5](https://github.com/fijimunkii/cozysoc/issues/5), and [#6](https://github.com/fijimunkii/cozysoc/issues/6).
+The [product roadmap](../roadmap.md) defines release scope and acceptance gates. Hardware, platform and integration support require the documented validation evidence; architectural intent alone is not a support claim.
 
 ## Documents
 
@@ -11,7 +11,7 @@ The canonical roadmap remains [issue #1](https://github.com/fijimunkii/cozysoc/i
 - [Domain model](domain-model.md) — the shared vocabulary for networks, sensors, observations, devices, findings, incidents, coverage, and actions.
 - [Support and capability matrix](support-matrix.md) — candidate platforms and the prerequisites/blind spots for each monitoring capability.
 - [Resource budgets](resource-budgets.md) — measurable targets for the core app before optional security engines are added.
-- [Validation gates](validation-gates.md) — what Foundation #4–#6 must prove before provisional decisions become support claims.
+- [Validation gates](validation-gates.md) — evidence required before provisional decisions become support claims.
 - [Security design](../security/README.md) — maintained threat model and normative security requirements derived from these trust boundaries.
 
 ## Decision status

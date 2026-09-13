@@ -111,10 +111,8 @@ process behavior. The existing macOS native-session lab reads the actual run
 repeatedly through IPC and the built JSON command before its independent peer
 finishes counting; the existing three-request ceiling remains unchanged.
 
-Next: shared frontend history presentation and broader corroborated assessments.
-The active check stays experimentally gated. Packaged Local Network permissions,
-physical Wi-Fi/NIC behavior and actual sleep/resume still require their separate
-evidence; this read feature does not close #14 or #29.
+The active check is experimentally gated. Packaged Local Network permissions,
+physical Wi-Fi/NIC behavior and actual sleep/resume require separate validation.
 
 ## Shared browser history
 

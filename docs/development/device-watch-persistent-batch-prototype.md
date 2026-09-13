@@ -97,7 +97,7 @@ produced the same evidence digest. SQLite page totals match each complete file.
 Batch allocation stayed exactly 17,711,104 bytes. Only the lookup representation
 changed between measurements. The completed durations were 340,395 ms and
 334,962 ms respectively, including reopen verification; neither is a controller
-CPU/RAM or latency budget result. Later commits add documentation only.
+CPU/RAM or latency budget result.
 
 The refined prototype leaves about 2.58 MiB below 25 MiB **before** the omitted
 production components. Treat this as evidence to continue integration, not a
@@ -106,6 +106,6 @@ baseline. Source-key idempotency, scoped history and identity queries, retention
 quota recovery and transactional migration must be implemented and measured
 before the representation can replace live storage.
 
-The next integration step is the [versioned storage codec](evidence-batch-codec.md),
-which adds independent expiry metadata and frozen-format compatibility tests. It
-is not yet used by live writes/readers, and its production footprint is unmeasured.
+The [storage codec contract](evidence-batch-codec.md) defines independent expiry
+metadata and frozen-format compatibility. Live storage does not use that format,
+and its production footprint is unmeasured.
