@@ -2,7 +2,9 @@ package devicewatch
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -159,5 +161,63 @@ func TestPlannedLegacyReconciliationKeepsExistingClaimIDs(t *testing.T) {
 	detail, err = store.GetDeviceEvidenceDetail(ctx, storage.DeviceEvidenceDetailQuery{ScopeID: scope, DeviceID: result.DeviceID, AsOf: at})
 	if err != nil || len(detail.Evidence) != 2 {
 		t.Fatal("replay duplicated links", detail, err)
+	}
+}
+
+func TestReconciliationPlanUsesCallerIdentityTransaction(t *testing.T) {
+	store, scope, sensor := newIdentityFixtureStore(t)
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Second)
+	first := neighborObservationFixture(t, scope, sensor, "obs.snapshot.first", "192.168.1.20", "02:00:00:00:00:01", at.Add(-time.Hour))
+	if _, err := store.InsertObservation(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	reconciler, _ := NewReconciler(store)
+	original, err := reconciler.ReconcileObservation(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := url.URL{Scheme: "file", Path: store.Path()}
+	uri.RawQuery = url.Values{"mode": {"rw"}, "_pragma": {"foreign_keys(1)", "synchronous(FULL)", "busy_timeout(100)"}}.Encode()
+	db, err := sql.Open("sqlite", uri.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	reader, err := storage.NewLegacyIdentitySnapshot(tx, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := neighborObservationFixture(t, scope, sensor, "obs.snapshot.current", "192.168.1.21", "02:00:00:00:00:01", at)
+	plan, err := PlanReconciliation(ctx, reader, current)
+	if err != nil || plan.Result.DeviceID != original.DeviceID || plan.NewDevice != nil {
+		t.Fatal("snapshot lost original continuity", plan, err)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE devices SET retired_at_ns=? WHERE id=?", at.Add(-time.Nanosecond).UnixNano(), original.DeviceID); err != nil {
+		t.Fatal(err)
+	}
+	plan, err = PlanReconciliation(ctx, reader, current)
+	if err != nil || plan.NewDevice == nil || plan.Result.DeviceID == original.DeviceID {
+		t.Fatal("planner ignored staged retirement", plan, err)
+	}
+	outside, err := PlanReconciliation(ctx, store, current)
+	if err != nil || outside.Result.DeviceID != original.DeviceID || outside.NewDevice != nil {
+		t.Fatal("staged retirement escaped transaction", outside, err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if plan, err := PlanReconciliation(ctx, reader, current); !errors.Is(err, sql.ErrTxDone) || !reflect.DeepEqual(plan, ReconciliationPlan{}) {
+		t.Fatal("planner escaped closed snapshot", plan, err)
+	}
+	outside, err = PlanReconciliation(ctx, store, current)
+	if err != nil || outside.Result.DeviceID != original.DeviceID {
+		t.Fatal("rollback changed continuity", outside, err)
 	}
 }

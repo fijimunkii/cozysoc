@@ -158,6 +158,10 @@ func (s *Store) EnsureDeviceClaimLink(ctx context.Context, link domain.DeviceCla
 }
 
 func (s *Store) FindRecentDevicesByClaim(ctx context.Context, scopeID string, kind domain.ClaimKind, value string, since, until time.Time) ([]domain.Device, error) {
+	return findRecentDevicesByClaim(ctx, s.conn, s.now().UTC(), scopeID, kind, value, since, until)
+}
+
+func findRecentDevicesByClaim(ctx context.Context, reader identityQueryReader, now time.Time, scopeID string, kind domain.ClaimKind, value string, since, until time.Time) ([]domain.Device, error) {
 	if err := validateQueryID("scope id", scopeID); err != nil {
 		return nil, err
 	}
@@ -168,7 +172,7 @@ func (s *Store) FindRecentDevicesByClaim(ctx context.Context, scopeID string, ki
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.conn.QueryContext(ctx, `SELECT DISTINCT d.id, d.user_label, d.created_at_ns, d.retired_at_ns
+	rows, err := reader.QueryContext(ctx, `SELECT DISTINCT d.id, d.user_label, d.created_at_ns, d.retired_at_ns
 		FROM devices d
 		JOIN device_claim_links l ON l.device_id = d.id
 		JOIN identity_claims c ON c.id = l.claim_id
@@ -177,7 +181,7 @@ func (s *Store) FindRecentDevicesByClaim(ctx context.Context, scopeID string, ki
 		  AND c.expires_at_ns > ?
 		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)
 		ORDER BY d.id ASC LIMIT 3`, scopeID, kind, normalized, unixNanos(since.UTC()), unixNanos(until.UTC()),
-		unixNanos(s.now().UTC()), unixNanos(until.UTC()))
+		unixNanos(now), unixNanos(until.UTC()))
 	if err != nil {
 		return nil, fmt.Errorf("find recent devices by claim: %w", err)
 	}
