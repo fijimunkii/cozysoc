@@ -70,9 +70,42 @@ bounds and no-partial-result behavior. Fuzz targets exercise compressed bytes an
 raw frame mutations followed by valid gzip wrapping; accepted records must always
 encode and decode again without change.
 
-The codec does not implement durable acknowledgment, source-key idempotency,
-query indexing/pagination, scope filtering, pruning, quota recovery or migration.
-Those belong in the storage adapter and must preserve current contracts before
-live writes or readers use this format. Re-measure the unchanged full controller
-workload, including all database pages and expiry/index overhead, before claiming
+## SQL transaction primitives
+
+`evidence_batch_sql.go` supplies internal append and scoped point-read primitives
+using this codec. Its schema is reserved and is **not installed by `Store.Open`**;
+no live writer or reader uses it. It accepts an exclusively owned SQL transaction,
+so the integration can commit evidence, indexes and related changes together.
+The transaction owner must roll back any error and acknowledge only after a
+successful commit. It must use a dedicated connection, never the shared pinned
+`Store.conn`. Tests use a separate pool against the same private SQLite file,
+with foreign keys and FULL synchronous durability enabled.
+
+Each batch belongs to one sensor/stream and enrolled scope. Appends validate the
+sensor's scope and require a complete observation bundle whose claims and links
+refer to that observation. The codec's broader retained-only shapes remain valid
+encoding, but are not fresh append inputs. The latest partial batch is rewritten
+within the transaction and rolls over at either codec bound. The source-key
+uniqueness contract matches observation ingestion: a replay of the same
+sensor/stream/source key keeps the first evidence and expiry, even if the replay
+has another observation ID. An observation ID reused for a different source key
+is rejected. Canonical observation IDs and source keys use tagged reversible
+binary digests; other values remain in full, without hashing. Equal packed source
+keys and IDs share the lookup value through an expression index.
+
+Point reads require a scope, observation ID and explicit evaluation time. They
+return the original bundle only before the stored observation expiry, validating
+payload size, slot/count, ID, source, scope, key and expiry against the index.
+Returned claims retain their individual stored expiries; this is a raw evidence
+read, **not a current identity or presence projection**. Missing and expired
+lookups return `sql.ErrNoRows`; corrupt evidence returns no partial record.
+
+Regression tests cover replay, ID conflicts, source and scope separation, exact
+expiry boundaries, independently expired claims, reopen, count/byte rollover,
+corrupt payload/index rejection, injected rollback and separate transaction
+ownership. These primitives do not yet implement full identity foreign keys and
+query indexes, pagination, retention/pruning, quota recovery, connection lifecycle,
+schema migration or rollback compatibility. They cannot be activated until those
+contracts and the legacy-record fallback are implemented and tested. Re-measure
+the unchanged full controller workload, including all database pages and expiry/index overhead, before claiming
 #150's storage target. CPU/RAM and sustained-run gates remain open.
