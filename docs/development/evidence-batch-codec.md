@@ -89,6 +89,21 @@ same transaction's identity snapshot, assign each stored expiry, persist all rel
 changes, and acknowledge only after commit. Plans must not be queued and applied
 against a later identity state. Query integration and migration remain required.
 
+`storage.NewLegacyIdentitySnapshot` supplies the legacy-table identity reader for
+an exclusively owned SQL transaction and fixed retention-evaluation time. It shares
+the live store's query implementation, including normalization, inclusive observed
+time bounds, retained-claim expiry, retirement at the query's upper bound, distinct
+device ordering and the three-candidate ambiguity limit. Claim/link validity is not
+substituted for the existing recent-evidence continuity rule. Queries see the
+transaction's own staged changes and fail once it is committed or rolled back;
+the reader never owns transaction completion or falls back to another connection.
+
+This is only the legacy half of mixed-history reconciliation. It must not be used
+alone once batch-only claims are written. Batch identity indexes and a combined
+reader remain necessary. Snapshot tests cover staged ambiguity and retirement,
+external read isolation, commit/rollback, cancellation, clock and query validation,
+expiry/time boundaries, scope filtering and planner use of the same transaction.
+
 Tests exercise read-only new/continuous/ambiguous decisions, IPv4/IPv6 normalization,
 original evidence and codec round trips, lookup failure, and legacy partial-write
 recovery/replay with noncanonical claim IDs.
