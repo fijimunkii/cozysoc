@@ -1,0 +1,212 @@
+package storage
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/hex"
+	"errors"
+	"strings"
+	"time"
+)
+
+// evidenceBatchSchema is reserved for the batch adapter. It is deliberately not
+// part of migrate: live queries, retention and migration must be integrated first.
+const evidenceBatchSchema = `
+CREATE TABLE evidence_batch_sources (
+ id INTEGER PRIMARY KEY,
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id),
+ sensor_id TEXT NOT NULL REFERENCES sensors(id),
+ stream TEXT NOT NULL,
+ UNIQUE(sensor_id, stream)
+) STRICT;
+CREATE TABLE evidence_batches (
+ id INTEGER PRIMARY KEY,
+ source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
+ entries INTEGER NOT NULL CHECK(entries BETWEEN 1 AND 100),
+ data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 1048576)
+) STRICT;
+CREATE INDEX evidence_batches_source ON evidence_batches(source_id, id DESC);
+CREATE TABLE evidence_batch_lookup (
+ id BLOB PRIMARY KEY,
+ source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
+ source_key BLOB,
+ batch_id INTEGER NOT NULL REFERENCES evidence_batches(id),
+ slot INTEGER NOT NULL CHECK(slot BETWEEN 0 AND 99),
+ expires_at_ns INTEGER NOT NULL,
+ UNIQUE(batch_id, slot)
+) STRICT, WITHOUT ROWID;
+CREATE UNIQUE INDEX evidence_batch_replay ON evidence_batch_lookup(source_id, coalesce(source_key, id));
+`
+
+// packedEvidenceKey is reversible, with disjoint tags for full text and a
+// canonical 16-byte digest. It never hashes arbitrary identifiers/source keys.
+func packedEvidenceKey(value, prefix string) []byte {
+	suffix := strings.TrimPrefix(value, prefix)
+	if strings.HasPrefix(value, prefix) && len(suffix) == 32 && strings.ToLower(suffix) == suffix {
+		if decoded, err := hex.DecodeString(suffix); err == nil {
+			return append([]byte{1}, decoded...)
+		}
+	}
+	return append([]byte{0}, []byte(value)...)
+}
+
+// validateCompleteBatchBundle checks relations in addition to codec domain
+// validation. Read paths repeat this check because stored bytes are untrusted.
+func validateCompleteBatchBundle(r EvidenceBatchRecord) error {
+	if r.Observation == nil || r.ObservationExpiresAt == nil || !batchTimeFits(*r.ObservationExpiresAt) {
+		return ErrEvidenceBatchData
+	}
+	o := r.Observation
+	for _, claim := range r.Claims {
+		if claim.Claim.ScopeID != o.ScopeID || claim.Claim.SourceSensorID != o.SensorID || claim.Claim.SourceObservationID != o.ID {
+			return ErrEvidenceBatchData
+		}
+	}
+	for _, link := range r.Links {
+		found := false
+		for _, claim := range r.Claims {
+			if claim.Claim.ID == link.ClaimID {
+				found = true
+			}
+		}
+		if !found || link.EvidenceObservationID != o.ID {
+			return ErrEvidenceBatchData
+		}
+	}
+	return nil
+}
+
+// appendEvidenceBatch stages one complete record in an exclusively owned SQL
+// transaction. The caller MUST roll back on error and acknowledge only after
+// commit. Do not begin this transaction on Store.conn, whose autocommit users
+// could otherwise have their writes absorbed by this transaction.
+// A source-key replay returns false without replacing original evidence/expiry.
+// This primitive does not implement identity indexes, pruning or quota policy.
+func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord) (bool, error) {
+	single, err := EncodeEvidenceBatch([]EvidenceBatchRecord{r})
+	if err != nil {
+		return false, err
+	}
+	if err := validateCompleteBatchBundle(r); err != nil {
+		return false, err
+	}
+	o := r.Observation
+	// An observation cannot authorize its own scope.
+	var sensorScope string
+	if err := tx.QueryRowContext(ctx, "SELECT scope_id FROM sensors WHERE id = ?", o.SensorID).Scan(&sensorScope); err != nil {
+		return false, err
+	}
+	if sensorScope != o.ScopeID {
+		return false, ErrEvidenceBatchData
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO evidence_batch_sources(scope_id,sensor_id,stream) VALUES(?,?,?) ON CONFLICT(sensor_id,stream) DO NOTHING`, o.ScopeID, o.SensorID, o.SourceStream); err != nil {
+		return false, err
+	}
+	var source int64
+	var scope string
+	if err := tx.QueryRowContext(ctx, `SELECT id,scope_id FROM evidence_batch_sources WHERE sensor_id=? AND stream=?`, o.SensorID, o.SourceStream).Scan(&source, &scope); err != nil {
+		return false, err
+	}
+	if scope != o.ScopeID {
+		return false, ErrEvidenceBatchData
+	}
+	id, key := packedEvidenceKey(o.ID, "obs.dw."), packedEvidenceKey(o.SourceKey, "")
+	var exists int
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM evidence_batch_lookup WHERE source_id=? AND coalesce(source_key,id)=?`, source, key).Scan(&exists)
+	if err == nil {
+		return false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	// Reject an ID collision before rewriting a partial batch.
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM evidence_batch_lookup WHERE id=?`, id).Scan(&exists)
+	if err == nil {
+		return false, ErrEvidenceBatchData
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	var batch int64
+	var count int
+	var data []byte
+	err = tx.QueryRowContext(ctx, `SELECT id,entries,CASE WHEN length(data)<=? THEN data ELSE NULL END FROM evidence_batches WHERE source_id=? ORDER BY id DESC LIMIT 1`, EvidenceBatchMaxBytes, source).Scan(&batch, &count, &data)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	slot := 0
+	if err == nil {
+		records, decodeErr := DecodeEvidenceBatch(data)
+		if decodeErr != nil {
+			return false, decodeErr
+		}
+		if count != len(records) {
+			return false, ErrEvidenceBatchData
+		}
+		for _, retained := range records {
+			if validateCompleteBatchBundle(retained) != nil || retained.Observation.ScopeID != scope || retained.Observation.SensorID != o.SensorID || retained.Observation.SourceStream != o.SourceStream {
+				return false, ErrEvidenceBatchData
+			}
+		}
+		if count < EvidenceBatchMaxRecords {
+			combined, encodeErr := EncodeEvidenceBatch(append(records, r))
+			if encodeErr == nil {
+				data, slot = combined, count
+			} else if !errors.Is(encodeErr, ErrEvidenceBatchLimit) {
+				return false, encodeErr
+			}
+		}
+	}
+	if slot == 0 {
+		result, err := tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,entries,data) VALUES(?,1,?)`, source, single)
+		if err != nil {
+			return false, err
+		}
+		batch, err = result.LastInsertId()
+		if err != nil {
+			return false, err
+		}
+	} else if _, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,data=? WHERE id=?`, slot+1, data, batch); err != nil {
+		return false, err
+	}
+	var storedKey any = key
+	if bytes.Equal(key, id) {
+		storedKey = nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO evidence_batch_lookup(id,source_id,source_key,batch_id,slot,expires_at_ns) VALUES(?,?,?,?,?,?)`, id, source, storedKey, batch, slot, r.ObservationExpiresAt.UnixNano())
+	return err == nil, err
+}
+
+// readEvidenceBatch reads one original bundle in the caller's snapshot. The
+// observation's stored expiry controls availability of this lookup; individual
+// claims retain their expiry metadata and are NOT projected as current identity.
+func readEvidenceBatch(ctx context.Context, tx *sql.Tx, scope, id string, now time.Time) (EvidenceBatchRecord, error) {
+	if validateQueryID("scope", scope) != nil || validateQueryID("observation", id) != nil || !batchTimeFits(now) {
+		return EvidenceBatchRecord{}, ErrEvidenceBatchData
+	}
+	var data, key []byte
+	var slot, count int
+	var expiry int64
+	var sensor, stream string
+	err := tx.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=? THEN b.data ELSE NULL END,b.entries,l.slot,l.expires_at_ns,coalesce(l.source_key,l.id),s.sensor_id,s.stream
+ FROM evidence_batch_lookup l JOIN evidence_batches b ON b.id=l.batch_id AND b.source_id=l.source_id JOIN evidence_batch_sources s ON s.id=l.source_id
+ WHERE l.id=? AND s.scope_id=? AND l.expires_at_ns>?`, EvidenceBatchMaxBytes, packedEvidenceKey(id, "obs.dw."), scope, now.UnixNano()).Scan(&data, &count, &slot, &expiry, &key, &sensor, &stream)
+	if err != nil {
+		return EvidenceBatchRecord{}, err
+	}
+	records, err := DecodeEvidenceBatch(data)
+	if err != nil {
+		return EvidenceBatchRecord{}, err
+	}
+	if count != len(records) || slot < 0 || slot >= len(records) {
+		return EvidenceBatchRecord{}, ErrEvidenceBatchData
+	}
+	r := records[slot]
+	if validateCompleteBatchBundle(r) != nil || r.Observation.ID != id || r.Observation.ScopeID != scope || r.Observation.SensorID != sensor || r.Observation.SourceStream != stream || !batchTimeFits(*r.ObservationExpiresAt) || r.ObservationExpiresAt.UnixNano() != expiry || !bytes.Equal(packedEvidenceKey(r.Observation.SourceKey, ""), key) {
+		return EvidenceBatchRecord{}, ErrEvidenceBatchData
+	}
+	return r, nil
+}
+
+func batchTimeFits(t time.Time) bool { return !t.IsZero() && time.Unix(0, t.UnixNano()).Equal(t) }
