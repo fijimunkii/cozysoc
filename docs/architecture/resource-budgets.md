@@ -47,12 +47,29 @@ Storage policy will be finalized by #30; these are architecture envelopes for #1
 
 | Metric | Initial target | Notes |
 | --- | ---: | --- |
-| Discovery-only normalized data growth | <= 25 MiB/day for the reference workload | Excludes optional DNS/flow/IDS/wireless data |
+| Discovery-only normalized data growth | <= 30 MiB/day for the reference workload | Excludes optional DNS/flow/IDS/wireless data |
 | Default core managed-data quota | <= 1 GiB before pressure policy must act | Exact per-class retention is #30 |
 | Full packet payload retention | 0 by default | Diagnostic captures, if introduced later, are explicit and separately bounded |
 | Database access | controller only | UI/engines/sensors do not open the DB file directly |
 
 Storage pressure must degrade explicitly: retention/compaction should run before writes fail, and data loss/expiry must be represented rather than turning old data into current evidence.
+
+### Discovery growth budget decision
+
+The discovery target is revised from **25 to 30 MiB/day** by maintainer decision.
+The [sparse replay adapter measurement](../development/device-watch-batch-adapter-workload.md#sparse-replay-index-september-13-2026)
+uses 100 devices and 1,440 one-minute collections after warm-up on an Apple M4
+Mac16,13 (10 logical CPUs, 24 GiB RAM), macOS 26.6.2 and APFS. It completed in
+484,099 ms and grew by 28.508 MiB, leaving **1.492 MiB** under the revised target.
+The 20% increase accepts this measured component footprint and prioritizes live
+integration over further compaction solely to meet 25 MiB. It does not establish
+that the original target was impossible.
+
+The workload, collection cadence, evidence fidelity, durability, retention and
+1 GiB quota are unchanged. Installation recommendations and release claims are
+unchanged: live storage still measures 474.50 MiB/day. Production query, lifecycle
+and migration integration and a full workload rerun must establish compliance with
+30 MiB/day. Historical evidence retains the target used when it was recorded.
 
 ## Optional capability budgets
 

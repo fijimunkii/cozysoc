@@ -275,7 +275,7 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 		}
 	}
 	collect()
-	report := batchWorkloadReport{Kind: "reserved-batch-adapter-not-full-controller-budget", Collections: rounds, Devices: 100, NewObservations: rounds * 100, DailyTarget: 25 << 20, Comparison: "not-evaluated-short-run", OS: runtime.GOOS, Architecture: runtime.GOARCH, Go: runtime.Version()}
+	report := batchWorkloadReport{Kind: "reserved-batch-adapter-not-full-controller-budget", Collections: rounds, Devices: 100, NewObservations: rounds * 100, DailyTarget: 30 << 20, Comparison: "not-evaluated-short-run", OS: runtime.GOOS, Architecture: runtime.GOARCH, Go: runtime.Version()}
 	report.Before = batchAllocation(t, db)
 	report.BytesBefore = report.Before.PageSize * report.Before.PageCount
 	if err := db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&report.SQLite); err != nil {

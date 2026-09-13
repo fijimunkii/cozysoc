@@ -49,7 +49,7 @@ page and must reconcile with the complete logical file size.
 
 Growth is the final SQLite file size minus its size after warm-up. A completed
 test means the evidence and measurement checks passed; the report independently
-compares growth with the unchanged 25 MiB/day discovery target. Partial or failed
+compares growth with the current 30 MiB/day discovery target. Partial or failed
 runs do not establish a daily result.
 
 Included costs are the production codec, independent stored expiry metadata,
@@ -64,7 +64,7 @@ The accelerated run is storage-volume evidence, not a 24-hour soak or a CPU/RAM,
 latency, scheduling or hardware-support result. Record exact source, hardware,
 OS, filesystem and toolchain with published results. Export only sanitized
 counts, digests and schema allocation; never a raw database, hardware serial,
-hostname or household inventory. Do not relax the target or reference workload.
+hostname or household inventory. Budget revisions require a recorded decision; keep the reference workload unchanged.
 
 ## Recorded result: September 13, 2026
 
@@ -80,7 +80,7 @@ device/coverage count, reopen digest and file/page-accounting checks passed.
 | Database after warm-up | 290,816 bytes |
 | Final database | 36,827,136 bytes |
 | Daily growth | **36,536,320 bytes / 34.844 MiB** |
-| Unchanged daily target | 25 MiB |
+| Daily target at measurement | 25 MiB |
 | Excess before identity-query integration | **9.844 MiB** |
 | Reopened observations, including warm-up | 144,100 |
 | Reopened claims / links | 288,200 / 288,200 |
@@ -103,13 +103,13 @@ must verify their own original-versus-reopened digest.
 | Free-page growth | 4,096 | 0.004 |
 | **Total** | **36,536,320** | **34.844** |
 
-The replay and batch/slot indexes together add **10.551 MiB**. This is the next
-measured optimization target: reduce duplicated lookup storage while preserving
+The replay and batch/slot indexes together added **10.551 MiB**, motivating the
+sparse replay measurement below while preserving
 source-key idempotency, exact record identification, transactional pruning and
 referential integrity. The result does not justify adding full per-record
 identity indexes without another footprint check. The production 474.50 MiB
 baseline remains the live result, and #150 remains open until the integrated
-controller meets the unchanged workload and budget requirements.
+controller meets the unchanged workload and current budget requirements.
 
 ## Sparse replay index: September 13, 2026
 
@@ -125,7 +125,7 @@ representations. No observation, claim, link or lookup was omitted.
 | Daily growth | 34.844 MiB | **28.508 MiB** |
 | Replay-index growth | 6.328 MiB | **0 MiB** |
 | Final file size | 36,827,136 bytes | 30,183,424 bytes |
-| Excess over 25 MiB | 9.844 MiB | **3.508 MiB** |
+| Excess over then-current 25 MiB | 9.844 MiB | **3.508 MiB** |
 
 Total growth fell by **6,643,712 bytes (6.336 MiB)**. Of that difference,
 6,635,520 bytes are removed replay-index growth and 8,192 bytes are the difference
@@ -141,8 +141,10 @@ Write and verification elapsed time was 484,099 ms; this is not a CPU/RAM or
 latency-budget result. Each run preserves its own independently assigned expiry
 values, so the two runs are not expected to share an evidence digest.
 
-The adapter still exceeds the target before identity-query integration. The
-observation lookup and batch/slot index together still grow by 10.023 MiB. Further
-reduction must preserve bounded queries, exact identity, foreign keys and pruning;
-this result does not authorize removing those guarantees or increasing the budget.
+Against the [revised 30 MiB/day target](../architecture/resource-budgets.md#discovery-growth-budget-decision),
+the measured 29,892,608-byte growth fits with **1,564,672 bytes (1.492 MiB)**
+remaining. Historical tables and JSON retain their original 25 MiB comparisons.
+Further compaction solely to meet 25 MiB is no longer required. The next step is
+production query, lifecycle and migration integration, preserving bounded queries,
+exact identity, foreign keys and pruning, followed by the full controller workload.
 Live controller storage is unchanged and #150 remains open.

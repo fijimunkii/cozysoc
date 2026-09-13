@@ -77,7 +77,7 @@ offline test operation; they are not a proposed implementation for history APIs.
 The prototype file includes batch and point-lookup storage. It excludes device and
 coverage records, source-key indexes, production history/presence/identity queries,
 independent claim expiry, pruning, quota recovery and controller overhead. Even a
-file below 25 MiB would not establish the whole-controller target. Full production
+file below the current 30 MiB target would not establish the whole-controller target. Full production
 query integration, retention/quota behavior, transactional migration and rollback,
 and the unchanged persisted workload from #151/#152 remain necessary. CPU/RAM and
 24-hour sustained-run gates also remain open.
@@ -99,7 +99,7 @@ changed between measurements. The completed durations were 340,395 ms and
 334,962 ms respectively, including reopen verification; neither is a controller
 CPU/RAM or latency budget result.
 
-The refined prototype leaves about 2.58 MiB below 25 MiB **before** the omitted
+The refined prototype leaves about 2.58 MiB below the then-current 25 MiB target **before** the omitted
 production components. Treat this as evidence to continue integration, not a
 whole-controller budget pass or a replacement for the production 474.50 MiB
 baseline. Source-key idempotency, scoped history and identity queries, retention,

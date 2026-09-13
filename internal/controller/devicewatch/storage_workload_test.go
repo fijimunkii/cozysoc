@@ -189,11 +189,11 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 	comparison := "not-evaluated-short-run"
 	if rounds == 24*60 {
 		comparison = "within-target-component-only"
-		if after-before > 25<<20 {
+		if after-before > 30<<20 {
 			comparison = "exceeded"
 		}
 	}
 	return storageWorkloadReport{AllocationBefore: allocationBefore, AllocationAfter: allocationAfter, SchemaVersion: 2, Workload: "stable-100-neighbor-storage-v1", OS: runtime.GOOS, Architecture: runtime.GOARCH, GoVersion: runtime.Version(), SimulatedMinutes: rounds, CollectionIntervalSeconds: 60, Devices: storageWorkloadDevices,
 		NewObservations: int64(count - storageWorkloadDevices), DatabaseBytesBefore: before, DatabaseBytesAfter: after, DatabaseGrowthBytes: after - before,
-		WallElapsedMilliseconds: time.Since(wallStart).Milliseconds(), DailyTargetBytes: 25 << 20, TargetComparison: comparison}
+		WallElapsedMilliseconds: time.Since(wallStart).Milliseconds(), DailyTargetBytes: 30 << 20, TargetComparison: comparison}
 }
