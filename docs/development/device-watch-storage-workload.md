@@ -123,3 +123,35 @@ length. Grouping object-byte differences by owning table separates each table's
 records from its indexes without attributing free pages to live evidence. This
 accounting measures allocation, not hypothetical savings from deleting an index
 or changing representation. It does not run VACUUM or alter persistence settings.
+
+## Recorded attribution: September 13, 2026
+
+The [schema-2 result](evidence/device-watch-storage-attribution-2026-09-13.json)
+records the same full workload at source
+`c3e72e364339866f3a79f1f33e508a775db2db54`, with production code unchanged
+from `5b37ab199e2d89d5bee4c1db9ecb5321cb9313d2`, on the same named hardware
+and software settings as the baseline. All 144,000 new observations, 100 final
+devices, ingestion, page accounting and reopen checks passed. Growth was
+497,545,216 bytes (**474.496 MiB**), still **18.98×** the target. The earlier
+474.746 MiB baseline remains a separate run; this is not a production reduction.
+
+The following values are after-minus-before allocated bytes, converted to MiB:
+
+| Owning table | Table pages (MiB) | Index pages (MiB) | Total (MiB) |
+| --- | ---: | ---: | ---: |
+| `device_claim_links` | 75.188 | 99.770 | 174.957 |
+| `observations` | 62.656 | 93.156 | 155.812 |
+| `identity_claims` | 56.391 | 85.793 | 142.184 |
+| `coverage_samples` | 1.129 | 0.414 | 1.543 |
+| **Total** | **195.363** | **279.133** | **474.496** |
+
+Free-list growth was 0 bytes; the listed objects account for all file growth.
+Indexes account for **58.83%** of the growth. Even the
+**195.363 MiB** allocated to table records alone exceeds the 25 MiB envelope.
+This rules out index removal alone as a sufficient fix; it does not justify
+removing indexes needed by current queries. Device identity links and claims
+are the largest combined allocation, so #150 should evaluate a more compact
+evidence representation that preserves original timestamps, provenance, identity
+ambiguity and query behavior. Any proposed reduction still needs migration and
+correctness tests and a completed unchanged-workload rerun. No storage policy
+or budget is changed by this measurement.
