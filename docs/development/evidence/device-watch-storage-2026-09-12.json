@@ -1,0 +1,33 @@
+{
+  "recorded_at_utc": "2026-09-13T00:34:16.490682+00:00",
+  "measured_source_commit": "3f6783534f7f41f42e452bffb287cb3a1a346ef7",
+  "production_baseline_commit": "d1c57f177739da5679e779c3f65f1e15f03b6de6",
+  "hardware": {
+    "model": "Mac16,13",
+    "processor": "Apple M4",
+    "logical_cpus": 10,
+    "memory_bytes": 25769803776
+  },
+  "os_version": "26.6.2",
+  "filesystem": "apfs",
+  "command": "TMPDIR=/private/tmp COZYSOC_STORAGE_WORKLOAD=1 go test ./internal/controller/devicewatch -run '^TestDeviceWatchDailyStorageWorkload$' -count=1 -timeout=35m -v",
+  "measurement_completed": true,
+  "test_exit_code": 0,
+  "report": {
+    "schema_version": 1,
+    "workload": "stable-100-neighbor-storage-v1",
+    "os": "darwin",
+    "architecture": "arm64",
+    "go_version": "go1.27.1",
+    "simulated_minutes": 1440,
+    "collection_interval_seconds": 60,
+    "devices": 100,
+    "new_observations": 144000,
+    "database_bytes_before": 548864,
+    "database_bytes_after": 498356224,
+    "database_growth_bytes": 497807360,
+    "wall_elapsed_ms": 1375135,
+    "daily_target_bytes": 26214400,
+    "target_comparison": "exceeded"
+  }
+}
