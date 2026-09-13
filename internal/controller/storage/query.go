@@ -264,7 +264,7 @@ func validateQueryID(label, value string) error {
 	return nil
 }
 
-func scanObservation(rows *sql.Rows) (domain.Observation, error) {
+func scanObservation(rows interface{ Scan(...any) error }) (domain.Observation, error) {
 	var observation domain.Observation
 	var sourceEventID sql.NullString
 	var sourceTime sql.NullInt64
