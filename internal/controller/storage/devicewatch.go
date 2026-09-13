@@ -79,16 +79,20 @@ func (s *Store) EnsureSensor(ctx context.Context, sensor domain.Sensor) error {
 }
 
 func (s *Store) EnsureDevice(ctx context.Context, device domain.Device) error {
+	return ensureIdentityDevice(ctx, s.conn, device)
+}
+
+func ensureIdentityDevice(ctx context.Context, writer identityQueryWriter, device domain.Device) error {
 	if err := domain.ValidateDevice(device); err != nil {
 		return err
 	}
-	if _, err := s.conn.ExecContext(ctx, `INSERT INTO devices
+	if _, err := writer.ExecContext(ctx, `INSERT INTO devices
 		(id, user_label, created_at_ns, retired_at_ns) VALUES (?, ?, ?, ?)
 		ON CONFLICT(id) DO NOTHING`, device.ID, nullableString(device.UserLabel), unixNanos(device.CreatedAt), nullableTime(device.RetiredAt)); err != nil {
 		return wrapWrite("ensure device", err)
 	}
 	var createdAt int64
-	if err := s.conn.QueryRowContext(ctx, `SELECT created_at_ns FROM devices WHERE id = ?`, device.ID).Scan(&createdAt); err != nil {
+	if err := writer.QueryRowContext(ctx, `SELECT created_at_ns FROM devices WHERE id = ?`, device.ID).Scan(&createdAt); err != nil {
 		return fmt.Errorf("verify ensured device: %w", err)
 	}
 	if createdAt != unixNanos(device.CreatedAt) {
@@ -98,6 +102,10 @@ func (s *Store) EnsureDevice(ctx context.Context, device domain.Device) error {
 }
 
 func (s *Store) EnsureIdentityClaim(ctx context.Context, claim domain.IdentityClaim) (string, error) {
+	return ensureIdentityClaim(ctx, s.conn, claim, s.expiry)
+}
+
+func ensureIdentityClaim(ctx context.Context, writer identityQueryWriter, claim domain.IdentityClaim, expiry func(domain.RetentionClass) (int64, error)) (string, error) {
 	if err := domain.ValidateIdentityClaim(claim); err != nil {
 		return "", err
 	}
@@ -108,11 +116,11 @@ func (s *Store) EnsureIdentityClaim(ctx context.Context, claim domain.IdentityCl
 	if err != nil {
 		return "", err
 	}
-	expiresAt, err := s.expiry(claim.Retention)
+	expiresAt, err := expiry(claim.Retention)
 	if err != nil {
 		return "", err
 	}
-	if _, err := s.conn.ExecContext(ctx, `INSERT INTO identity_claims
+	if _, err := writer.ExecContext(ctx, `INSERT INTO identity_claims
 		(id, scope_id, kind, value, observed_at_ns, valid_until_ns, confidence, source_sensor_id,
 		 source_observation_id, retention_class, expires_at_ns)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -123,7 +131,7 @@ func (s *Store) EnsureIdentityClaim(ctx context.Context, claim domain.IdentityCl
 	}
 
 	var id, scopeID, sensorID string
-	err = s.conn.QueryRowContext(ctx, `SELECT id, scope_id, source_sensor_id FROM identity_claims
+	err = writer.QueryRowContext(ctx, `SELECT id, scope_id, source_sensor_id FROM identity_claims
 		WHERE source_observation_id = ? AND kind = ? AND value = ?`, claim.SourceObservationID, claim.Kind, value).
 		Scan(&id, &scopeID, &sensorID)
 	if err != nil {
@@ -136,10 +144,14 @@ func (s *Store) EnsureIdentityClaim(ctx context.Context, claim domain.IdentityCl
 }
 
 func (s *Store) EnsureDeviceClaimLink(ctx context.Context, link domain.DeviceClaimLink) error {
+	return ensureIdentityLink(ctx, s.conn, link)
+}
+
+func ensureIdentityLink(ctx context.Context, writer identityQueryWriter, link domain.DeviceClaimLink) error {
 	if err := domain.ValidateDeviceClaimLink(link); err != nil {
 		return err
 	}
-	if _, err := s.conn.ExecContext(ctx, `INSERT INTO device_claim_links
+	if _, err := writer.ExecContext(ctx, `INSERT INTO device_claim_links
 		(id, device_id, claim_id, valid_from_ns, valid_until_ns, confidence, authority, reason,
 		 evidence_observation_id, created_at_ns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO NOTHING`, link.ID, link.DeviceID, link.ClaimID, unixNanos(link.ValidFrom), nullableTime(link.ValidUntil),
@@ -147,7 +159,7 @@ func (s *Store) EnsureDeviceClaimLink(ctx context.Context, link domain.DeviceCla
 		return wrapWrite("ensure device claim link", err)
 	}
 	var deviceID, claimID string
-	if err := s.conn.QueryRowContext(ctx, `SELECT device_id, claim_id FROM device_claim_links WHERE id = ?`, link.ID).
+	if err := writer.QueryRowContext(ctx, `SELECT device_id, claim_id FROM device_claim_links WHERE id = ?`, link.ID).
 		Scan(&deviceID, &claimID); err != nil {
 		return fmt.Errorf("verify ensured device claim link: %w", err)
 	}

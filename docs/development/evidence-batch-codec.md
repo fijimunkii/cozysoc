@@ -263,3 +263,28 @@ expiry, invalid plans, absent devices, ambiguity, injected late-write rollback,
 retry and caller-owned commit. The adapter workload smoke test uses the real
 planner through this stager; the recorded daily footprint remains the separately
 identified earlier source measurement.
+
+## Legacy replay repair
+
+`devicewatch.RepairLegacyObservation` handles the stager's legacy replay signal in
+an exclusively owned caller transaction. `NewLegacyRepairStore` resolves the
+retained original using its scope/sensor/stream/source-key tuple and validates the
+sensor's scope. Retry IDs, payloads and timestamps never replace stored evidence.
+Missing or expired originals return `false` without recreating observations or
+claims. Reads bound payload and metadata allocation and validate the resulting
+original before reconciliation; corrupt evidence returns an error.
+
+The repair store uses the combined identity snapshot and the same idempotent SQL
+helpers as the live legacy store. Existing claim IDs and expiry are preserved;
+missing claims and links can be completed, including after a partial earlier write.
+Claim and link writes are confined to the original observation and its provenance.
+The real reconciler supplies the original decision rules, including ambiguity and
+resolved legacy claim IDs, without duplicating its identifier derivation in storage.
+
+Repair never updates the original observation, commits, or acknowledges ingestion.
+The owner must roll back failures and commit before acknowledgment. Tests cover
+changed retry payloads/IDs/times, partial noncanonical claim IDs, preserved original
+payload/expiry, owner-only commit, late-write rollback and retry, expired/missing
+originals, wrong scope and corrupt or oversized stored data. Live queue/connection
+integration, migration and the remaining batch-reader/foreign-key/lifecycle gates
+are still required before activation.
