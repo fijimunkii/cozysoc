@@ -287,3 +287,13 @@ func (s ReconcilingSink) PutCoverageSample(ctx context.Context, sample domain.Co
 }
 
 var _ IdentityStore = (*storage.Store)(nil)
+
+// PlanBatchEvidence adapts the same producer decision for transactional storage.
+// The stager owns replay validation, expiry assignment and persistence.
+func PlanBatchEvidence(ctx context.Context, reader *storage.MixedIdentitySnapshot, observation domain.Observation) (storage.EvidenceBatchPlan, error) {
+	plan, err := PlanReconciliation(ctx, reader, observation)
+	if err != nil {
+		return storage.EvidenceBatchPlan{}, err
+	}
+	return storage.EvidenceBatchPlan{NewDevice: plan.NewDevice, Claims: plan.Claims, Links: plan.Links}, nil
+}

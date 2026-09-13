@@ -40,6 +40,7 @@ type batchWorkloadSink struct {
 	store  *storage.Store
 	db     *sql.DB
 	digest workloadEvidenceDigest
+	stager *storage.EvidenceBatchStager
 }
 
 func (s *batchWorkloadSink) PutObservation(ctx context.Context, o domain.Observation) (bool, error) {
@@ -48,42 +49,13 @@ func (s *batchWorkloadSink) PutObservation(ctx context.Context, o domain.Observa
 		return false, err
 	}
 	defer tx.Rollback()
-	reader, err := storage.NewMixedIdentitySnapshot(tx, time.Now().UTC())
-	if err != nil {
-		return false, err
-	}
-	plan, err := devicewatch.PlanReconciliation(ctx, reader, o)
-	if err != nil {
-		return false, err
-	}
-	if plan.NewDevice != nil {
-		d := plan.NewDevice
-		if err := domain.ValidateDevice(*d); err != nil {
-			return false, err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO devices(id,created_at_ns) VALUES(?,?) ON CONFLICT(id) DO NOTHING`, d.ID, d.CreatedAt.UnixNano()); err != nil {
-			return false, err
-		}
-		var created int64
-		if err := tx.QueryRowContext(ctx, `SELECT created_at_ns FROM devices WHERE id=?`, d.ID).Scan(&created); err != nil {
-			return false, err
-		}
-		if created != d.CreatedAt.UnixNano() {
-			return false, fmt.Errorf("device creation evidence conflict")
-		}
-	}
-	expiry := time.Now().UTC().Add(storage.DefaultLimits().Retention[o.Retention])
-	record := storage.EvidenceBatchRecord{Observation: &o, ObservationExpiresAt: &expiry, Links: plan.Links}
-	for _, c := range plan.Claims {
-		record.Claims = append(record.Claims, storage.RetainedIdentityClaim{Claim: c, ExpiresAt: time.Now().UTC().Add(storage.DefaultLimits().Retention[c.Retention])})
-	}
-	inserted, err := storage.AppendEvidenceBatchForTest(ctx, tx, record)
+	record, inserted, err := s.stager.Stage(ctx, tx, o)
 	if err != nil {
 		return false, err
 	}
 	if !inserted {
 		return false, nil
-	} // Deferred rollback discards any staged device.
+	}
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}
@@ -264,7 +236,11 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 	if err := s.EnsureSensor(ctx, domain.Sensor{ID: "sensor.storage-lab", ScopeID: "scope.storage-lab", Kind: "desktop-neighbor-cache", Ownership: "builtin", RegisteredAt: start.Add(-time.Hour), Metadata: json.RawMessage(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	sink := &batchWorkloadSink{store: s, db: db, digest: workloadEvidenceDigest{}}
+	stager, err := storage.NewEvidenceBatchStager(storage.DefaultLimits(), devicewatch.PlanBatchEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink := &batchWorkloadSink{store: s, db: db, digest: workloadEvidenceDigest{}, stager: stager}
 	source := &batchWorkloadSource{snapshot: devicewatch.Snapshot{CapturedAt: start.Add(-time.Minute), InterfaceName: "fixture0", Sources: []devicewatch.SourceStatus{{Method: devicewatch.MethodARPCache, Available: true}, {Method: devicewatch.MethodNDPCache, Available: true}}}}
 	for i := 0; i < 100; i++ {
 		mac, err := net.ParseMAC(fmt.Sprintf("02:00:00:00:00:%02x", i+1))
