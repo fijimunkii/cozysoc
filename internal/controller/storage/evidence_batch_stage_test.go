@@ -83,6 +83,10 @@ func TestEvidenceBatchStagerReplaySkipsPlannerAndClock(t *testing.T) {
 			s, db := batchSQLFixture(t)
 			r := batchSQLRecord(1)
 			if format == "batch" {
+				// Keep encoded expiry and lookup metadata consistent for an expired,
+				// unpruned observation rather than corrupting only the lookup column.
+				expired := time.Now().UTC().Add(-time.Hour)
+				r.ObservationExpiresAt = &expired
 				if _, err := batchSQLAppend(t, db, r); err != nil {
 					t.Fatal(err)
 				}
@@ -115,10 +119,6 @@ func TestEvidenceBatchStagerReplaySkipsPlannerAndClock(t *testing.T) {
 			// Suppression is storage-based, not dependent on whether evidence has expired.
 			if format == "legacy" {
 				if _, err := db.Exec("UPDATE observations SET expires_at_ns=1"); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				if _, err := db.Exec("UPDATE evidence_batch_lookup SET expires_at_ns=1"); err != nil {
 					t.Fatal(err)
 				}
 			}
