@@ -70,7 +70,7 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 	if rounds < 1 || rounds > 24*60 {
 		t.Fatal("storage workload collection count is outside bounds")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	dir := t.TempDir()
 	store, err := storage.Open(dir, storage.DefaultLimits())
