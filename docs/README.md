@@ -38,6 +38,8 @@ capability or platform-support claim.
 - [Validation gates](architecture/validation-gates.md) define evidence requirements.
 - [Storage workload](development/device-watch-storage-workload.md) records the
   production resource result and its reproducible measurement boundary.
+- [Batch adapter workload](development/device-watch-batch-adapter-workload.md)
+  defines component footprint measurement before identity-query integration.
 - [ADRs](adr/) record architectural decisions and rationale.
 
 Feature and operating guides describe the current contract directly. Keep benchmark
