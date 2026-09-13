@@ -93,6 +93,8 @@ Foundation architecture, threat-model and integration decisions, the controller/
 
 Release gates remain open: [hardware evidence #56](https://github.com/fijimunkii/cozysoc/issues/56), [installers and updates #28](https://github.com/fijimunkii/cozysoc/issues/28), [lab and performance gates #29](https://github.com/fijimunkii/cozysoc/issues/29), and [privacy/recovery #30](https://github.com/fijimunkii/cozysoc/issues/30). CI exercises macOS 15/26 native labs and Linux controller/frontend/process checks; those scoped results do not promote every architecture candidate to a supported platform.
 
+The [Device Watch storage workload](docs/development/device-watch-storage-workload.md) measured **474.75 MiB** of database growth for 100 stable synthetic neighbors over 1,440 one-minute collections, exceeding the **25 MiB/day** target by about **19×**. [Storage reduction #150](https://github.com/fijimunkii/cozysoc/issues/150) is open. This accelerated component measurement does not establish CPU/RAM budgets or 24-hour reliability.
+
 The first software release line is **v0.1**, the desktop alpha. Later roadmap stages use v0.2–v0.5, with v1.0 reserved for the first broadly ready release.
 
 ## Security and privacy

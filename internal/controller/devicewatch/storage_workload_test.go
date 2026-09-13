@@ -70,7 +70,11 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 	if rounds < 1 || rounds > 24*60 {
 		t.Fatal("storage workload collection count is outside bounds")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	deadline := time.Minute
+	if rounds == 24*60 {
+		deadline = 30 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	dir := t.TempDir()
 	store, err := storage.Open(dir, storage.DefaultLimits())
@@ -177,7 +181,7 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 	}
 	comparison := "not-evaluated-short-run"
 	if rounds == 24*60 {
-		comparison = "below-target-component-only"
+		comparison = "within-target-component-only"
 		if after-before > 25<<20 {
 			comparison = "exceeded"
 		}
