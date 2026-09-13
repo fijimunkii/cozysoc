@@ -1,0 +1,947 @@
+{
+  "recorded_at_utc": "2026-09-13T12:59:16.983378+00:00",
+  "measured_source_commit": "c3e72e364339866f3a79f1f33e508a775db2db54",
+  "production_baseline_commit": "5b37ab199e2d89d5bee4c1db9ecb5321cb9313d2",
+  "hardware": {
+    "model": "Mac16,13",
+    "processor": "Apple M4",
+    "logical_cpus": 10,
+    "memory_bytes": 25769803776
+  },
+  "os_version": "26.6.2",
+  "filesystem": "apfs",
+  "command": "TMPDIR=/private/tmp COZYSOC_STORAGE_WORKLOAD=1 go test ./internal/controller/devicewatch -run '^TestDeviceWatchDailyStorageWorkload$' -count=1 -timeout=35m -v",
+  "measurement_completed": true,
+  "test_exit_code": 0,
+  "report": {
+    "schema_version": 2,
+    "workload": "stable-100-neighbor-storage-v1",
+    "os": "darwin",
+    "architecture": "arm64",
+    "go_version": "go1.27.1",
+    "simulated_minutes": 1440,
+    "collection_interval_seconds": 60,
+    "devices": 100,
+    "new_observations": 144000,
+    "database_bytes_before": 548864,
+    "database_bytes_after": 498094080,
+    "database_growth_bytes": 497545216,
+    "wall_elapsed_ms": 1362040,
+    "daily_target_bytes": 26214400,
+    "target_comparison": "exceeded",
+    "allocation_before": {
+      "page_size": 4096,
+      "page_count": 134,
+      "free_pages": 0,
+      "objects": [
+        {
+          "name": "audit_events",
+          "table": "audit_events",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "audit_events_expiry_idx",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "audit_events_time_idx",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "coverage_expiry_idx",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 56,
+          "unused_bytes": 4029
+        },
+        {
+          "name": "coverage_samples",
+          "table": "coverage_samples",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 680,
+          "unused_bytes": 3403
+        },
+        {
+          "name": "coverage_scope_time_idx",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 87,
+          "unused_bytes": 3998
+        },
+        {
+          "name": "device_claim_links",
+          "table": "device_claim_links",
+          "kind": "table",
+          "pages": 14,
+          "bytes": 57344,
+          "payload_bytes": 50000,
+          "unused_bytes": 6066
+        },
+        {
+          "name": "device_claim_links_claim_time_idx",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 7,
+          "bytes": 28672,
+          "payload_bytes": 19772,
+          "unused_bytes": 8220
+        },
+        {
+          "name": "device_claim_links_device_time_idx",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 7,
+          "bytes": 28672,
+          "payload_bytes": 19272,
+          "unused_bytes": 8720
+        },
+        {
+          "name": "devices",
+          "table": "devices",
+          "kind": "table",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 5500,
+          "unused_bytes": 6353
+        },
+        {
+          "name": "finding_evidence",
+          "table": "finding_evidence",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings",
+          "table": "findings",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings_expiry_idx",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings_scope_time_idx",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "https_configurations",
+          "table": "https_configurations",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "identity_claims",
+          "table": "identity_claims",
+          "kind": "table",
+          "pages": 11,
+          "bytes": 45056,
+          "payload_bytes": 37810,
+          "unused_bytes": 6015
+        },
+        {
+          "name": "identity_claims_expiry_idx",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 4,
+          "bytes": 16384,
+          "payload_bytes": 11572,
+          "unused_bytes": 4168
+        },
+        {
+          "name": "identity_claims_scope_value_idx",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 4,
+          "bytes": 16384,
+          "payload_bytes": 10182,
+          "unused_bytes": 5558
+        },
+        {
+          "name": "ingestion_checkpoints",
+          "table": "ingestion_checkpoints",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "network_scopes",
+          "table": "network_scopes",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 132,
+          "unused_bytes": 3951
+        },
+        {
+          "name": "observations",
+          "table": "observations",
+          "kind": "table",
+          "pages": 13,
+          "bytes": 53248,
+          "payload_bytes": 40710,
+          "unused_bytes": 11853
+        },
+        {
+          "name": "observations_expiry_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 5199,
+          "unused_bytes": 6757
+        },
+        {
+          "name": "observations_kind_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 7299,
+          "unused_bytes": 4657
+        },
+        {
+          "name": "observations_scope_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 6999,
+          "unused_bytes": 4957
+        },
+        {
+          "name": "observations_sensor_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 7099,
+          "unused_bytes": 4857
+        },
+        {
+          "name": "resolver_configurations",
+          "table": "resolver_configurations",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sensors",
+          "table": "sensors",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 81,
+          "unused_bytes": 4003
+        },
+        {
+          "name": "sensors_scope_idx",
+          "table": "sensors",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 43,
+          "unused_bytes": 4042
+        },
+        {
+          "name": "sqlite_autoindex_audit_events_1",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_coverage_samples_1",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 47,
+          "unused_bytes": 4038
+        },
+        {
+          "name": "sqlite_autoindex_device_claim_links_1",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 4,
+          "bytes": 16384,
+          "payload_bytes": 8872,
+          "unused_bytes": 6868
+        },
+        {
+          "name": "sqlite_autoindex_devices_1",
+          "table": "devices",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 4599,
+          "unused_bytes": 7357
+        },
+        {
+          "name": "sqlite_autoindex_findings_1",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_1",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_2",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_3",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_identity_claims_1",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 4,
+          "bytes": 16384,
+          "payload_bytes": 9772,
+          "unused_bytes": 5968
+        },
+        {
+          "name": "sqlite_autoindex_identity_claims_2",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 5,
+          "bytes": 20480,
+          "payload_bytes": 12782,
+          "unused_bytes": 7042
+        },
+        {
+          "name": "sqlite_autoindex_network_scopes_1",
+          "table": "network_scopes",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 20,
+          "unused_bytes": 4065
+        },
+        {
+          "name": "sqlite_autoindex_observations_1",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 4299,
+          "unused_bytes": 7657
+        },
+        {
+          "name": "sqlite_autoindex_observations_2",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 7799,
+          "unused_bytes": 4157
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_1",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_2",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_3",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_sensors_1",
+          "table": "sensors",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 21,
+          "unused_bytes": 4064
+        },
+        {
+          "name": "sqlite_autoindex_storage_events_1",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_schema",
+          "table": "sqlite_schema",
+          "kind": "table",
+          "pages": 6,
+          "bytes": 24576,
+          "payload_bytes": 15473,
+          "unused_bytes": 8654
+        },
+        {
+          "name": "storage_events",
+          "table": "storage_events",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "storage_events_expiry_idx",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "storage_events_time_idx",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        }
+      ]
+    },
+    "allocation_after": {
+      "page_size": 4096,
+      "page_count": 121605,
+      "free_pages": 0,
+      "objects": [
+        {
+          "name": "audit_events",
+          "table": "audit_events",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "audit_events_expiry_idx",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "audit_events_time_idx",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "coverage_expiry_idx",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 25,
+          "bytes": 102400,
+          "payload_bytes": 83450,
+          "unused_bytes": 14331
+        },
+        {
+          "name": "coverage_samples",
+          "table": "coverage_samples",
+          "kind": "table",
+          "pages": 290,
+          "bytes": 1187840,
+          "payload_bytes": 979880,
+          "unused_bytes": 194838
+        },
+        {
+          "name": "coverage_scope_time_idx",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 63,
+          "bytes": 258048,
+          "payload_bytes": 128121,
+          "unused_bytes": 124852
+        },
+        {
+          "name": "device_claim_links",
+          "table": "device_claim_links",
+          "kind": "table",
+          "pages": 19262,
+          "bytes": 78897152,
+          "payload_bytes": 73202000,
+          "unused_bytes": 3368160
+        },
+        {
+          "name": "device_claim_links_claim_time_idx",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 8330,
+          "bytes": 34119680,
+          "payload_bytes": 28931205,
+          "unused_bytes": 4223919
+        },
+        {
+          "name": "device_claim_links_device_time_idx",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 13366,
+          "bytes": 54747136,
+          "payload_bytes": 28210705,
+          "unused_bytes": 25511443
+        },
+        {
+          "name": "devices",
+          "table": "devices",
+          "kind": "table",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 5500,
+          "unused_bytes": 6353
+        },
+        {
+          "name": "finding_evidence",
+          "table": "finding_evidence",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings",
+          "table": "findings",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings_expiry_idx",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "findings_scope_time_idx",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "https_configurations",
+          "table": "https_configurations",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "identity_claims",
+          "table": "identity_claims",
+          "kind": "table",
+          "pages": 14447,
+          "bytes": 59174912,
+          "payload_bytes": 54484210,
+          "unused_bytes": 2445231
+        },
+        {
+          "name": "identity_claims_expiry_idx",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 5054,
+          "bytes": 20701184,
+          "payload_bytes": 17115005,
+          "unused_bytes": 2660935
+        },
+        {
+          "name": "identity_claims_scope_value_idx",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 7149,
+          "bytes": 29282304,
+          "payload_bytes": 15112015,
+          "unused_bytes": 13219905
+        },
+        {
+          "name": "ingestion_checkpoints",
+          "table": "ingestion_checkpoints",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "network_scopes",
+          "table": "network_scopes",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 132,
+          "unused_bytes": 3951
+        },
+        {
+          "name": "observations",
+          "table": "observations",
+          "kind": "table",
+          "pages": 16053,
+          "bytes": 65753088,
+          "payload_bytes": 58663110,
+          "unused_bytes": 5826935
+        },
+        {
+          "name": "observations_expiry_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 2283,
+          "bytes": 9351168,
+          "payload_bytes": 7748505,
+          "unused_bytes": 1142971
+        },
+        {
+          "name": "observations_kind_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 5551,
+          "bytes": 22736896,
+          "payload_bytes": 10774605,
+          "unused_bytes": 11463383
+        },
+        {
+          "name": "observations_scope_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 5344,
+          "bytes": 21889024,
+          "payload_bytes": 10342305,
+          "unused_bytes": 11050295
+        },
+        {
+          "name": "observations_sensor_time_idx",
+          "table": "observations",
+          "kind": "index",
+          "pages": 5498,
+          "bytes": 22519808,
+          "payload_bytes": 10486405,
+          "unused_bytes": 11535131
+        },
+        {
+          "name": "resolver_configurations",
+          "table": "resolver_configurations",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sensors",
+          "table": "sensors",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 81,
+          "unused_bytes": 4003
+        },
+        {
+          "name": "sensors_scope_idx",
+          "table": "sensors",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 43,
+          "unused_bytes": 4042
+        },
+        {
+          "name": "sqlite_autoindex_audit_events_1",
+          "table": "audit_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_coverage_samples_1",
+          "table": "coverage_samples",
+          "kind": "index",
+          "pages": 21,
+          "bytes": 86016,
+          "payload_bytes": 70481,
+          "unused_bytes": 10964
+        },
+        {
+          "name": "sqlite_autoindex_device_claim_links_1",
+          "table": "device_claim_links",
+          "kind": "index",
+          "pages": 3863,
+          "bytes": 15822848,
+          "payload_bytes": 13224305,
+          "unused_bytes": 1687591
+        },
+        {
+          "name": "sqlite_autoindex_devices_1",
+          "table": "devices",
+          "kind": "index",
+          "pages": 3,
+          "bytes": 12288,
+          "payload_bytes": 4599,
+          "unused_bytes": 7357
+        },
+        {
+          "name": "sqlite_autoindex_findings_1",
+          "table": "findings",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_1",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_2",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_https_configurations_3",
+          "table": "https_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_identity_claims_1",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 4244,
+          "bytes": 17383424,
+          "payload_bytes": 14521205,
+          "unused_bytes": 1946695
+        },
+        {
+          "name": "sqlite_autoindex_identity_claims_2",
+          "table": "identity_claims",
+          "kind": "index",
+          "pages": 5533,
+          "bytes": 22663168,
+          "payload_bytes": 18858615,
+          "unused_bytes": 2873561
+        },
+        {
+          "name": "sqlite_autoindex_network_scopes_1",
+          "table": "network_scopes",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 20,
+          "unused_bytes": 4065
+        },
+        {
+          "name": "sqlite_autoindex_observations_1",
+          "table": "observations",
+          "kind": "index",
+          "pages": 1892,
+          "bytes": 7749632,
+          "payload_bytes": 6451605,
+          "unused_bytes": 843027
+        },
+        {
+          "name": "sqlite_autoindex_observations_2",
+          "table": "observations",
+          "kind": "index",
+          "pages": 3298,
+          "bytes": 13508608,
+          "payload_bytes": 11495105,
+          "unused_bytes": 1541631
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_1",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_2",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_resolver_configurations_3",
+          "table": "resolver_configurations",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_autoindex_sensors_1",
+          "table": "sensors",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 21,
+          "unused_bytes": 4064
+        },
+        {
+          "name": "sqlite_autoindex_storage_events_1",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "sqlite_schema",
+          "table": "sqlite_schema",
+          "kind": "table",
+          "pages": 6,
+          "bytes": 24576,
+          "payload_bytes": 15473,
+          "unused_bytes": 8654
+        },
+        {
+          "name": "storage_events",
+          "table": "storage_events",
+          "kind": "table",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "storage_events_expiry_idx",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        },
+        {
+          "name": "storage_events_time_idx",
+          "table": "storage_events",
+          "kind": "index",
+          "pages": 1,
+          "bytes": 4096,
+          "payload_bytes": 0,
+          "unused_bytes": 4088
+        }
+      ]
+    }
+  }
+}

@@ -21,21 +21,23 @@ import (
 const storageWorkloadDevices = 100
 
 type storageWorkloadReport struct {
-	SchemaVersion             int    `json:"schema_version"`
-	Workload                  string `json:"workload"`
-	OS                        string `json:"os"`
-	Architecture              string `json:"architecture"`
-	GoVersion                 string `json:"go_version"`
-	SimulatedMinutes          int    `json:"simulated_minutes"`
-	CollectionIntervalSeconds int    `json:"collection_interval_seconds"`
-	Devices                   int    `json:"devices"`
-	NewObservations           int64  `json:"new_observations"`
-	DatabaseBytesBefore       int64  `json:"database_bytes_before"`
-	DatabaseBytesAfter        int64  `json:"database_bytes_after"`
-	DatabaseGrowthBytes       int64  `json:"database_growth_bytes"`
-	WallElapsedMilliseconds   int64  `json:"wall_elapsed_ms"`
-	DailyTargetBytes          int64  `json:"daily_target_bytes"`
-	TargetComparison          string `json:"target_comparison"`
+	SchemaVersion             int               `json:"schema_version"`
+	Workload                  string            `json:"workload"`
+	OS                        string            `json:"os"`
+	Architecture              string            `json:"architecture"`
+	GoVersion                 string            `json:"go_version"`
+	SimulatedMinutes          int               `json:"simulated_minutes"`
+	CollectionIntervalSeconds int               `json:"collection_interval_seconds"`
+	Devices                   int               `json:"devices"`
+	NewObservations           int64             `json:"new_observations"`
+	DatabaseBytesBefore       int64             `json:"database_bytes_before"`
+	DatabaseBytesAfter        int64             `json:"database_bytes_after"`
+	DatabaseGrowthBytes       int64             `json:"database_growth_bytes"`
+	WallElapsedMilliseconds   int64             `json:"wall_elapsed_ms"`
+	DailyTargetBytes          int64             `json:"daily_target_bytes"`
+	TargetComparison          string            `json:"target_comparison"`
+	AllocationBefore          storageAllocation `json:"allocation_before"`
+	AllocationAfter           storageAllocation `json:"allocation_after"`
 }
 
 func TestDeviceWatchStorageWorkloadSmoke(t *testing.T) {
@@ -140,6 +142,7 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 		return info.Size()
 	}
 	before := databaseBytes()
+	allocationBefore := readStorageAllocation(t, filepath.Join(dir, storage.Filename))
 	wallStart := time.Now()
 	for i := 0; i < rounds; i++ {
 		source.snapshot.CapturedAt = start.Add(time.Duration(i) * time.Minute)
@@ -167,6 +170,10 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 		t.Fatal(err)
 	}
 	after := databaseBytes()
+	allocationAfter := readStorageAllocation(t, filepath.Join(dir, storage.Filename))
+	if allocationBefore.PageSize*allocationBefore.PageCount != before || allocationAfter.PageSize*allocationAfter.PageCount != after {
+		t.Fatal("page accounting differs from database file lengths")
+	}
 	if after < before {
 		t.Fatal("database unexpectedly shrank during retained growth workload")
 	}
@@ -186,7 +193,7 @@ func runStorageWorkload(t *testing.T, rounds int) storageWorkloadReport {
 			comparison = "exceeded"
 		}
 	}
-	return storageWorkloadReport{SchemaVersion: 1, Workload: "stable-100-neighbor-storage-v1", OS: runtime.GOOS, Architecture: runtime.GOARCH, GoVersion: runtime.Version(), SimulatedMinutes: rounds, CollectionIntervalSeconds: 60, Devices: storageWorkloadDevices,
+	return storageWorkloadReport{AllocationBefore: allocationBefore, AllocationAfter: allocationAfter, SchemaVersion: 2, Workload: "stable-100-neighbor-storage-v1", OS: runtime.GOOS, Architecture: runtime.GOARCH, GoVersion: runtime.Version(), SimulatedMinutes: rounds, CollectionIntervalSeconds: 60, Devices: storageWorkloadDevices,
 		NewObservations: int64(count - storageWorkloadDevices), DatabaseBytesBefore: before, DatabaseBytesAfter: after, DatabaseGrowthBytes: after - before,
 		WallElapsedMilliseconds: time.Since(wallStart).Milliseconds(), DailyTargetBytes: 25 << 20, TargetComparison: comparison}
 }
