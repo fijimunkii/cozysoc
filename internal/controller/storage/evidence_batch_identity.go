@@ -26,6 +26,7 @@ CREATE TABLE evidence_batch_identity_routes (
  device_id TEXT NOT NULL CHECK(length(device_id) BETWEEN 1 AND 128),
  PRIMARY KEY(group_id,kind,value,device_id)
 ) STRICT, WITHOUT ROWID;
+CREATE INDEX evidence_batch_identity_device ON evidence_batch_identity_routes(device_id,group_id);
 CREATE INDEX evidence_batch_identity_value ON evidence_batch_identity_routes(kind,value,device_id,group_id);
 `
 
