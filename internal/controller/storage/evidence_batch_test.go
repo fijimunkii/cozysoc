@@ -221,7 +221,7 @@ func TestEvidenceBatchV1Golden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := DecodeEvidenceBatch(batchFrameGzip(t, raw))
+	decoded, err := DecodeEvidenceBatch(batchFrameGzip(t, bytes.TrimSuffix(raw, []byte("\n"))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func FuzzDecodeEvidenceBatchFrame(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	f.Add(seed)
+	f.Add(bytes.TrimSuffix(seed, []byte("\n")))
 	f.Add([]byte(`{}`))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) > EvidenceBatchMaxBytes+1 {

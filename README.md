@@ -93,9 +93,7 @@ Foundation architecture, threat-model and integration decisions, the controller/
 
 Release gates remain open: [hardware evidence #56](https://github.com/fijimunkii/cozysoc/issues/56), [installers and updates #28](https://github.com/fijimunkii/cozysoc/issues/28), [lab and performance gates #29](https://github.com/fijimunkii/cozysoc/issues/29), and [privacy/recovery #30](https://github.com/fijimunkii/cozysoc/issues/30). CI exercises macOS 15/26 native labs and Linux controller/frontend/process checks; those scoped results do not promote every architecture candidate to a supported platform.
 
-The [Device Watch storage workload](docs/development/device-watch-storage-workload.md) measured **474.50 MiB** for 100 stable synthetic neighbors over 1,440 one-minute collections—about **19×** the **25 MiB/day** target. Table records alone use 195.36 MiB, so removing indexes cannot meet the target. [Storage reduction #150](https://github.com/fijimunkii/cozysoc/issues/150) remains open.
-
-A [lossless encoding experiment](docs/development/device-watch-compression-feasibility.md) led to a [standalone persistent prototype](docs/development/device-watch-persistent-batch-prototype.md) measuring **22.42 MiB**, with verified reopen and transaction recovery. A [versioned storage codec](docs/development/evidence-batch-codec.md) now preserves independent expiry metadata. Production query integration, retention/quota handling and migration remain required. Production storage is unchanged; these component experiments do not establish CPU/RAM budgets or 24-hour reliability.
+Device Watch currently exceeds the [storage budget](docs/architecture/resource-budgets.md): the reference workload measured **474.50 MiB** against the **25 MiB/day** target. Storage reduction remains a release requirement. See the [workload and evidence](docs/development/device-watch-storage-workload.md) for measurement scope and limitations. Prototype and codec results do not establish production resource budgets or 24-hour reliability.
 
 The first software release line is **v0.1**, the desktop alpha. Later roadmap stages use v0.2–v0.5, with v1.0 reserved for the first broadly ready release.
 
