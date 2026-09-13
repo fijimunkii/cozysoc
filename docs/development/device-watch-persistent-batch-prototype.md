@@ -16,8 +16,11 @@ An append that exceeds the byte limit starts a new batch if the individual recor
 fits. SQLite uses DELETE journaling and FULL synchronization, checked in regression
 coverage. No weaker durability setting is used to speed up the experiment.
 
-The lookup table uses the observation ID as a WITHOUT ROWID primary key and stores
-batch ID, slot and an explicit observation expiry. Point lookup joins one indexed
+The lookup table uses a reversible observation-ID key as a WITHOUT ROWID primary key and stores
+batch ID, slot and an explicit observation expiry. Canonical lowercase `obs.dw.`
+IDs encode their 32 hexadecimal characters as 16 binary bytes plus a tag. Other
+IDs use a different tag followed by the full original string. Decode rejects
+noncanonical encodings, and distinct ID spellings cannot collide. Point lookup joins one indexed
 entry to one batch in a single SQL statement, then decodes at most 100 records and
 1 MiB. It checks that the indexed slot contains the requested original ID and hides
 records at or past the supplied expiry. An identical replay with the same expiry
