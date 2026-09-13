@@ -38,7 +38,25 @@ CREATE TABLE evidence_batch_lookup (
  expires_at_ns INTEGER NOT NULL,
  UNIQUE(batch_id, slot)
 ) STRICT, WITHOUT ROWID;
-CREATE UNIQUE INDEX evidence_batch_replay ON evidence_batch_lookup(source_id, coalesce(source_key, id));
+-- Matching packed source keys already have an entry in the primary-key tree.
+-- Only exceptional keys need a second index. Cross-form uniqueness still holds
+-- at the database boundary for both inserts and updates.
+CREATE UNIQUE INDEX evidence_batch_replay ON evidence_batch_lookup(source_id, source_key)
+ WHERE source_key IS NOT NULL;
+CREATE TRIGGER evidence_batch_replay_insert BEFORE INSERT ON evidence_batch_lookup
+ WHEN (NEW.source_key IS NULL AND EXISTS (
+  SELECT 1 FROM evidence_batch_lookup WHERE source_id=NEW.source_id AND source_key=NEW.id
+ )) OR (NEW.source_key IS NOT NULL AND EXISTS (
+  SELECT 1 FROM evidence_batch_lookup WHERE id=NEW.source_key AND source_id=NEW.source_id AND source_key IS NULL
+ ))
+ BEGIN SELECT RAISE(ABORT, 'duplicate evidence source key'); END;
+CREATE TRIGGER evidence_batch_replay_update BEFORE UPDATE OF id,source_id,source_key ON evidence_batch_lookup
+ WHEN (NEW.source_key IS NULL AND EXISTS (
+  SELECT 1 FROM evidence_batch_lookup WHERE source_id=NEW.source_id AND source_key=NEW.id AND id<>OLD.id
+ )) OR (NEW.source_key IS NOT NULL AND EXISTS (
+  SELECT 1 FROM evidence_batch_lookup WHERE id=NEW.source_key AND source_id=NEW.source_id AND source_key IS NULL AND id<>OLD.id
+ ))
+ BEGIN SELECT RAISE(ABORT, 'duplicate evidence source key'); END;
 `
 
 // packedEvidenceKey is reversible, with disjoint tags for full text and a
@@ -99,7 +117,8 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 	}
 	id, key := packedEvidenceKey(o.ID, "obs.dw."), packedEvidenceKey(o.SourceKey, "")
 	var exists int
-	err = tx.QueryRowContext(ctx, `SELECT 1 FROM evidence_batch_lookup WHERE source_id=? AND coalesce(source_key,id)=?`, source, key).Scan(&exists)
+	err = tx.QueryRowContext(ctx, `SELECT 1 FROM evidence_batch_lookup WHERE id=? AND source_id=? AND source_key IS NULL
+ UNION ALL SELECT 1 FROM evidence_batch_lookup WHERE source_id=? AND source_key=? LIMIT 1`, key, source, source, key).Scan(&exists)
 	if err == nil {
 		return false, nil
 	}
