@@ -155,3 +155,7 @@ evidence representation that preserves original timestamps, provenance, identity
 ambiguity and query behavior. Any proposed reduction still needs migration and
 correctness tests and a completed unchanged-workload rerun. No storage policy
 or budget is changed by this measurement.
+
+The follow-up [compression feasibility experiment](device-watch-compression-feasibility.md)
+compares bounded lossless batch encodings. Its payload-only results do not replace
+the persisted measurements above.
