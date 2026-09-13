@@ -102,3 +102,24 @@ and is excluded from daily evidence. The completed run used the documented
 thirty-minute deadline. Subsequent harness edits shorten only the smoke deadline
 and rename the unused within-budget result label; the recorded source above is
 the exact version that produced this baseline.
+
+## Page attribution (report schema 2)
+
+The workload now records `allocation_before` and `allocation_after` using the
+production SQLite driver's `dbstat` table through a separate read-only connection.
+Snapshots occur after the warm-up collection and after closing the writer. They
+export schema object names and aggregate sizes only, never stored evidence rows.
+
+Each object records its owning table, table/index kind, page count, allocated
+bytes, payload bytes and unused bytes. Automatic primary-key and unique indexes
+are included. Payload is SQLite record payload, including stored index keys; it
+is not a measure of observation JSON alone. Unused bytes are space inside allocated
+pages, not removable whole pages. Page headers and other structural bytes account
+for the remaining difference. Free-list pages are counted separately.
+
+For both snapshots, the harness requires object pages plus free-list pages to equal
+the database page count, and page count times page size to equal the measured file
+length. Grouping object-byte differences by owning table separates each table's
+records from its indexes without attributing free pages to live evidence. This
+accounting measures allocation, not hypothetical savings from deleting an index
+or changing representation. It does not run VACUUM or alter persistence settings.
