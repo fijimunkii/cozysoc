@@ -50,9 +50,9 @@ This is accelerated **storage-volume evidence**, not 24 hours of wall-clock
 operation. The runtime scheduler, real OS cache readers, controller/API loops,
 service manager and UI are not running. Wall elapsed time is recorded only for
 reproducibility; it does not establish CPU, resident-memory, latency or sustained
-operation budgets. A result below 25 MiB would not prove that the whole application
+operation budgets. A result below 30 MiB would not prove that the whole application
 meets its storage target. A component result above it establishes that this
-workload already exceeds the application's 25 MiB/day architecture envelope.
+workload already exceeds the application's 30 MiB/day architecture envelope.
 
 ## Interpreting output
 
@@ -61,7 +61,7 @@ Go toolchain, simulated duration, represented-device and observation counts, bef
 after database lengths, growth, actual elapsed time and the architecture target.
 `target_comparison` is separate from whether the Go measurement test completed:
 
-- `exceeded`: the full workload's growth exceeds 25 MiB.
+- `exceeded`: the full workload's growth exceeds 30 MiB.
 - `within-target-component-only`: this component workload is at or below that envelope;
   this is not a whole-controller budget pass.
 - `not-evaluated-short-run`: a fixture smoke check, not daily evidence.
@@ -72,6 +72,9 @@ interface/address inventory, raw database or household traffic into evidence.
 Do not silently increase the budget or lower the workload to turn a result green.
 Named-hardware CPU/RAM calibration, overload recovery and the at-least-24-hour
 pre-beta sustained run remain separate release gates.
+
+Historical reports below retain their original 25 MiB comparisons. The current
+[architecture target](../architecture/resource-budgets.md) is 30 MiB/day.
 
 ## Recorded baseline: September 12, 2026
 
@@ -87,7 +90,7 @@ with Go 1.27.1.
 | Database after warm-up | 548,864 bytes |
 | Database after measured collections | 498,356,224 bytes |
 | Growth | 497,807,360 bytes (474.746 MiB) |
-| Architecture target | 26,214,400 bytes (25 MiB) |
+| Architecture target at measurement | 26,214,400 bytes (25 MiB) |
 | Target comparison | Exceeded by a factor of 18.99 |
 | New observations / final devices | 144,000 / 100 |
 | Measured wall elapsed time | 1,375,135 ms |
@@ -127,7 +130,7 @@ records the same full workload at source
 from `5b37ab199e2d89d5bee4c1db9ecb5321cb9313d2`, on the same named hardware
 and software settings as the baseline. All 144,000 new observations, 100 final
 devices, ingestion, page accounting and reopen checks passed. Growth was
-497,545,216 bytes (**474.496 MiB**), still **18.98×** the target. The earlier
+497,545,216 bytes (**474.496 MiB**), still **18.98×** the then-current 25 MiB target. The earlier
 474.746 MiB baseline remains a separate run; this is not a production reduction.
 
 The following values are after-minus-before allocated bytes, converted to MiB:
@@ -142,7 +145,7 @@ The following values are after-minus-before allocated bytes, converted to MiB:
 
 Free-list growth was 0 bytes; the listed objects account for all file growth.
 Indexes account for **58.83%** of the growth. Even the
-**195.363 MiB** allocated to table records alone exceeds the 25 MiB envelope.
+**195.363 MiB** allocated to table records alone exceeds even the revised 30 MiB envelope.
 This rules out index removal alone as a sufficient fix; it does not justify
 removing indexes needed by current queries. Device identity links and claims
 are the largest combined allocation, so #150 should evaluate a more compact

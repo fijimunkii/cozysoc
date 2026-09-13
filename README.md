@@ -91,7 +91,7 @@ The canonical [product roadmap](docs/roadmap.md) defines release scope, product 
 
 Installation and updates, hardware/service validation, resource budgets, privacy and recovery remain release requirements. [Issue #1](https://github.com/fijimunkii/cozysoc/issues/1) tracks execution against the documented roadmap.
 
-Device Watch currently exceeds the [storage budget](docs/architecture/resource-budgets.md): the reference workload measured **474.50 MiB** against the **25 MiB/day** target. Storage reduction remains a release requirement. See the [workload and evidence](docs/development/device-watch-storage-workload.md) for measurement scope and limitations. Prototype and codec results do not establish production resource budgets or 24-hour reliability.
+Device Watch currently exceeds the [storage budget](docs/architecture/resource-budgets.md): the reference workload measured **474.50 MiB** against the **30 MiB/day** target. Storage reduction remains a release requirement. See the [workload and evidence](docs/development/device-watch-storage-workload.md) for measurement scope and limitations. Prototype and codec results do not establish production resource budgets or 24-hour reliability.
 
 ## Security and privacy
 

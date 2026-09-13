@@ -2,7 +2,7 @@
 
 Related: #150, following the [persisted storage attribution](device-watch-storage-workload.md).
 This is a test-only representation experiment. Production storage still exceeds
-the 25 MiB/day target; no schema, collection cadence or retention policy changes.
+the current 30 MiB/day target; no schema, collection cadence or retention policy changes.
 
 ## Reproduce
 
@@ -42,7 +42,7 @@ and production identity queries and is not a CPU or latency budget measurement.
 | DefaultCompression | 26.953 | 13.662 |
 | BestCompression | 25.556 | 13.345 |
 
-Plain gzip does not fit even the payload within 25 MiB. The derived-ID candidate
+At the then-current 25 MiB target, plain gzip did not fit even the payload. The derived-ID candidate
 leaves meaningful room for storage overhead, but that room is **unproven** until
 measured with real persistence and required indexes.
 
