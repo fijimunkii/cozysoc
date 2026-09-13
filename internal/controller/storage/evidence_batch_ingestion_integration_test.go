@@ -253,4 +253,29 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 		}
 	}
 
+	after := ""
+	seen := map[string]bool{}
+	for pageNumber := 0; pageNumber < 100; pageNumber++ {
+		page, err := reader.ListDeviceEvidence(context.Background(), storage.DeviceEvidenceQuery{ScopeID: o.ScopeID, AsOf: source.snapshot.CapturedAt, AfterID: after, Limit: 17})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, summary := range page.Devices {
+			if seen[summary.Device.ID] || !deviceIDs[summary.Device.ID] || !summary.LastSeen.Equal(source.snapshot.CapturedAt.Add(-time.Minute)) {
+				t.Fatal("incorrect paginated device", summary)
+			}
+			seen[summary.Device.ID] = true
+		}
+		if page.NextID == "" {
+			break
+		}
+		if len(page.Devices) != 17 || page.NextID != page.Devices[len(page.Devices)-1].Device.ID {
+			t.Fatal("invalid device cursor", page)
+		}
+		after = page.NextID
+	}
+	if len(seen) != 100 {
+		t.Fatal("pagination lost devices", len(seen))
+	}
+
 }

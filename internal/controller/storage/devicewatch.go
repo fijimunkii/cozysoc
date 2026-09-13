@@ -213,34 +213,61 @@ func findRecentDevicesByClaim(ctx context.Context, reader identityQueryReader, n
 	return devices, nil
 }
 
-func (s *Store) ListDeviceEvidence(ctx context.Context, query DeviceEvidenceQuery) (DeviceEvidencePage, error) {
+func normalizeDeviceEvidenceQuery(query DeviceEvidenceQuery, now time.Time) (DeviceEvidenceQuery, error) {
 	if err := validateQueryID("scope id", query.ScopeID); err != nil {
-		return DeviceEvidencePage{}, err
+		return query, err
 	}
 	if query.AsOf.IsZero() {
-		query.AsOf = s.now().UTC()
+		query.AsOf = now
 	} else {
 		query.AsOf = query.AsOf.UTC()
 	}
 	if query.AfterID != "" {
 		if err := validateQueryID("device cursor id", query.AfterID); err != nil {
-			return DeviceEvidencePage{}, err
+			return query, err
 		}
 	}
 	limit, err := normalizeQueryLimit(query.Limit)
 	if err != nil {
-		return DeviceEvidencePage{}, err
+		return query, err
 	}
 	query.Limit = limit
 
-	args := []any{query.ScopeID, unixNanos(query.AsOf), unixNanos(s.now().UTC()), unixNanos(query.AsOf)}
+	if !batchTimeFits(now) || !batchTimeFits(query.AsOf) {
+		return query, ErrEvidenceBatchData
+	}
+	return query, nil
+}
+
+func deviceEvidencePage(devices []DeviceEvidenceSummary, limit int) DeviceEvidencePage {
+	page := DeviceEvidencePage{Devices: devices}
+	if len(devices) > limit {
+		page.Devices = devices[:limit]
+		page.NextID = page.Devices[limit-1].Device.ID
+	}
+	return page
+}
+func (s *Store) ListDeviceEvidence(ctx context.Context, query DeviceEvidenceQuery) (DeviceEvidencePage, error) {
+	now := s.now().UTC()
+	q, err := normalizeDeviceEvidenceQuery(query, now)
+	if err != nil {
+		return DeviceEvidencePage{}, err
+	}
+	devices, err := listLegacyDeviceEvidence(ctx, s.conn, now, q)
+	if err != nil {
+		return DeviceEvidencePage{}, err
+	}
+	return deviceEvidencePage(devices, q.Limit), nil
+}
+func listLegacyDeviceEvidence(ctx context.Context, reader identityQueryReader, now time.Time, query DeviceEvidenceQuery) ([]DeviceEvidenceSummary, error) {
+	args := []any{query.ScopeID, unixNanos(query.AsOf), unixNanos(now), unixNanos(query.AsOf)}
 	cursor := ""
 	if query.AfterID != "" {
 		cursor = " AND d.id > ?"
 		args = append(args, query.AfterID)
 	}
 	args = append(args, query.Limit+1)
-	rows, err := s.conn.QueryContext(ctx, `SELECT d.id, d.user_label, d.created_at_ns, d.retired_at_ns,
+	rows, err := reader.QueryContext(ctx, `SELECT d.id, d.user_label, d.created_at_ns, d.retired_at_ns,
 		MAX(c.observed_at_ns) AS last_seen_ns
 		FROM devices d
 		JOIN device_claim_links l ON l.device_id = d.id
@@ -252,18 +279,18 @@ func (s *Store) ListDeviceEvidence(ctx context.Context, query DeviceEvidenceQuer
 		GROUP BY d.id, d.user_label, d.created_at_ns, d.retired_at_ns
 		ORDER BY d.id ASC LIMIT ?`, args...)
 	if err != nil {
-		return DeviceEvidencePage{}, fmt.Errorf("list device evidence: %w", err)
+		return nil, fmt.Errorf("list device evidence: %w", err)
 	}
 	defer rows.Close()
 
-	page := DeviceEvidencePage{Devices: make([]DeviceEvidenceSummary, 0, query.Limit+1)}
+	devices := make([]DeviceEvidenceSummary, 0, query.Limit+1)
 	for rows.Next() {
 		var summary DeviceEvidenceSummary
 		var userLabel sql.NullString
 		var createdAt, lastSeen int64
 		var retiredAt sql.NullInt64
 		if err := rows.Scan(&summary.Device.ID, &userLabel, &createdAt, &retiredAt, &lastSeen); err != nil {
-			return DeviceEvidencePage{}, fmt.Errorf("scan device evidence: %w", err)
+			return nil, fmt.Errorf("scan device evidence: %w", err)
 		}
 		if userLabel.Valid {
 			summary.Device.UserLabel = userLabel.String
@@ -275,16 +302,12 @@ func (s *Store) ListDeviceEvidence(ctx context.Context, query DeviceEvidenceQuer
 		}
 		summary.FirstSeen = summary.Device.CreatedAt
 		summary.LastSeen = time.Unix(0, lastSeen).UTC()
-		page.Devices = append(page.Devices, summary)
+		devices = append(devices, summary)
 	}
 	if err := rows.Err(); err != nil {
-		return DeviceEvidencePage{}, fmt.Errorf("iterate device evidence: %w", err)
+		return nil, fmt.Errorf("iterate device evidence: %w", err)
 	}
-	if len(page.Devices) > query.Limit {
-		page.Devices = page.Devices[:query.Limit]
-		page.NextID = page.Devices[len(page.Devices)-1].Device.ID
-	}
-	return page, nil
+	return devices, nil
 }
 
 func scanDevice(rows *sql.Rows) (domain.Device, error) {
