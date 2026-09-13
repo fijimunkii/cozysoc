@@ -157,3 +157,46 @@ Further compaction solely to meet 25 MiB is no longer required. The next step is
 production query, lifecycle and migration integration, preserving bounded queries,
 exact identity, foreign keys and pruning, followed by the full controller workload.
 Live controller storage is unchanged and #150 remains open.
+
+## Identity routing and real reconciliation queries: September 13, 2026
+
+The [identity-query result](evidence/device-watch-batch-identity-2026-09-13.json)
+records source `1ddb3ccfd0ed8e182df2b21a1b1cc2eeb822d64a` on the same Apple M4
+Mac16,13, macOS 26.6.2, APFS, Go 1.27.1 and SQLite 3.53.4 configuration. The
+1,440 measured collections now use the actual mixed legacy/batch identity reader
+and reconciliation planner in each bundle's transaction. There is no in-memory
+continuity substitute. All evidence, lookup, routing, bounds and reopen checks
+passed, with exactly 100 persisted devices.
+
+| Measurement | Result |
+| --- | ---: |
+| Database after warm-up | 462,848 bytes |
+| Final database | 30,527,488 bytes |
+| Daily growth | **30,064,640 bytes / 28.672 MiB** |
+| Current daily target | 31,457,280 bytes / 30 MiB |
+| Remaining margin | **1,392,640 bytes / 1.328 MiB** |
+| Reopened observations, including warm-up | 144,100 |
+| Reopened claims / links | 288,200 / 288,200 |
+| Persisted devices / coverage samples | 100 / 1,441 |
+| Write and verification elapsed time | 777,724 ms |
+
+Growth includes 17.121 MiB of batch pages, 5.844 MiB of observation lookup,
+4.094 MiB of batch/slot uniqueness, 1.543 MiB of coverage and 0.070 MiB of batch
+indexes. The identity dictionaries and their indexes occupy 98,304 bytes already
+established by the unchanged warm-up; they add no growth for the stable keys in
+this workload. Those initial pages are present in both allocation snapshots.
+Changing identity keys can add dictionaries and is covered by correctness tests,
+not by this stable-workload growth result.
+
+The `sha256-sorted-record-sha256-v1` digest is
+`bf2fae4d2cb16e3429444a28def3c45b663b95332b9119078475d539a640ae51`.
+It covers every original record and payload, rejecting duplicate observation IDs.
+It is not comparable with earlier insertion-order digests or runs with different
+independently assigned expiry values.
+
+This component now fits the revised budget with reconciliation identity queries.
+It does not activate live batch storage or establish a whole-controller pass.
+History/detail/activity readers, replay-before-planning ingestion, complete
+foreign-key and quota/lifecycle behavior, migration/rollback and the full controller
+workload remain required. The live 474.50 MiB result and separate CPU/RAM and
+sustained-run gates remain unchanged.
