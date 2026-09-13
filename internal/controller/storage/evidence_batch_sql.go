@@ -23,12 +23,17 @@ CREATE TABLE evidence_batch_sources (
 CREATE TABLE evidence_batches (
  id INTEGER PRIMARY KEY,
  source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
+ identity_group INTEGER NOT NULL REFERENCES evidence_batch_identity_groups(id),
  entries INTEGER NOT NULL CHECK(entries BETWEEN 1 AND 100),
  next_expiry_ns INTEGER NOT NULL,
+ first_claim_ns INTEGER NOT NULL DEFAULT 0,
+ last_claim_ns INTEGER NOT NULL DEFAULT 0,
+ last_claim_expiry_ns INTEGER NOT NULL DEFAULT 0,
  data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 1048576)
 ) STRICT;
 CREATE INDEX evidence_batches_expiry ON evidence_batches(next_expiry_ns, id);
-CREATE INDEX evidence_batches_source ON evidence_batches(source_id, id DESC);
+CREATE INDEX evidence_batches_source ON evidence_batches(source_id, identity_group, id DESC);
+CREATE INDEX evidence_batches_identity_group ON evidence_batches(identity_group,id);
 CREATE TABLE evidence_batch_lookup (
  id BLOB PRIMARY KEY CHECK(length(id) BETWEEN 2 AND 129),
  source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
@@ -57,7 +62,7 @@ CREATE TRIGGER evidence_batch_replay_update BEFORE UPDATE OF id,source_id,source
   SELECT 1 FROM evidence_batch_lookup WHERE id=NEW.source_key AND source_id=NEW.source_id AND source_key IS NULL AND id<>OLD.id
  ))
  BEGIN SELECT RAISE(ABORT, 'duplicate evidence source key'); END;
-`
+` + evidenceBatchIdentitySchema
 
 // packedEvidenceKey is reversible, with disjoint tags for full text and a
 // canonical 16-byte digest. It never hashes arbitrary identifiers/source keys.
@@ -93,6 +98,9 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 		return false, err
 	}
 	if err := validateCompleteBatchBundle(r); err != nil {
+		return false, err
+	}
+	if err := validateEvidenceBatchClaimTimes([]EvidenceBatchRecord{r}); err != nil {
 		return false, err
 	}
 	o := r.Observation
@@ -133,15 +141,20 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 	if !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
+	identityGroup, err := ensureEvidenceBatchIdentityGroup(ctx, tx, source, r)
+	if err != nil {
+		return false, err
+	}
 	var batch int64
 	var count int
 	var nextExpiry int64
 	var data []byte
-	err = tx.QueryRowContext(ctx, `SELECT id,entries,next_expiry_ns,CASE WHEN length(data)<=? THEN data ELSE NULL END FROM evidence_batches WHERE source_id=? ORDER BY id DESC LIMIT 1`, EvidenceBatchMaxBytes, source).Scan(&batch, &count, &nextExpiry, &data)
+	err = tx.QueryRowContext(ctx, `SELECT id,entries,next_expiry_ns,CASE WHEN length(data)<=? THEN data ELSE NULL END FROM evidence_batches WHERE source_id=? AND identity_group=? ORDER BY id DESC LIMIT 1`, EvidenceBatchMaxBytes, source, identityGroup).Scan(&batch, &count, &nextExpiry, &data)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
 	slot := 0
+	combinedRecords := []EvidenceBatchRecord{r}
 	if err == nil {
 		records, decodeErr := DecodeEvidenceBatch(data)
 		if decodeErr != nil {
@@ -155,10 +168,20 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 				return false, ErrEvidenceBatchData
 			}
 		}
+		if err := validateEvidenceBatchClaimBounds(ctx, tx, batch, records); err != nil {
+			return false, err
+		}
+		if err := validateEvidenceBatchLookups(ctx, tx, batch, source, records); err != nil {
+			return false, err
+		}
+		if err := validateEvidenceBatchIdentityGroup(ctx, tx, identityGroup, source, records); err != nil {
+			return false, err
+		}
 		if count < EvidenceBatchMaxRecords {
 			combined, encodeErr := EncodeEvidenceBatch(append(records, r))
 			if encodeErr == nil {
 				data, slot = combined, count
+				combinedRecords = append(records, r)
 				nextExpiry = nextEvidenceBatchExpiry(append(records, r))
 			} else if !errors.Is(encodeErr, ErrEvidenceBatchLimit) {
 				return false, encodeErr
@@ -166,7 +189,7 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 		}
 	}
 	if slot == 0 {
-		result, err := tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,entries,next_expiry_ns,data) VALUES(?,1,?,?)`, source, nextEvidenceBatchExpiry([]EvidenceBatchRecord{r}), single)
+		result, err := tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,identity_group,entries,next_expiry_ns,data) VALUES(?,?,1,?,?)`, source, identityGroup, nextEvidenceBatchExpiry([]EvidenceBatchRecord{r}), single)
 		if err != nil {
 			return false, err
 		}
@@ -175,6 +198,9 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 			return false, err
 		}
 	} else if _, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,next_expiry_ns=?,data=? WHERE id=?`, slot+1, nextExpiry, data, batch); err != nil {
+		return false, err
+	}
+	if err := writeEvidenceBatchClaimBounds(ctx, tx, batch, combinedRecords); err != nil {
 		return false, err
 	}
 	var storedKey any = key

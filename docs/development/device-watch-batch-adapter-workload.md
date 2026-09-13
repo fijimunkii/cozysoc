@@ -2,7 +2,7 @@
 
 Related: #150. This workload measures the reserved SQL batch adapter and storage
 codec with real Device Watch evidence, device rows and coverage samples. It is a
-component measurement before identity-query integration. Live persistence and
+component measurement with reconciliation identity queries. Live persistence and
 migrations do not use the adapter, and this workload cannot establish the full
 controller's storage budget.
 
@@ -22,10 +22,11 @@ workload does not read real caches or send traffic. It has a thirty-minute
 internal deadline and creates and removes its own private database.
 
 The real collector constructs observations and coverage samples. The real
-reconciler constructs claims, links and devices, using a stable in-memory MAC
-continuity fixture in place of production identity queries. Devices and coverage
-use the existing `Store`; complete observation/claim/link bundles use the actual
-reserved adapter, committing each record and its lookup in one transaction.
+reconciliation planner constructs claims, links and devices using the combined
+legacy/batch identity reader in the same transaction that writes each bundle, its
+lookup and any new device. Coverage uses the existing `Store`. This fixture uses
+unique source keys; production replay-before-planning orchestration remains an
+integration requirement.
 A test-only bridge avoids an import cycle; it does not expose a production API or
 activate the schema in `Store.Open`.
 
@@ -40,7 +41,11 @@ The dedicated writer verifies DELETE journaling, FULL synchronization, foreign
 keys, 4 KiB pages and the default 1 GiB page quota. The measurement does not vacuum,
 reduce retention, weaken durability or drop observations. After closing both
 writers, it reopens read-only, verifies every batch and lookup slot, and compares
-a digest of all original evidence and payload bytes. It verifies all 144,100
+a digest of all original evidence and payload bytes. Grouping changes physical
+iteration order, so current reports use `sha256-sorted-record-sha256-v1`: reject
+duplicate observation IDs, hash each complete original record and raw payload,
+then hash those fixed-length digests in observation-ID order. Historical reports
+retain their earlier insertion-order digest and cannot be compared to this format. It verifies all 144,100
 observations (including warm-up), 288,200 claims, 288,200 links, 100 devices and
 1,441 coverage samples. Page attribution includes every table, index and free
 page and must reconcile with the complete logical file size.
@@ -54,8 +59,8 @@ runs do not establish a daily result.
 
 Included costs are the production codec, independent stored expiry metadata,
 batch/source/lookup tables and indexes, device and coverage persistence, and
-reserved-schema overhead. Missing costs include production identity/history query
-indexes, ingestion queue integration, controller lifecycle, retention audit and
+reserved-schema overhead and reconciliation identity routing/queries. Missing costs
+include history/detail/activity query indexes, ingestion queue integration, controller lifecycle, retention audit and
 quota recovery integration, and migration/rollback. The full unchanged controller
 workload must be repeated after those are implemented. Temporary journal peaks,
 filesystem metadata, logs and the UI are outside this logical-file measurement.
@@ -65,6 +70,10 @@ latency, scheduling or hardware-support result. Record exact source, hardware,
 OS, filesystem and toolchain with published results. Export only sanitized
 counts, digests and schema allocation; never a raw database, hardware serial,
 hostname or household inventory. Budget revisions require a recorded decision; keep the reference workload unchanged.
+
+The recorded results below precede identity routing and used an in-memory continuity
+fixture. They are historical component measurements; remeasure the current adapter
+before using them as its footprint. Historical targets and digests are unchanged.
 
 ## Recorded result: September 13, 2026
 
