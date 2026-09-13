@@ -123,6 +123,7 @@ type Ingestor struct {
 	submitters sync.WaitGroup
 	closeOnce  sync.Once
 	done       chan struct{}
+	closeErr   error // published by closing done after the owned sink is closed
 
 	episodeMu      sync.Mutex
 	overflowActive bool
@@ -248,7 +249,7 @@ func (i *Ingestor) Close(ctx context.Context) error {
 	})
 	select {
 	case <-i.done:
-		return nil
+		return i.closeErr
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -308,6 +309,9 @@ func (i *Ingestor) beginSubmit() bool {
 
 func (i *Ingestor) run() {
 	defer func() {
+		if owned, ok := i.sink.(interface{ closeIngestionSink() error }); ok {
+			i.closeErr = owned.closeIngestionSink()
+		}
 		i.stateMu.Lock()
 		i.closed = true
 		i.stateMu.Unlock()
@@ -364,6 +368,13 @@ func (i *Ingestor) process(item ingestionItem) (IngestionResult, error) {
 	result := IngestionResult{Kind: item.kind, Inserted: true}
 	switch item.kind {
 	case IngestionObservation:
+		if atomic, ok := i.sink.(interface {
+			ingestObservation(context.Context, domain.Observation, *domain.IngestionCheckpoint) (bool, error)
+		}); ok {
+			inserted, err := atomic.ingestObservation(ctx, *item.observation, item.checkpoint)
+			result.Inserted = inserted
+			return result, err
+		}
 		inserted, err := i.sink.InsertObservation(ctx, *item.observation)
 		result.Inserted = inserted
 		if err != nil {

@@ -196,14 +196,18 @@ func (s *Store) CreateSensor(ctx context.Context, sensor domain.Sensor) error {
 }
 
 func (s *Store) InsertObservation(ctx context.Context, observation domain.Observation) (bool, error) {
+	return insertObservation(ctx, s.conn, observation, s.expiry)
+}
+
+func insertObservation(ctx context.Context, writer identityQueryWriter, observation domain.Observation, expiry func(domain.RetentionClass) (int64, error)) (bool, error) {
 	if err := domain.ValidateObservation(observation); err != nil {
 		return false, err
 	}
-	expiresAt, err := s.expiry(observation.Retention)
+	expiresAt, err := expiry(observation.Retention)
 	if err != nil {
 		return false, err
 	}
-	result, err := s.conn.ExecContext(ctx, `INSERT INTO observations
+	result, err := writer.ExecContext(ctx, `INSERT INTO observations
 		(id, scope_id, sensor_id, kind, source_stream, source_key, source_event_id, source_time_ns,
 		 ingested_at_ns, schema_version, confidence, attribution, payload, retention_class, expires_at_ns)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -330,10 +334,14 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event domain.AuditEvent) e
 }
 
 func (s *Store) SaveCheckpoint(ctx context.Context, checkpoint domain.IngestionCheckpoint) error {
+	return saveCheckpoint(ctx, s.conn, checkpoint)
+}
+
+func saveCheckpoint(ctx context.Context, writer identityQueryWriter, checkpoint domain.IngestionCheckpoint) error {
 	if err := domain.ValidateCheckpoint(checkpoint); err != nil {
 		return err
 	}
-	_, err := s.conn.ExecContext(ctx, `INSERT INTO ingestion_checkpoints
+	_, err := writer.ExecContext(ctx, `INSERT INTO ingestion_checkpoints
 		(sensor_id, stream_id, cursor, updated_at_ns) VALUES (?, ?, ?, ?)
 		ON CONFLICT(sensor_id, stream_id) DO UPDATE SET cursor = excluded.cursor, updated_at_ns = excluded.updated_at_ns`,
 		checkpoint.SensorID, checkpoint.StreamID, checkpoint.Cursor, unixNanos(checkpoint.UpdatedAt))

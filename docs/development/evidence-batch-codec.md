@@ -147,9 +147,10 @@ Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys and
-query indexes, pagination, quota recovery, connection lifecycle,
-schema migration or rollback compatibility. They cannot be activated until those
-contracts and the legacy-record fallback are implemented and tested. Re-measure
+history/detail/activity readers, pagination, retention-driven quota recovery,
+schema migration or rollback compatibility. The queue owner below supplies a
+private configured connection and legacy replay dispatch. Live activation still
+requires the remaining contracts to be implemented and tested. Re-measure
 the unchanged full controller workload, including all database pages and
 expiry/index overhead, before claiming #150's storage target. CPU/RAM and sustained-run gates remain open.
 
@@ -285,6 +286,50 @@ Repair never updates the original observation, commits, or acknowledges ingestio
 The owner must roll back failures and commit before acknowledgment. Tests cover
 changed retry payloads/IDs/times, partial noncanonical claim IDs, preserved original
 payload/expiry, owner-only commit, late-write rollback and retry, expired/missing
-originals, wrong scope and corrupt or oversized stored data. Live queue/connection
-integration, migration and the remaining batch-reader/foreign-key/lifecycle gates
-are still required before activation.
+originals, wrong scope and corrupt or oversized stored data. The queue owner below
+dispatches repair in its transaction. Runtime wiring, migration and the remaining
+batch-reader/foreign-key/lifecycle gates are still required before activation.
+
+## Queue and connection ownership
+
+`NewEvidenceBatchIngestor` connects the existing bounded queue to the stager and
+trusted producer repair adapter. It requires the reserved schema and does not
+install it. The live runtime still uses the legacy ingestor until the remaining
+reader, referential-integrity, retention/lifecycle and migration gates are ready.
+A runtime using this constructor must use `StorageSink` without an outer
+`ReconcilingSink`: successful observation receipts already include reconciliation.
+
+The queue owns a separate pinned SQLite connection opened against the existing
+literal file path (`mode=rw`). It applies the same rollback journal, FULL
+synchronous durability, foreign keys, busy timeout, trusted-schema setting and
+page quota as the parent store. Applying the quota to this connection prevents
+new writes from bypassing the configured database size limit. Parent autocommit
+writers and history snapshots cannot join its transactions.
+
+Each Device Watch observation runs replay validation, planning or legacy repair,
+evidence/index/device writes and any checkpoint update in one transaction. Only
+successful commit produces a successful receipt. Replay still advances its
+checkpoint, without changing original evidence or claiming a new insertion.
+Errors roll back all staged work and retain the existing ingestion failure and
+storage-full health reporting. Other observation kinds keep their legacy SQL
+representation, with replay/conflict checks across both formats and a checkpoint
+in the same transaction. Changing the kind on a retry cannot create duplicate
+evidence or bypass legacy Device Watch repair. Other ingestion kinds retain their
+existing SQL behavior on the private writer. This does not add automatic batch
+pruning or resolve the remaining mixed-format uniqueness/deletion contracts.
+
+Queue capacity, input copying, submission backpressure, receipt waiting and
+processing deadlines use the existing ingestor. Close rejects new submissions,
+drains accepted work and queued failure events, then closes its private connection
+before reporting completion. A caller's timed-out Close does not interrupt that
+drain or leak the writer; callers must close the ingestor before its parent store.
+
+Tests cover private connection settings and closure, schema/adapter prerequisites,
+queue overflow, failed and timed-out waits, draining, planner and checkpoint
+failure rollback, failed commit followed by retry, SQLite quota exhaustion and
+recovery, batch and legacy replay, original evidence and checkpoint preservation,
+other observation fallback and reopened committed rows. A four-collection,
+100-device collector run through `StorageSink` verifies 400 original observations,
+800 claims, 800 links, 100 devices and four coverage samples, with no ingestion
+losses. This is a short integration check, not a new daily footprint measurement or
+a complete controller resource-budget result.
