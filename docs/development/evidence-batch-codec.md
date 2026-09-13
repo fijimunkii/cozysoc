@@ -1,8 +1,8 @@
 # Evidence batch storage codec
 
 Related: #150. `storage.EncodeEvidenceBatch` and `storage.DecodeEvidenceBatch`
-provide the reusable codec for the next storage integration step. They are not
-called by live persistence or history readers yet. No database migration, runtime
+define a bounded format for retained evidence. They are not
+used by live persistence or history readers. No database migration, runtime
 flag or storage-policy change is introduced. The [standalone prototype](device-watch-persistent-batch-prototype.md)
 remains separate evidence; its 22.42 MiB result does not measure this codec with
 production expiry metadata or establish the controller's budget.

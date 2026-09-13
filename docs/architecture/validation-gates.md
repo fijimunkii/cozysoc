@@ -1,8 +1,8 @@
 # Architecture validation gates
 
-Architecture documentation is not proof that the proposed platform and integration paths work. This file maps the remaining **Foundation** evidence needed to close issue #3 and finalize the implementation contract for v0.1.
+Architecture documentation is not proof that the proposed platform and integration paths work. This file defines the validation evidence required before architectural candidates become supported product paths. Release requirements are defined in the [product roadmap](../roadmap.md).
 
-## Issue #4 — threat model
+## Threat-model validation
 
 **Baseline result:** [`docs/security/threat-model.md`](../security/threat-model.md) and [`docs/security/security-requirements.md`](../security/security-requirements.md).
 
@@ -19,9 +19,9 @@ The threat model evaluates the architecture boundaries from the system model and
 - user-approved network scope → active discovery/assessment confinement; and
 - findings → network actions as a deliberately separated authority boundary.
 
-### Architecture consequences from #4
+### Required architecture properties
 
-The baseline threat model **supports the existing architecture** rather than forcing a redesign, provided implementation preserves its narrow boundaries. In particular:
+Implementation must preserve the threat model's narrow authority boundaries:
 
 - the renderer cannot receive generic system/process authority;
 - local control cannot become an ambient unauthenticated HTTP endpoint;
@@ -33,7 +33,7 @@ The baseline threat model **supports the existing architecture** rather than for
 
 A future implementation that cannot satisfy these requirements triggers an architecture/security review rather than silently weakening the model.
 
-## Issue #5 — real feasibility experiments
+## Platform and hardware validation
 
 **Harness result:** [`experiments/foundation/feasibility/`](../../experiments/foundation/feasibility/). Real-machine evidence remains tracked by #56.
 
@@ -66,7 +66,7 @@ Prove with owned lab traffic:
 
 On real supported Linux hardware, record exact adapter USB ID, chipset/revision, firmware, kernel/driver, bands/channels, permissions, monitor-mode behavior, unplug/replug, and cleanup.
 
-### Security evidence required by #4
+### Required security evidence
 
 The #5 experiments must additionally demonstrate that the selected desktop/service/sensor paths can meet the applicable security requirements without broad privilege shortcuts, especially SEC-002–SEC-010, SEC-022, SEC-027–SEC-029, SEC-034, and SEC-035.
 
@@ -74,7 +74,7 @@ The #5 experiments must additionally demonstrate that the selected desktop/servi
 
 Revisit a Proposed ADR if the reference platform cannot meet independent service lifetime, security boundary, or resource targets without substantially increasing privilege/complexity.
 
-## Issue #6 — integration and redistribution evaluation
+## Integration and redistribution validation
 
 **Baseline result:** [`docs/integrations/evaluation-2026-09-08.md`](../integrations/evaluation-2026-09-08.md) and [ADR 0007](../adr/0007-integration-engine-strategy.md).
 
@@ -104,7 +104,7 @@ Every implemented integration must still establish:
 - license/distribution review for the exact binaries, drivers, feeds, rules, and assets actually shipped or installed; and
 - uninstall/recovery ownership boundaries.
 
-### Security evidence required by #4
+### Required security evidence
 
 Each implementation must document how it satisfies or constrains applicable requirements for hostile input, endpoint identity/SSRF, TLS, external ownership, secret handling, artifact provenance, resource bounds, and untrusted-engine isolation, notably SEC-007–SEC-008, SEC-011–SEC-014, SEC-019, SEC-022, and SEC-028–SEC-029.
 
@@ -123,13 +123,10 @@ A Proposed architecture ADR becomes Accepted only when:
 5. applicable threat-model requirements have concrete implementation/test evidence; and
 6. no unresolved high-impact issue is hidden behind a support claim.
 
-## Closure rule for issue #3
+## Support decision rule
 
-After the integration-strategy baseline is merged, issue #3 remains open only for the release-driving real-machine evidence in #5/#56 needed to accept or revise the Proposed shell/reference-platform decisions.
-
-Close #3 only when that evidence is sufficient to either:
-
-- accept the Proposed shell/platform/packaging decisions; or
-- revise them and merge the superseding architecture changes.
-
-Closing #3 marks the Foundation architecture/security/integration contract as ready for v0.1 implementation; it is not itself a software release.
+Shell, platform and packaging decisions require sufficient real-machine evidence
+to accept the proposed path or revise it through a superseding architecture
+decision. An accepted implementation contract is not itself a software release.
+The [product roadmap](../roadmap.md) defines the release gates; the support matrix
+must state the exact validated combinations and remaining limitations.

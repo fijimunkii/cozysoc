@@ -80,10 +80,10 @@ web → authenticated UDS → controller → OS metadata before and after enroll
 It checks that Device Watch stays off, monitoring history remains empty, and
 closing web leaves the controller alive.
 
-This is not real-browser accessibility certification, a macOS runtime test, or a
-physical network test. The independent accessibility branch and hardware gates
-remain separate. Active checks, durable quality history, and corroborated
-diagnosis remain future work with independent scope, privacy, and traffic limits.
+These fixtures do not certify real-browser accessibility or physical network
+behavior; those require separate validation. [Active checks](network-quality.md),
+[retained history](gateway-history.md) and [retained diagnosis](retained-quality-diagnosis.md)
+have independent scope, privacy and traffic-limit contracts.
 
 Implementation references: [React effect cleanup](https://react.dev/learn/synchronizing-with-effects)
 and [monotonic time](https://www.w3.org/TR/hr-time-2/#monotonic-clock).

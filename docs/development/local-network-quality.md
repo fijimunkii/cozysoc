@@ -67,7 +67,7 @@ and do not create audits, observations, or coverage samples. The transient
 evidence ID is not a retrievable history record. Prefix values, host addresses,
 MAC addresses, raw OS flags, and raw source errors are absent from the response.
 
-## Validation and next slice
+## Validation and scope
 
 Synthetic tests cover administrative state, binding changes, duplicate-prefix
 addresses, link-local-only limits, denied permissions, source failures, malformed
@@ -75,10 +75,11 @@ or oversized context, canceled reads, and invalid sample timing. UDS tests cover
 authentication-before-handler, caller-input rejection, deadlines, and bounded
 errors. Linux process E2E exercises the actual CLI/UDS/controller/OS path before
 and after enrollment, confirms Device Watch stays off, and checks that reads do
-not create monitoring history. The normal Darwin build remains compilation
-coverage, not a macOS runtime, sleep/resume, carrier, or hardware certification.
+not create monitoring history. These tests do not certify physical NIC behavior, sleep/resume or carrier diagnosis.
 
-The [shared frontend panel](browser-network-quality.md) now presents this read
-with explicit source, freshness, and unknown-state copy. Separately authorized active gateway/resolver/external checks,
-bounded durable history, corroborated diagnosis, and their privacy/routing/rate
-controls remain future work. There is no automatic network configuration change.
+The [shared frontend panel](browser-network-quality.md) presents this read
+with explicit source, freshness and unknown-state copy. Active checks and retained
+comparisons are separate contracts: [gateway consent](gateway-consent-session.md),
+[resolver consent](resolver-consent.md), [HTTPS consent](https-consent.md) and
+[retained diagnosis](retained-quality-diagnosis.md). This passive read grants no
+active-check authority and makes no network configuration change.

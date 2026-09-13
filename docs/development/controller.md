@@ -105,9 +105,9 @@ go run ./cmd/cozysoc web --state-dir /tmp/cozysoc-dev --ui-dir ui/dist
 
 `cozysoc web` prints an authenticated loopback URL. Open that exact URL so the browser can exchange its one-time fragment bootstrap for a separate HttpOnly local web-session cookie. The browser session is **not** the controller UDS session secret.
 
-The web mode currently exposes only a narrowly typed, authenticated read-only coverage endpoint. It binds to a literal loopback IP, enforces exact Host/origin rules, has no generic controller method proxy, and does not start, stop, supervise, or own the controller. Stopping the web process leaves `cozysoc serve` running.
+The web mode exposes narrowly typed authenticated read routes and guarded mutation routes; see the [frontend contract](frontend.md). It binds to a literal loopback IP, enforces exact Host/origin rules, has no generic controller method proxy, and does not start, stop, supervise, or own the controller. Stopping the web process leaves `cozysoc serve` running.
 
-`cozysoc dev`, which may orchestrate controller + web together for developer convenience, is intentionally a follow-up and is not production lifecycle evidence.
+`cozysoc dev` orchestrates controller and web for development, reusing an existing controller or owning only the temporary controller it starts. It is not production lifecycle evidence.
 
 ## Security boundary
 

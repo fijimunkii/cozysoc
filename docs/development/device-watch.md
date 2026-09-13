@@ -200,14 +200,14 @@ Labels are bounded, trimmed, and reject control characters. A real change and it
 
 The mutation does not grant network, generic capability-lifecycle, process, filesystem, or arbitrary database write authority.
 
-## What remains in #11
+## Limitations and validation requirements
 
-This work still does not close #11. Remaining work includes:
+The browser provides network selection, enable/disable, device presence, labeling and coverage views. Further work and validation include:
 
-- desktop UI exposure for network selection, enable/disable, device presence, labeling, and coverage/operational detail;
+- packaged desktop-shell support and installed-service lifecycle validation;
 - auditable merge/split correction flows for identity ambiguity;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
 - owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, ingestion lag, and write-pressure/full-volume recovery scenarios.
 
-The shared #12 coverage vocabulary can now represent permission-required state, other observation points, traffic direction gaps, DNS client scope, and wireless hopping/dwell limits. Broader #12 work still requires **real producers** for those capabilities, source-specific permission evidence, aggregation once multiple real observation points exist, and generic frontend presentation. Named-workload calibration for latency/resource thresholds and real low-disk/full-volume recovery behavior on named filesystems/hardware remain #29 lab claims rather than things CI fixtures can certify.
+The shared coverage vocabulary represents permission-required state, other observation points, traffic direction gaps, DNS client scope, and wireless hopping/dwell limits. Support for additional capabilities requires **real producers**, source-specific permission evidence and aggregation across their observation points. Named-workload calibration for latency/resource thresholds and real low-disk/full-volume recovery behavior on named filesystems/hardware remain #29 lab claims rather than things CI fixtures can certify.
