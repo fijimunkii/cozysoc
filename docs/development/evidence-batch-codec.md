@@ -224,3 +224,42 @@ normalized routing, exact-time gaps, independent expiry, mixed-format ambiguity 
 deduplication, scope, closed transactions, corrupt routing/bounds, rollback,
 retention regrouping and cleanup, indexed candidate selection, and work-limit
 failure without a partial identity decision.
+
+## Transactional ingestion staging
+
+`NewEvidenceBatchStager` copies the configured retention policy and accepts the
+trusted controller planner adapter `devicewatch.PlanBatchEvidence`. `Stage` uses
+an exclusively owned caller transaction: it validates sensor/scope authority and
+checks legacy and batch source-key replay and observation-ID conflicts before
+invoking the planner. A missing reserved schema is an integration error.
+
+Batch replay returns an empty record and `false` without invoking the planner,
+reading the clock, assigning new expiry or rewriting data. Expired but unpruned
+observations still suppress insertion. Legacy replay instead returns
+`ErrEvidenceBatchLegacyReplay`: the owner must use the compatibility/repair path
+with the original stored observation. A legacy observation may have been committed
+before reconciliation completed, so acknowledging it as a complete atomic batch
+could silently skip missing claims or links. Live compatibility handling remains
+an activation requirement.
+
+For a new observation, the planner reads the same transaction through the mixed
+identity snapshot. Observation bytes and pointer fields are copied so the planner
+cannot rewrite original evidence. Storage assigns independent write-time expiry
+to the observation and each claim. It validates the complete bounded bundle,
+stages any referenced new device without overwriting existing creation evidence,
+checks that every linked device exists, and appends the bundle and all indexes in
+that transaction. Ambiguity may retain claims without a device or links.
+
+The returned record and inserted flag are provisional. The owner must roll back
+any error and acknowledge only after successful commit. The stager never opens,
+commits or rolls back a transaction and must not use shared `Store.conn`. It does
+not configure connection quota/durability, provide full mixed-format claim/link
+uniqueness or deletion semantics, install migrations or activate the live queue.
+
+Tests cover source replay in both formats, explicit legacy repair signaling,
+unpruned expiry, ID conflicts, sensor/scope separation, missing schema, source-ID
+zero separation, immutable original inputs, copied retention policy, independent
+expiry, invalid plans, absent devices, ambiguity, injected late-write rollback,
+retry and caller-owned commit. The adapter workload smoke test uses the real
+planner through this stager; the recorded daily footprint remains the separately
+identified earlier source measurement.

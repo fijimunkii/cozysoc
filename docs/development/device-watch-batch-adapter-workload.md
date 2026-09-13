@@ -25,8 +25,9 @@ The real collector constructs observations and coverage samples. The real
 reconciliation planner constructs claims, links and devices using the combined
 legacy/batch identity reader in the same transaction that writes each bundle, its
 lookup and any new device. Coverage uses the existing `Store`. This fixture uses
-unique source keys; production replay-before-planning orchestration remains an
-integration requirement.
+unique source keys through `EvidenceBatchStager`; separate regressions cover
+replay-before-planning and failure rollback. Live queue/lifecycle integration and
+legacy replay repair remain requirements.
 A test-only bridge avoids an import cycle; it does not expose a production API or
 activate the schema in `Store.Open`.
 
