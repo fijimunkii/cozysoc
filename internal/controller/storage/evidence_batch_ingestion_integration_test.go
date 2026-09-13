@@ -193,6 +193,7 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 	}
 	defer rows.Close()
 	observations, claims, links := 0, 0, 0
+	deviceIDs := map[string]bool{}
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
@@ -209,6 +210,9 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 			observations++
 			claims += len(record.Claims)
 			links += len(record.Links)
+			for _, link := range record.Links {
+				deviceIDs[link.DeviceID] = true
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -220,4 +224,33 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 	if stats := i.Stats(); stats.Accepted != 404 || stats.Processed != 404 || stats.Failed != 0 || stats.Dropped != 0 {
 		t.Fatal(stats)
 	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	reader, err := storage.NewMixedIdentitySnapshot(tx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := range deviceIDs {
+		detail, err := reader.GetDeviceEvidenceDetail(context.Background(), storage.DeviceEvidenceDetailQuery{ScopeID: o.ScopeID, DeviceID: id, AsOf: source.snapshot.CapturedAt})
+		if err != nil || len(detail.Evidence) != 8 || detail.Truncated || !detail.Summary.LastSeen.Equal(source.snapshot.CapturedAt.Add(-time.Minute)) {
+			t.Fatal(detail, err)
+		}
+		observations := map[string]bool{}
+		for _, item := range detail.Evidence {
+			if item.Observation == nil {
+				t.Fatal("missing retained source")
+			}
+			observations[item.Observation.ID] = true
+		}
+		if len(observations) != 4 {
+			t.Fatal("missing collected observations", len(observations))
+		}
+	}
+
 }

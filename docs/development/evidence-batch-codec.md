@@ -146,8 +146,8 @@ lookups return `sql.ErrNoRows`; corrupt evidence returns no partial record.
 Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
-ownership. These primitives do not yet implement full identity foreign keys and
-history/detail/activity readers, pagination, retention-driven quota recovery,
+ownership. These primitives do not yet implement full identity foreign keys,
+device-list/activity and other history readers, pagination, retention-driven quota recovery,
 schema migration or rollback compatibility. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
@@ -333,3 +333,44 @@ other observation fallback and reopened committed rows. A four-collection,
 800 claims, 800 links, 100 devices and four coverage samples, with no ingestion
 losses. This is a short integration check, not a new daily footprint measurement or
 a complete controller resource-budget result.
+
+## Mixed device detail
+
+`MixedIdentitySnapshot.GetDeviceEvidenceDetail` reads legacy and batch identity
+history in the same caller-owned transaction with a fixed retention clock. It
+keeps the existing device-detail output, scope and retirement rules: original
+claim time and link start must be at or before the requested as-of time, and the
+claim must still be retained at evaluation time. Presence validity ending does
+not erase historical detail. Source observation provenance is included only while
+that original observation remains retained; independently retained claims still
+appear after observation expiry or pruning.
+
+Legacy detail SQL is shared with the live `Store` reader. Results from both formats
+are combined by claim time descending, then claim ID ascending; link ID provides
+a stable tie-break for multiple links to the same claim. The summary uses the
+latest eligible claim and the device's original creation time. One extra row
+establishes truncation. Claim values match legacy normalization, while stored
+batch evidence remains unchanged. Duplicate link IDs among examined eligible
+batch rows or combined candidates return an error; this is not a substitute for
+the remaining global mixed-format uniqueness contract.
+
+A covering `(device_id, group_id)` routing index selects candidate batches without
+creating an index entry per historical claim. Candidates are inspected by newest
+claim bound. Each selected batch is decoded and checked against its source,
+identity dictionary, lookup slots, independent expiry and claim bounds before
+projecting original claims and links. Equal-time candidates are all considered;
+a verified older upper bound can end the scan only when it cannot change the
+requested rows or truncation. At most 100 candidate batches are decoded. Corrupt
+selected evidence, schema/query errors or work-budget exhaustion produce no
+partial detail or false not-found result.
+
+Parity tests compare mixed and all-legacy results across observation times,
+independent expiry boundaries, limits and pruning. Other tests cover retirement,
+staged snapshot state and rollback, closed transactions, corrupt payload/index
+metadata, duplicate selected link IDs, equal-time ordering, bounded work and the
+device routing index. The real queue/collector fixture also verifies four original
+collections and eight claim/link detail rows for each of 100 devices.
+The index changes the reserved schema; previous footprint
+measurements retain their exact source and do not measure this index. Live device
+list/detail/activity wiring, other readers, lifecycle and migration gates remain
+open, as does the unchanged full-controller storage measurement.
