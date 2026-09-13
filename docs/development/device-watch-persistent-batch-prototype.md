@@ -81,3 +81,27 @@ file below 25 MiB would not establish the whole-controller target. Full producti
 query integration, retention/quota behavior, transactional migration and rollback,
 and the unchanged persisted workload from #151/#152 remain necessary. CPU/RAM and
 24-hour sustained-run gates also remain open.
+
+## Completed measurements: September 13, 2026
+
+Both runs used Go 1.27.1 on an Apple M4 Mac16,13 (24 GiB RAM, 10 logical CPUs),
+macOS 26.6.2, darwin/arm64. Both full runs persisted 144,000 records in 1,440 batches, committed one record per
+transaction, and verified every original record and lookup after reopening. Both
+produced the same evidence digest. SQLite page totals match each complete file.
+
+| Prototype lookup encoding | Complete database | Lookup table | Source commit |
+| --- | ---: | ---: | --- |
+| [Original text keys](evidence/device-watch-batch-prototype-text-index-2026-09-13.json) | 27,140,096 bytes (25.883 MiB) | 9,416,704 bytes | `cdcdfffd5e91a697f436f99d16677481cf850ac0` |
+| [Tagged binary keys](evidence/device-watch-batch-prototype-packed-index-2026-09-13.json) | 23,506,944 bytes (22.418 MiB) | 5,783,552 bytes | `487158c582c0cfd0d480daecf07edae70b07d1d7` |
+
+Batch allocation stayed exactly 17,711,104 bytes. Only the lookup representation
+changed between measurements. The completed durations were 340,395 ms and
+334,962 ms respectively, including reopen verification; neither is a controller
+CPU/RAM or latency budget result. Later commits add documentation only.
+
+The refined prototype leaves about 2.58 MiB below 25 MiB **before** the omitted
+production components. Treat this as evidence to continue integration, not a
+whole-controller budget pass or a replacement for the production 474.50 MiB
+baseline. Source-key idempotency, scoped history and identity queries, retention,
+quota recovery and transactional migration must be implemented and measured
+before the representation can replace live storage.
