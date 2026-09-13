@@ -99,8 +99,8 @@ transaction's own staged changes and fail once it is committed or rolled back;
 the reader never owns transaction completion or falls back to another connection.
 
 This is only the legacy half of mixed-history reconciliation. It must not be used
-alone once batch-only claims are written. Batch identity indexes and a combined
-reader remain necessary. Snapshot tests cover staged ambiguity and retirement,
+alone once batch-only claims are written. The combined reader described below adds reserved batch identity routes; it
+remains separate from live activation. Snapshot tests cover staged ambiguity and retirement,
 external read isolation, commit/rollback, cancellation, clock and query validation,
 expiry/time boundaries, scope filtering and planner use of the same transaction.
 
@@ -122,7 +122,7 @@ with foreign keys and FULL synchronous durability enabled.
 Each batch belongs to one sensor/stream and enrolled scope. Appends validate the
 sensor's scope and require a complete observation bundle whose claims and links
 refer to that observation. The codec's broader retained-only shapes remain valid
-encoding, but are not fresh append inputs. The latest partial batch is rewritten
+encoding, but are not fresh append inputs. The latest partial batch with the same identity lookup keys is rewritten
 within the transaction and rolls over at either codec bound. The source-key
 uniqueness contract matches observation ingestion: a replay of the same
 sensor/stream/source key keeps the first evidence and expiry, even if the replay
@@ -185,3 +185,42 @@ cascades against the legacy SQLite tables. It also covers original derived IDs
 after observation deletion, independent expiry boundaries, reopen, appending to a
 pruned batch, lookup compaction, empty batches, bounded selection, cancellation,
 corrupt-index rejection and rollback across multiple partially processed batches.
+
+## Identity routing and combined queries
+
+The reserved adapter groups records by their source and exact normalized set of
+linked `(claim kind, claim value, device ID)` tuples. The sorted routing dictionary
+is stored in full, without lossy hashes; route order and duplicate links do not
+change the key. Records with different lookup keys use separate partial batches.
+Claims, links, observations, original payload bytes and individual expiry values
+remain in the v1 codec. A group is a lookup aid, not a claim of continuous presence.
+Unlinked ambiguous claims remain stored even though they have no device route.
+
+Each batch stores the minimum/maximum original claim observation time and maximum
+claim expiry for candidate selection. These broad bounds never establish an event
+inside a gap or allow one claim to borrow another claim's expiry. Candidate reads
+verify the original batch, routing dictionary and time metadata, then check exact
+claim kind/value, observation time, expiry and device link. They retain the legacy
+retirement rule and do not substitute presence validity for recent continuity.
+
+`NewMixedIdentitySnapshot` combines the legacy reader and reserved batch reader in
+one caller-owned transaction, deduplicates devices, sorts by ID and returns at most
+three candidates. Missing schema and corrupt selected data fail the entire query;
+there is no fallback that silently omits batch history. A query inspects at most
+100 candidate batches, each bounded by the codec limits. Exhaustion returns
+`ErrEvidenceBatchQueryLimit` with no partial candidates, never false absence or
+uniqueness. This work limit is not a measured latency or CPU guarantee.
+
+Appending and pruning validate existing routing and bounds before mutation.
+Pruning regroups records if independent claim expiry changes their surviving keys,
+rebuilds observation slots and bounds in the same transaction, and removes unused
+dictionaries and routes. It does not retain expired lookup values in empty groups.
+The schema remains reserved: live migration, ingestion, history/detail/activity
+queries, complete foreign-key behavior, quota/lifecycle integration and rollback
+compatibility are still required before activation.
+
+Regression coverage includes unchanged evidence under interleaved grouping,
+normalized routing, exact-time gaps, independent expiry, mixed-format ambiguity and
+deduplication, scope, closed transactions, corrupt routing/bounds, rollback,
+retention regrouping and cleanup, indexed candidate selection, and work-limit
+failure without a partial identity decision.

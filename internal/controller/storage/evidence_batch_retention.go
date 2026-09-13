@@ -146,11 +146,11 @@ func pruneEvidenceBatches(ctx context.Context, tx *sql.Tx, now time.Time, maxBat
 
 func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time) (evidenceBatchPruneCounts, error) {
 	var counts evidenceBatchPruneCounts
-	var source, expiry int64
+	var source, expiry, identityGroup int64
 	var count int
 	var data []byte
 	var scope, sensor, stream string
-	err := tx.QueryRowContext(ctx, `SELECT b.source_id,b.entries,b.next_expiry_ns,CASE WHEN length(b.data)<=? THEN b.data ELSE NULL END,s.scope_id,s.sensor_id,s.stream FROM evidence_batches b JOIN evidence_batch_sources s ON s.id=b.source_id WHERE b.id=?`, EvidenceBatchMaxBytes, id).Scan(&source, &count, &expiry, &data, &scope, &sensor, &stream)
+	err := tx.QueryRowContext(ctx, `SELECT b.source_id,b.identity_group,b.entries,b.next_expiry_ns,CASE WHEN length(b.data)<=? THEN b.data ELSE NULL END,s.scope_id,s.sensor_id,s.stream FROM evidence_batches b JOIN evidence_batch_sources s ON s.id=b.source_id WHERE b.id=?`, EvidenceBatchMaxBytes, id).Scan(&source, &identityGroup, &count, &expiry, &data, &scope, &sensor, &stream)
 	if err != nil {
 		return counts, err
 	}
@@ -165,6 +165,12 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 		if err := validateRetainedBatchBundle(r, scope, sensor, stream); err != nil {
 			return counts, err
 		}
+	}
+	if err := validateEvidenceBatchClaimBounds(ctx, tx, id, records); err != nil {
+		return counts, err
+	}
+	if err := validateEvidenceBatchIdentityGroup(ctx, tx, identityGroup, source, records); err != nil {
+		return counts, err
 	}
 	if err := validateEvidenceBatchLookups(ctx, tx, id, source, records); err != nil {
 		return counts, err
@@ -181,7 +187,7 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 	}
 	// Removing observations can disable derived-ID packing, increasing encoded
 	// size. Repartition if needed; never drop retained evidence to fit a batch.
-	groups, err := partitionRetainedEvidence(retained)
+	groups, err := partitionIdentityEvidence(retained)
 	if err != nil {
 		return counts, err
 	}
@@ -190,24 +196,34 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 	}
 	if len(groups) == 0 {
 		_, err = tx.ExecContext(ctx, `DELETE FROM evidence_batches WHERE id=?`, id)
-		return counts, err
+		if err != nil {
+			return counts, err
+		}
+		return counts, removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
 	}
 	for i, group := range groups {
 		data, err := EncodeEvidenceBatch(group)
 		if err != nil {
 			return counts, err
 		}
+		newIdentityGroup, err := ensureEvidenceBatchIdentityGroup(ctx, tx, source, group[0])
+		if err != nil {
+			return counts, err
+		}
 		batchID := id
 		if i == 0 {
-			_, err = tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,next_expiry_ns=?,data=? WHERE id=?`, len(group), nextEvidenceBatchExpiry(group), data, id)
+			_, err = tx.ExecContext(ctx, `UPDATE evidence_batches SET identity_group=?,entries=?,next_expiry_ns=?,data=? WHERE id=?`, newIdentityGroup, len(group), nextEvidenceBatchExpiry(group), data, id)
 		} else {
 			var result sql.Result
-			result, err = tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,entries,next_expiry_ns,data) VALUES(?,?,?,?)`, source, len(group), nextEvidenceBatchExpiry(group), data)
+			result, err = tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,identity_group,entries,next_expiry_ns,data) VALUES(?,?,?,?,?)`, source, newIdentityGroup, len(group), nextEvidenceBatchExpiry(group), data)
 			if err == nil {
 				batchID, err = result.LastInsertId()
 			}
 		}
 		if err != nil {
+			return counts, err
+		}
+		if err := writeEvidenceBatchClaimBounds(ctx, tx, batchID, group); err != nil {
 			return counts, err
 		}
 		for slot, r := range group {
@@ -224,7 +240,7 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 			}
 		}
 	}
-	return counts, nil
+	return counts, removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
 }
 
 func partitionRetainedEvidence(records []EvidenceBatchRecord) ([][]EvidenceBatchRecord, error) {

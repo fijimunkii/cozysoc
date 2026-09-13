@@ -8,12 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
 	"runtime"
+	"sort"
 	"testing"
 	"time"
 
@@ -34,77 +34,68 @@ func (batchWorkloadInspector) Inspect(context.Context, string) (devicewatch.Inte
 	return devicewatch.InterfaceState{Name: "fixture0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast | net.FlagMulticast, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.50.250/24")}}, nil
 }
 
-// Stable-fixture continuity replaces production identity queries, which have not
-// been integrated. Devices and coverage use the real Store; bundles use the
-// actual reserved adapter and codec with separate real-time stored expiries.
+// The real planner reads mixed legacy/batch identity in the same transaction
+// that commits the synthetic observation, its decision and any new device.
 type batchWorkloadSink struct {
-	store      *storage.Store
-	db         *sql.DB
-	reconciler *devicewatch.Reconciler
-	current    storage.EvidenceBatchRecord
-	devices    map[string]domain.Device
-	macDevices map[string]string
-	digest     hash.Hash
+	store  *storage.Store
+	db     *sql.DB
+	digest workloadEvidenceDigest
 }
 
-func (s *batchWorkloadSink) EnsureDevice(ctx context.Context, d domain.Device) error {
-	if err := s.store.EnsureDevice(ctx, d); err != nil {
-		return err
-	}
-	s.devices[d.ID] = d
-	return nil
-}
-func (s *batchWorkloadSink) EnsureIdentityClaim(_ context.Context, c domain.IdentityClaim) (string, error) {
-	s.current.Claims = append(s.current.Claims, storage.RetainedIdentityClaim{Claim: c, ExpiresAt: time.Now().UTC().Add(storage.DefaultLimits().Retention[c.Retention])})
-	return c.ID, nil
-}
-func (s *batchWorkloadSink) EnsureDeviceClaimLink(_ context.Context, l domain.DeviceClaimLink) error {
-	s.current.Links = append(s.current.Links, l)
-	for _, c := range s.current.Claims {
-		if c.Claim.ID == l.ClaimID && c.Claim.Kind == domain.ClaimMAC {
-			s.macDevices[c.Claim.Value] = l.DeviceID
-		}
-	}
-	return nil
-}
-func (s *batchWorkloadSink) FindRecentDevicesByClaim(_ context.Context, _ string, kind domain.ClaimKind, value string, _, _ time.Time) ([]domain.Device, error) {
-	if kind != domain.ClaimMAC {
-		return nil, fmt.Errorf("workload only supports stable MAC continuity")
-	}
-	if id := s.macDevices[value]; id != "" {
-		return []domain.Device{s.devices[id]}, nil
-	}
-	return nil, nil
-}
 func (s *batchWorkloadSink) PutObservation(ctx context.Context, o domain.Observation) (bool, error) {
-	expiry := time.Now().UTC().Add(storage.DefaultLimits().Retention[o.Retention])
-	s.current = storage.EvidenceBatchRecord{Observation: &o, ObservationExpiresAt: &expiry}
-	if _, err := s.reconciler.ReconcileObservation(ctx, o); err != nil {
-		return false, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
 	defer tx.Rollback()
-	inserted, err := storage.AppendEvidenceBatchForTest(ctx, tx, s.current)
+	reader, err := storage.NewMixedIdentitySnapshot(tx, time.Now().UTC())
 	if err != nil {
 		return false, err
 	}
+	plan, err := devicewatch.PlanReconciliation(ctx, reader, o)
+	if err != nil {
+		return false, err
+	}
+	if plan.NewDevice != nil {
+		d := plan.NewDevice
+		if err := domain.ValidateDevice(*d); err != nil {
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO devices(id,created_at_ns) VALUES(?,?) ON CONFLICT(id) DO NOTHING`, d.ID, d.CreatedAt.UnixNano()); err != nil {
+			return false, err
+		}
+		var created int64
+		if err := tx.QueryRowContext(ctx, `SELECT created_at_ns FROM devices WHERE id=?`, d.ID).Scan(&created); err != nil {
+			return false, err
+		}
+		if created != d.CreatedAt.UnixNano() {
+			return false, fmt.Errorf("device creation evidence conflict")
+		}
+	}
+	expiry := time.Now().UTC().Add(storage.DefaultLimits().Retention[o.Retention])
+	record := storage.EvidenceBatchRecord{Observation: &o, ObservationExpiresAt: &expiry, Links: plan.Links}
+	for _, c := range plan.Claims {
+		record.Claims = append(record.Claims, storage.RetainedIdentityClaim{Claim: c, ExpiresAt: time.Now().UTC().Add(storage.DefaultLimits().Retention[c.Retention])})
+	}
+	inserted, err := storage.AppendEvidenceBatchForTest(ctx, tx, record)
+	if err != nil {
+		return false, err
+	}
+	if !inserted {
+		return false, nil
+	} // Deferred rollback discards any staged device.
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}
-	if inserted {
-		if err := hashWorkloadRecord(s.digest, s.current); err != nil {
-			return false, err
-		}
+	if err := hashWorkloadRecord(s.digest, record); err != nil {
+		return false, err
 	}
-	return inserted, nil
+	return true, nil
 }
 func (s *batchWorkloadSink) PutCoverageSample(ctx context.Context, c domain.CoverageSample) error {
 	return s.store.InsertCoverageSample(ctx, c)
 }
-func hashWorkloadRecord(h hash.Hash, r storage.EvidenceBatchRecord) error {
+func hashWorkloadRecord(h workloadEvidenceDigest, r storage.EvidenceBatchRecord) error {
 	if r.Observation == nil {
 		return fmt.Errorf("workload observation missing")
 	}
@@ -115,8 +106,29 @@ func hashWorkloadRecord(h hash.Hash, r storage.EvidenceBatchRecord) error {
 	if err != nil {
 		return err
 	}
-	_, err = h.Write(raw)
-	return err
+	if _, exists := h[r.Observation.ID]; exists {
+		return fmt.Errorf("duplicate workload observation")
+	}
+	h[r.Observation.ID] = sha256.Sum256(raw)
+	return nil
+}
+
+// Grouping changes physical iteration order. Compare every original record once,
+// then summarize fixed-length per-record hashes in observation-ID order.
+type workloadEvidenceDigest map[string][32]byte
+
+func (d workloadEvidenceDigest) Sum(prefix []byte) []byte {
+	keys := make([]string, 0, len(d))
+	for key := range d {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	h := sha256.New()
+	for _, key := range keys {
+		value := d[key]
+		_, _ = h.Write(value[:])
+	}
+	return h.Sum(prefix)
 }
 
 type batchWorkloadAllocation struct {
@@ -158,6 +170,7 @@ func batchAllocation(t *testing.T, db *sql.DB) batchWorkloadAllocation {
 }
 
 type batchWorkloadReport struct {
+	DigestFormat         string                  `json:"digest_format"`
 	Kind                 string                  `json:"kind"`
 	Collections          int                     `json:"collections"`
 	Devices              int                     `json:"devices"`
@@ -251,11 +264,7 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 	if err := s.EnsureSensor(ctx, domain.Sensor{ID: "sensor.storage-lab", ScopeID: "scope.storage-lab", Kind: "desktop-neighbor-cache", Ownership: "builtin", RegisteredAt: start.Add(-time.Hour), Metadata: json.RawMessage(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	sink := &batchWorkloadSink{store: s, db: db, devices: map[string]domain.Device{}, macDevices: map[string]string{}, digest: sha256.New()}
-	sink.reconciler, err = devicewatch.NewReconciler(sink)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sink := &batchWorkloadSink{store: s, db: db, digest: workloadEvidenceDigest{}}
 	source := &batchWorkloadSource{snapshot: devicewatch.Snapshot{CapturedAt: start.Add(-time.Minute), InterfaceName: "fixture0", Sources: []devicewatch.SourceStatus{{Method: devicewatch.MethodARPCache, Available: true}, {Method: devicewatch.MethodNDPCache, Available: true}}}}
 	for i := 0; i < 100; i++ {
 		mac, err := net.ParseMAC(fmt.Sprintf("02:00:00:00:00:%02x", i+1))
@@ -275,7 +284,7 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 		}
 	}
 	collect()
-	report := batchWorkloadReport{Kind: "reserved-batch-adapter-not-full-controller-budget", Collections: rounds, Devices: 100, NewObservations: rounds * 100, DailyTarget: 30 << 20, Comparison: "not-evaluated-short-run", OS: runtime.GOOS, Architecture: runtime.GOARCH, Go: runtime.Version()}
+	report := batchWorkloadReport{DigestFormat: "sha256-sorted-record-sha256-v1", Kind: "batch-adapter-with-identity-not-full-controller-budget", Collections: rounds, Devices: 100, NewObservations: rounds * 100, DailyTarget: 30 << 20, Comparison: "not-evaluated-short-run", OS: runtime.GOOS, Architecture: runtime.GOARCH, Go: runtime.Version()}
 	report.Before = batchAllocation(t, db)
 	report.BytesBefore = report.Before.PageSize * report.Before.PageCount
 	if err := db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&report.SQLite); err != nil {
@@ -288,9 +297,6 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 		if (i+1)%60 == 0 {
 			t.Logf("batch adapter: %d/%d collections", i+1, rounds)
 		}
-	}
-	if len(sink.devices) != 100 || len(sink.macDevices) != 100 {
-		t.Fatal("continuity fixture changed device count")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
@@ -330,12 +336,12 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 	if err := rows.Close(); err != nil {
 		t.Fatal(err)
 	}
-	actual := sha256.New()
+	actual := workloadEvidenceDigest{}
 	for _, id := range ids {
 		var data []byte
-		var source, expiry int64
+		var source, expiry, identityGroup int64
 		var entries int
-		if err := tx.QueryRowContext(ctx, "SELECT source_id,entries,next_expiry_ns,data FROM evidence_batches WHERE id=?", id).Scan(&source, &entries, &expiry, &data); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT source_id,identity_group,entries,next_expiry_ns,data FROM evidence_batches WHERE id=?", id).Scan(&source, &identityGroup, &entries, &expiry, &data); err != nil {
 			t.Fatal(err)
 		}
 		records, err := storage.DecodeEvidenceBatch(data)
@@ -343,6 +349,12 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 			t.Fatal("invalid durable batch", err)
 		}
 		if err := storage.ValidateEvidenceBatchLookupsForTest(ctx, tx, id, source, records); err != nil {
+			t.Fatal(err)
+		}
+		if err := storage.ValidateEvidenceBatchIdentityGroupForTest(ctx, tx, identityGroup, source, records); err != nil {
+			t.Fatal(err)
+		}
+		if err := storage.ValidateEvidenceBatchClaimBoundsForTest(ctx, tx, id, records); err != nil {
 			t.Fatal(err)
 		}
 		for _, record := range records {
@@ -377,9 +389,9 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 	report.SHA256 = hex.EncodeToString(actual.Sum(nil))
 	report.WallMS = time.Since(wallStart).Milliseconds()
 	if rounds == 1440 {
-		report.Comparison = "above-target-before-query-integration"
+		report.Comparison = "above-target-before-controller-integration"
 		if report.Growth <= report.DailyTarget {
-			report.Comparison = "within-target-before-query-integration"
+			report.Comparison = "within-target-before-controller-integration"
 		}
 	}
 	return report
