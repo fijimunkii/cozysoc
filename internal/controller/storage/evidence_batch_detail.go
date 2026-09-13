@@ -87,11 +87,8 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 		var label sql.NullString
 		var created int64
 		var retired sql.NullInt64
-		var batch, source, group, nextExpiry, first, last, expiry int64
-		var entries int
-		var raw []byte
-		var sensor, stream string
-		err := tx.QueryRowContext(ctx, batchDeviceDetailCandidateSQL, q.DeviceID, q.ScopeID, q.AsOf.UnixNano(), now.UnixNano(), q.AsOf.UnixNano(), inspected == 0, cursorTime, cursorTime, cursorBatch).Scan(&device.ID, &label, &created, &retired, &batch, &source, &group, &entries, &nextExpiry, &first, &last, &expiry, &raw, &sensor, &stream)
+		var candidate evidenceBatchCandidate
+		err := tx.QueryRowContext(ctx, batchDeviceDetailCandidateSQL, q.DeviceID, q.ScopeID, q.AsOf.UnixNano(), now.UnixNano(), q.AsOf.UnixNano(), inspected == 0, cursorTime, cursorTime, cursorBatch).Scan(&device.ID, &label, &created, &retired, &candidate.ID, &candidate.SourceID, &candidate.GroupID, &candidate.Entries, &candidate.NextExpiry, &candidate.FirstClaim, &candidate.LastClaim, &candidate.LastClaimExpiry, &candidate.Data, &candidate.Sensor, &candidate.Stream)
 		if errors.Is(err, sql.ErrNoRows) {
 			return result, nil
 		}
@@ -101,34 +98,13 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 		if inspected >= evidenceBatchIdentityMaxCandidates {
 			return deviceEvidenceDetailRows{}, ErrEvidenceBatchQueryLimit
 		}
-		records, err := DecodeEvidenceBatch(raw)
+		records, err := candidate.records(ctx, tx, q.ScopeID)
 		if err != nil {
-			return deviceEvidenceDetailRows{}, err
-		}
-		if len(records) != entries || nextEvidenceBatchExpiry(records) != nextExpiry {
-			return deviceEvidenceDetailRows{}, ErrEvidenceBatchData
-		}
-		if err := validateEvidenceBatchClaimTimes(records); err != nil {
-			return deviceEvidenceDetailRows{}, err
-		}
-		f, l, e := evidenceBatchClaimBounds(records)
-		if first != f || last != l || expiry != e {
-			return deviceEvidenceDetailRows{}, ErrEvidenceBatchData
-		}
-		for _, record := range records {
-			if err := validateRetainedBatchBundle(record, q.ScopeID, sensor, stream); err != nil {
-				return deviceEvidenceDetailRows{}, err
-			}
-		}
-		if err := validateEvidenceBatchIdentityGroup(ctx, tx, group, source, records); err != nil {
-			return deviceEvidenceDetailRows{}, err
-		}
-		if err := validateEvidenceBatchLookups(ctx, tx, batch, source, records); err != nil {
 			return deviceEvidenceDetailRows{}, err
 		}
 		// Original claim times cannot exceed the verified batch's stored upper bound.
 		// Keep all ties: claim IDs, not physical batch order, decide evidence ordering.
-		if len(result.Evidence) > q.Limit && last < result.Evidence[q.Limit].Evidence.ObservedAt.UnixNano() {
+		if len(result.Evidence) > q.Limit && candidate.LastClaim < result.Evidence[q.Limit].Evidence.ObservedAt.UnixNano() {
 			return result, nil
 		}
 		device.UserLabel = label.String
@@ -182,6 +158,6 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 		if len(result.Evidence) > q.Limit+1 {
 			result.Evidence = result.Evidence[:q.Limit+1]
 		}
-		cursorTime, cursorBatch = last, batch
+		cursorTime, cursorBatch = candidate.LastClaim, candidate.ID
 	}
 }

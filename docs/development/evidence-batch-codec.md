@@ -147,7 +147,7 @@ Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys,
-device-list/activity and other history readers, pagination, retention-driven quota recovery,
+activity and other history readers, retention-driven quota recovery,
 schema migration or rollback compatibility. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
@@ -374,3 +374,37 @@ The index changes the reserved schema; previous footprint
 measurements retain their exact source and do not measure this index. Live device
 list/detail/activity wiring, other readers, lifecycle and migration gates remain
 open, as does the unchanged full-controller storage measurement.
+
+## Mixed device lists
+
+`MixedIdentitySnapshot.ListDeviceEvidence` combines legacy and batch summaries in
+one fixed snapshot. It preserves device-ID ordering, the exclusive `AfterID`
+cursor, limits of up to 200 devices, and one extra device to establish the next
+page. Devices represented in both formats appear once, with the latest eligible
+original claim time. Scope, retirement and independent claim expiry match the
+legacy list. Unlike detail and activity, the existing list contract does not
+filter on link start or presence validity; the mixed list preserves that rule.
+Observation expiry does not remove independently retained claim history.
+
+The list uses an ordered device-ID range scan, indexed device-to-group and
+group-to-batch lookups, and the same selected-batch validation as detail reads.
+The join order keeps SQLite from scanning all retained batches per cursor step. It inspects original claims and links before accepting membership
+or last-seen. Newest claim bounds order work, but never become displayed times.
+Once a verified match reaches the current batch's upper bound or the as-of time,
+older batches cannot increase that device's last-seen. A legacy page lookahead
+also excludes batch device IDs that cannot affect the requested page.
+
+A whole page decodes at most 1,024 candidate batches, including ineligible
+candidates. Corruption in selected evidence, schema/query errors and work-budget
+exhaustion return no partial page or cursor that skips unseen evidence. The reader
+owns no transaction, writes no data and does not open or close connections.
+
+Tests compare mixed and all-legacy pages across limits, cursors, historical times,
+retirement, expiry and observation pruning. They cover future aggregate bounds,
+selected corruption, exhausted work budgets, indexed query plans, page-boundary
+selection and staged
+snapshot rollback. The real 100-device/four-collection queue fixture checks
+pagination with no duplicate or missing devices and exact last-seen times. These
+checks do not activate live readers or establish the full controller budget;
+activity/other history readers, referential integrity, lifecycle, migration and
+runtime wiring remain required.
