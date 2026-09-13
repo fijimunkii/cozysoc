@@ -105,3 +105,7 @@ whole-controller budget pass or a replacement for the production 474.50 MiB
 baseline. Source-key idempotency, scoped history and identity queries, retention,
 quota recovery and transactional migration must be implemented and measured
 before the representation can replace live storage.
+
+The next integration step is the [versioned storage codec](evidence-batch-codec.md),
+which adds independent expiry metadata and frozen-format compatibility tests. It
+is not yet used by live writes/readers, and its production footprint is unmeasured.
