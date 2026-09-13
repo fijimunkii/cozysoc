@@ -174,7 +174,7 @@ func TestEvidenceBatchSQLCorruptIndexAndPayload(t *testing.T) {
 	for _, mutation := range []string{
 		"UPDATE evidence_batch_lookup SET slot=99",
 		"UPDATE evidence_batch_lookup SET expires_at_ns=expires_at_ns+1",
-		"UPDATE evidence_batch_lookup SET source_key=x'00'",
+		"UPDATE evidence_batch_lookup SET source_key=x'0000'",
 		"UPDATE evidence_batches SET entries=2",
 		"UPDATE evidence_batches SET data=x'00'",
 	} {

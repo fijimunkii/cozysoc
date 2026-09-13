@@ -24,13 +24,15 @@ CREATE TABLE evidence_batches (
  id INTEGER PRIMARY KEY,
  source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
  entries INTEGER NOT NULL CHECK(entries BETWEEN 1 AND 100),
+ next_expiry_ns INTEGER NOT NULL,
  data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 1048576)
 ) STRICT;
+CREATE INDEX evidence_batches_expiry ON evidence_batches(next_expiry_ns, id);
 CREATE INDEX evidence_batches_source ON evidence_batches(source_id, id DESC);
 CREATE TABLE evidence_batch_lookup (
- id BLOB PRIMARY KEY,
+ id BLOB PRIMARY KEY CHECK(length(id) BETWEEN 2 AND 129),
  source_id INTEGER NOT NULL REFERENCES evidence_batch_sources(id),
- source_key BLOB,
+ source_key BLOB CHECK(source_key IS NULL OR length(source_key) BETWEEN 2 AND 513),
  batch_id INTEGER NOT NULL REFERENCES evidence_batches(id),
  slot INTEGER NOT NULL CHECK(slot BETWEEN 0 AND 99),
  expires_at_ns INTEGER NOT NULL,
@@ -58,23 +60,7 @@ func validateCompleteBatchBundle(r EvidenceBatchRecord) error {
 		return ErrEvidenceBatchData
 	}
 	o := r.Observation
-	for _, claim := range r.Claims {
-		if claim.Claim.ScopeID != o.ScopeID || claim.Claim.SourceSensorID != o.SensorID || claim.Claim.SourceObservationID != o.ID {
-			return ErrEvidenceBatchData
-		}
-	}
-	for _, link := range r.Links {
-		found := false
-		for _, claim := range r.Claims {
-			if claim.Claim.ID == link.ClaimID {
-				found = true
-			}
-		}
-		if !found || link.EvidenceObservationID != o.ID {
-			return ErrEvidenceBatchData
-		}
-	}
-	return nil
+	return validateRetainedBatchBundle(r, o.ScopeID, o.SensorID, o.SourceStream)
 }
 
 // appendEvidenceBatch stages one complete record in an exclusively owned SQL
@@ -82,7 +68,7 @@ func validateCompleteBatchBundle(r EvidenceBatchRecord) error {
 // commit. Do not begin this transaction on Store.conn, whose autocommit users
 // could otherwise have their writes absorbed by this transaction.
 // A source-key replay returns false without replacing original evidence/expiry.
-// This primitive does not implement identity indexes, pruning or quota policy.
+// This primitive does not implement identity indexes or quota policy.
 func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord) (bool, error) {
 	single, err := EncodeEvidenceBatch([]EvidenceBatchRecord{r})
 	if err != nil {
@@ -130,8 +116,9 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 	}
 	var batch int64
 	var count int
+	var nextExpiry int64
 	var data []byte
-	err = tx.QueryRowContext(ctx, `SELECT id,entries,CASE WHEN length(data)<=? THEN data ELSE NULL END FROM evidence_batches WHERE source_id=? ORDER BY id DESC LIMIT 1`, EvidenceBatchMaxBytes, source).Scan(&batch, &count, &data)
+	err = tx.QueryRowContext(ctx, `SELECT id,entries,next_expiry_ns,CASE WHEN length(data)<=? THEN data ELSE NULL END FROM evidence_batches WHERE source_id=? ORDER BY id DESC LIMIT 1`, EvidenceBatchMaxBytes, source).Scan(&batch, &count, &nextExpiry, &data)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
@@ -141,11 +128,11 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 		if decodeErr != nil {
 			return false, decodeErr
 		}
-		if count != len(records) {
+		if count != len(records) || nextExpiry != nextEvidenceBatchExpiry(records) {
 			return false, ErrEvidenceBatchData
 		}
 		for _, retained := range records {
-			if validateCompleteBatchBundle(retained) != nil || retained.Observation.ScopeID != scope || retained.Observation.SensorID != o.SensorID || retained.Observation.SourceStream != o.SourceStream {
+			if validateRetainedBatchBundle(retained, scope, o.SensorID, o.SourceStream) != nil {
 				return false, ErrEvidenceBatchData
 			}
 		}
@@ -153,13 +140,14 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 			combined, encodeErr := EncodeEvidenceBatch(append(records, r))
 			if encodeErr == nil {
 				data, slot = combined, count
+				nextExpiry = nextEvidenceBatchExpiry(append(records, r))
 			} else if !errors.Is(encodeErr, ErrEvidenceBatchLimit) {
 				return false, encodeErr
 			}
 		}
 	}
 	if slot == 0 {
-		result, err := tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,entries,data) VALUES(?,1,?)`, source, single)
+		result, err := tx.ExecContext(ctx, `INSERT INTO evidence_batches(source_id,entries,next_expiry_ns,data) VALUES(?,1,?,?)`, source, nextEvidenceBatchExpiry([]EvidenceBatchRecord{r}), single)
 		if err != nil {
 			return false, err
 		}
@@ -167,7 +155,7 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 		if err != nil {
 			return false, err
 		}
-	} else if _, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,data=? WHERE id=?`, slot+1, data, batch); err != nil {
+	} else if _, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,next_expiry_ns=?,data=? WHERE id=?`, slot+1, nextExpiry, data, batch); err != nil {
 		return false, err
 	}
 	var storedKey any = key
@@ -189,7 +177,7 @@ func readEvidenceBatch(ctx context.Context, tx *sql.Tx, scope, id string, now ti
 	var slot, count int
 	var expiry int64
 	var sensor, stream string
-	err := tx.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=? THEN b.data ELSE NULL END,b.entries,l.slot,l.expires_at_ns,coalesce(l.source_key,l.id),s.sensor_id,s.stream
+	err := tx.QueryRowContext(ctx, `SELECT CASE WHEN length(b.data)<=? THEN b.data ELSE NULL END,b.entries,l.slot,l.expires_at_ns,CASE WHEN length(coalesce(l.source_key,l.id))<=513 THEN coalesce(l.source_key,l.id) ELSE NULL END,s.sensor_id,s.stream
  FROM evidence_batch_lookup l JOIN evidence_batches b ON b.id=l.batch_id AND b.source_id=l.source_id JOIN evidence_batch_sources s ON s.id=l.source_id
  WHERE l.id=? AND s.scope_id=? AND l.expires_at_ns>?`, EvidenceBatchMaxBytes, packedEvidenceKey(id, "obs.dw."), scope, now.UnixNano()).Scan(&data, &count, &slot, &expiry, &key, &sensor, &stream)
 	if err != nil {

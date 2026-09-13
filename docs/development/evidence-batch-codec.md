@@ -104,8 +104,41 @@ Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys and
-query indexes, pagination, retention/pruning, quota recovery, connection lifecycle,
+query indexes, pagination, quota recovery, connection lifecycle,
 schema migration or rollback compatibility. They cannot be activated until those
 contracts and the legacy-record fallback are implemented and tested. Re-measure
-the unchanged full controller workload, including all database pages and expiry/index overhead, before claiming
-#150's storage target. CPU/RAM and sustained-run gates remain open.
+the unchanged full controller workload, including all database pages and
+expiry/index overhead, before claiming #150's storage target. CPU/RAM and sustained-run gates remain open.
+
+## Batch retention
+
+The internal `pruneEvidenceBatches` primitive selects at most 100 due batches
+through an index on each batch's earliest original observation/claim expiry.
+Each batch remains bounded to 100 records and the codec byte limits. Selection,
+rewrites, empty-batch deletion and lookup remapping share the caller's exclusive
+transaction. Counts are provisional until commit; an error requires rollback and
+returns no partial counts. Live `Store.PruneExpired` does not call this primitive.
+
+At the exact stored expiry, an observation payload and its source-key lookup are
+removed. Surviving claims and links keep their original IDs, times, confidence and
+other evidence, with observation references cleared to match the existing
+SQLite `ON DELETE SET NULL` behavior. Expiring a claim also removes its links,
+matching `ON DELETE CASCADE`. The next expiry is calculated from surviving stored
+expiries, never a fresh TTL. Partial batches with retained-only records can accept
+new complete records; slot compaction updates all surviving observation lookups.
+A replay remains suppressed while its observation lookup exists, and can be
+accepted again after that observation is pruned, as with legacy storage.
+
+Pruning validates the original lookup rows against the decoded records before
+rebuilding them. Missing or corrupt slots, keys, sources and expiry metadata abort
+the transaction rather than being silently repaired. Retained records are
+repartitioned if re-encoding exceeds a codec limit; evidence is never truncated to
+make it fit. Deleted SQLite pages can be reused; this primitive does not shrink
+the file with `VACUUM`, implement quota recovery or publish retention audit events.
+Those remain responsibilities of the controller integration.
+
+Regression coverage compares observation-reference clearing and claim/link
+cascades against the legacy SQLite tables. It also covers original derived IDs
+after observation deletion, independent expiry boundaries, reopen, appending to a
+pruned batch, lookup compaction, empty batches, bounded selection, cancellation,
+corrupt-index rejection and rollback across multiple partially processed batches.
