@@ -91,7 +91,12 @@ sensor/stream/source key keeps the first evidence and expiry, even if the replay
 has another observation ID. An observation ID reused for a different source key
 is rejected. Canonical observation IDs and source keys use tagged reversible
 binary digests; other values remain in full, without hashing. Equal packed source
-keys and IDs share the lookup value through an expression index.
+keys and IDs share the primary lookup entry. Only keys that differ from the packed
+observation ID occupy the partial replay index. Replay checks use the primary key
+and that partial index; they do not scan all lookups. Database insert/update
+triggers enforce source-key uniqueness across the two representations, while the
+partial unique index enforces it between exceptional keys. Replays retain the
+same first-record behavior regardless of which representation was stored first.
 
 Point reads require a scope, observation ID and explicit evaluation time. They
 return the original bundle only before the stored observation expiry, validating

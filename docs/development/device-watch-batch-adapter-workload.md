@@ -110,3 +110,39 @@ referential integrity. The result does not justify adding full per-record
 identity indexes without another footprint check. The production 474.50 MiB
 baseline remains the live result, and #150 remains open until the integrated
 controller meets the unchanged workload and budget requirements.
+
+## Sparse replay index: September 13, 2026
+
+The [sparse-index result](evidence/device-watch-batch-adapter-sparse-replay-2026-09-13.json)
+records source `fac2789d94c86f9fb643c203a4ef60a092a2ccaf` with the same workload,
+hardware, toolchain, durability and retention settings. Matching observation and
+source keys reuse the primary lookup; only differing source keys occupy the
+partial replay index. Insert/update triggers preserve uniqueness across both
+representations. No observation, claim, link or lookup was omitted.
+
+| Measurement | Baseline | Sparse replay index |
+| --- | ---: | ---: |
+| Daily growth | 34.844 MiB | **28.508 MiB** |
+| Replay-index growth | 6.328 MiB | **0 MiB** |
+| Final file size | 36,827,136 bytes | 30,183,424 bytes |
+| Excess over 25 MiB | 9.844 MiB | **3.508 MiB** |
+
+Total growth fell by **6,643,712 bytes (6.336 MiB)**. Of that difference,
+6,635,520 bytes are removed replay-index growth and 8,192 bytes are the difference
+in free-page reuse. The partial replay index retains its empty 4 KiB root page in
+this matching-key workload. Batch, observation-lookup, batch/slot-index and coverage
+allocations are unchanged. Arbitrary source keys still use the partial index.
+
+All 1,440 collections and full reopen verification passed: 144,100 observations,
+288,200 claims, 288,200 links, 100 devices and 1,441 coverage samples. The reopened
+evidence digest was
+`68a256b7f49f93bc04a08619cbf81fb907a2a2ceea58405468f993534f639d17`.
+Write and verification elapsed time was 484,099 ms; this is not a CPU/RAM or
+latency-budget result. Each run preserves its own independently assigned expiry
+values, so the two runs are not expected to share an evidence digest.
+
+The adapter still exceeds the target before identity-query integration. The
+observation lookup and batch/slot index together still grow by 10.023 MiB. Further
+reduction must preserve bounded queries, exact identity, foreign keys and pruning;
+this result does not authorize removing those guarantees or increasing the budget.
+Live controller storage is unchanged and #150 remains open.
