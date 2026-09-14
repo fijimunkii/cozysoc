@@ -30,54 +30,17 @@ func NewEvidenceBatchIngestor(store *Store, capacity int, logger *slog.Logger, p
 	if err != nil {
 		return nil, err
 	}
-	limits, err := normalizeLimits(store.limits)
-	if err != nil {
-		return nil, err
-	}
-	dsn, err := sqliteFileURI(store.path)
-	if err != nil {
-		return nil, err
-	}
-	// A separate pinned connection prevents any Store autocommit operation or
-	// history reader from joining the queue's transaction. mode=rw cannot create
-	// a replacement database if the original path disappears.
-	db, err := sql.Open("sqlite", dsn+"?mode=rw")
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, err := db.Conn(ctx)
+	writer, err := openEvidenceBatchWriter(ctx, store)
 	if err != nil {
-		_ = db.Close()
 		return nil, err
 	}
-	writer := &Store{db: db, conn: conn, path: store.path, limits: limits, now: time.Now}
-	fail := func(err error) (*Ingestor, error) { return nil, errors.Join(err, writer.Close()) }
-	if err := writer.configure(ctx); err != nil {
-		return fail(err)
-	}
-	// max_page_count is connection-local. A fresh writer must not bypass the
-	// parent's quota, even though both connections write the same database file.
-	if err := writer.applyQuota(ctx); err != nil {
-		return fail(err)
-	}
-	rows, err := conn.QueryContext(ctx, `SELECT b.data,l.slot,s.scope_id,g.routing,r.kind FROM evidence_batches b
-	 JOIN evidence_batch_lookup l ON l.batch_id=b.id JOIN evidence_batch_sources s ON s.id=b.source_id
-	 JOIN evidence_batch_identity_groups g ON g.id=b.identity_group
-	 JOIN evidence_batch_identity_routes r ON r.group_id=g.id LIMIT 0`)
-	if err != nil {
-		return fail(fmt.Errorf("batch ingestion requires reserved schema: %w", err))
-	}
-	if err := rows.Close(); err != nil {
-		return fail(err)
-	}
+
 	sink := &evidenceBatchIngestionSink{Store: writer, stager: stager, repair: repair}
 	i, err := newIngestor(sink, capacity, logger)
 	if err != nil {
-		return fail(err)
+		return nil, errors.Join(err, writer.Close())
 	}
 	return i, nil
 }

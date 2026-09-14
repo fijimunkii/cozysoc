@@ -389,23 +389,9 @@ func (s *Store) PruneExpired(ctx context.Context, now time.Time, maxRows int) (m
 	if maxRows <= 0 || maxRows > 10_000 {
 		return nil, fmt.Errorf("prune maxRows must be between 1 and 10000")
 	}
-	tables := []string{"identity_claims", "findings", "coverage_samples", "observations", "audit_events", "storage_events"}
-	counts := make(map[string]int64, len(tables))
-	total := int64(0)
-	for _, table := range tables {
-		query := fmt.Sprintf("DELETE FROM %s WHERE id IN (SELECT id FROM %s WHERE expires_at_ns <= ? ORDER BY expires_at_ns, id LIMIT ?)", table, table)
-		result, err := s.conn.ExecContext(ctx, query, unixNanos(now), maxRows)
-		if err != nil {
-			return nil, wrapWrite("prune "+table, err)
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return nil, fmt.Errorf("read prune result for %s: %w", table, err)
-		}
-		if rows > 0 {
-			counts[table] = rows
-			total += rows
-		}
+	counts, total, err := pruneLegacyExpired(ctx, s.conn, now, maxRows)
+	if err != nil {
+		return nil, err
 	}
 	if total > 0 {
 		details, _ := json.Marshal(map[string]any{"expired_rows": counts, "total": total})
@@ -414,6 +400,29 @@ func (s *Store) PruneExpired(ctx context.Context, now time.Time, maxRows int) (m
 		}
 	}
 	return counts, nil
+}
+
+// Caller controls transaction and audit ownership; maxRows is already validated.
+func pruneLegacyExpired(ctx context.Context, writer identityQueryWriter, now time.Time, maxRows int) (map[string]int64, int64, error) {
+	tables := []string{"identity_claims", "findings", "coverage_samples", "observations", "audit_events", "storage_events"}
+	counts := make(map[string]int64, len(tables))
+	total := int64(0)
+	for _, table := range tables {
+		query := fmt.Sprintf("DELETE FROM %s WHERE id IN (SELECT id FROM %s WHERE expires_at_ns <= ? ORDER BY expires_at_ns, id LIMIT ?)", table, table)
+		result, err := writer.ExecContext(ctx, query, unixNanos(now), maxRows)
+		if err != nil {
+			return nil, 0, wrapWrite("prune "+table, err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return nil, 0, fmt.Errorf("read prune result for %s: %w", table, err)
+		}
+		if rows > 0 {
+			counts[table] = rows
+			total += rows
+		}
+	}
+	return counts, total, nil
 }
 
 func (s *Store) StorageEventCount(ctx context.Context, kind string) (int, error) {
@@ -528,15 +537,19 @@ func (s *Store) expiry(class domain.RetentionClass) (int64, error) {
 }
 
 func (s *Store) insertStorageEvent(ctx context.Context, kind string, occurredAt time.Time, details json.RawMessage) error {
+	return insertStorageEvent(ctx, s.conn, kind, occurredAt, details, s.expiry)
+}
+
+func insertStorageEvent(ctx context.Context, writer identityQueryWriter, kind string, occurredAt time.Time, details json.RawMessage, expiry func(domain.RetentionClass) (int64, error)) error {
 	id, err := randomID("storage")
 	if err != nil {
 		return err
 	}
-	expiresAt, err := s.expiry(domain.RetentionAudit)
+	expiresAt, err := expiry(domain.RetentionAudit)
 	if err != nil {
 		return err
 	}
-	_, err = s.conn.ExecContext(ctx, `INSERT INTO storage_events (id, kind, occurred_at_ns, details, expires_at_ns) VALUES (?, ?, ?, ?, ?)`,
+	_, err = writer.ExecContext(ctx, `INSERT INTO storage_events (id, kind, occurred_at_ns, details, expires_at_ns) VALUES (?, ?, ?, ?, ?)`,
 		id, kind, unixNanos(occurredAt), string(details), expiresAt)
 	return wrapWrite("insert storage event", err)
 }
