@@ -29,8 +29,12 @@ CREATE TABLE evidence_batches (
  first_claim_ns INTEGER NOT NULL DEFAULT 0,
  last_claim_ns INTEGER NOT NULL DEFAULT 0,
  last_claim_expiry_ns INTEGER NOT NULL DEFAULT 0,
+ first_observation_ns INTEGER NOT NULL DEFAULT 0,
+ last_observation_ns INTEGER NOT NULL DEFAULT 0,
+ last_observation_expiry_ns INTEGER NOT NULL DEFAULT 0,
  data BLOB NOT NULL CHECK(length(data) BETWEEN 1 AND 1048576)
 ) STRICT;
+CREATE INDEX evidence_batches_observation_time ON evidence_batches(last_observation_ns DESC,id DESC);
 CREATE INDEX evidence_batches_expiry ON evidence_batches(next_expiry_ns, id);
 CREATE INDEX evidence_batches_source ON evidence_batches(source_id, identity_group, id DESC);
 CREATE INDEX evidence_batches_identity_group ON evidence_batches(identity_group,id);
@@ -168,7 +172,7 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 				return false, ErrEvidenceBatchData
 			}
 		}
-		if err := validateEvidenceBatchClaimBounds(ctx, tx, batch, records); err != nil {
+		if err := validateEvidenceBatchBounds(ctx, tx, batch, records); err != nil {
 			return false, err
 		}
 		if err := validateEvidenceBatchLookups(ctx, tx, batch, source, records); err != nil {
@@ -200,7 +204,7 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 	} else if _, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET entries=?,next_expiry_ns=?,data=? WHERE id=?`, slot+1, nextExpiry, data, batch); err != nil {
 		return false, err
 	}
-	if err := writeEvidenceBatchClaimBounds(ctx, tx, batch, combinedRecords); err != nil {
+	if err := writeEvidenceBatchBounds(ctx, tx, batch, combinedRecords); err != nil {
 		return false, err
 	}
 	var storedKey any = key

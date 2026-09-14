@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -193,6 +194,7 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 	}
 	defer rows.Close()
 	observations, claims, links := 0, 0, 0
+	originals := map[string]domain.Observation{o.ID: o}
 	deviceIDs := map[string]bool{}
 	for rows.Next() {
 		var raw []byte
@@ -208,6 +210,7 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 				t.Fatal("missing original evidence")
 			}
 			observations++
+			originals[record.Observation.ID] = *record.Observation
 			claims += len(record.Claims)
 			links += len(record.Links)
 			for _, link := range record.Links {
@@ -318,6 +321,28 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 	page, err := reader.ListDevicesForScope(context.Background(), storage.DeviceQuery{ScopeID: o.ScopeID, AsOf: source.snapshot.CapturedAt.Add(10 * time.Minute)})
 	if err != nil || len(page.Devices) != 0 || page.NextID != "" {
 		t.Fatal("scope membership widened presence interval", page, err)
+	}
+
+	query := storage.ObservationQuery{ScopeID: o.ScopeID, Since: time.Now().UTC().Add(-24 * time.Hour), Until: time.Now().UTC(), Limit: 73}
+	historyIDs := map[string]bool{}
+	for pageN := 0; pageN < 10; pageN++ {
+		history, err := reader.ListObservations(context.Background(), query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, observation := range history.Observations {
+			if historyIDs[observation.ID] || !reflect.DeepEqual(observation, originals[observation.ID]) {
+				t.Fatal("history changed original collected evidence", observation)
+			}
+			historyIDs[observation.ID] = true
+		}
+		if history.Next == nil {
+			break
+		}
+		query.Before = history.Next
+	}
+	if len(historyIDs) != 401 {
+		t.Fatal("history pagination lost observations", len(historyIDs))
 	}
 
 }

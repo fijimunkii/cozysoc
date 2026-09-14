@@ -20,7 +20,7 @@ func validateRetainedBatchBundle(r EvidenceBatchRecord, scope, sensor, stream st
 	}
 	observationID := ""
 	if r.Observation != nil {
-		if r.Observation.ScopeID != scope || r.Observation.SensorID != sensor || r.Observation.SourceStream != stream || !batchTimeFits(*r.ObservationExpiresAt) {
+		if r.Observation.ScopeID != scope || r.Observation.SensorID != sensor || r.Observation.SourceStream != stream || !batchTimeFits(r.Observation.IngestedAt) || (r.Observation.SourceTime != nil && !batchTimeFits(*r.Observation.SourceTime)) || !batchTimeFits(*r.ObservationExpiresAt) {
 			return ErrEvidenceBatchData
 		}
 		observationID = r.Observation.ID
@@ -166,7 +166,7 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 			return counts, err
 		}
 	}
-	if err := validateEvidenceBatchClaimBounds(ctx, tx, id, records); err != nil {
+	if err := validateEvidenceBatchBounds(ctx, tx, id, records); err != nil {
 		return counts, err
 	}
 	if err := validateEvidenceBatchIdentityGroup(ctx, tx, identityGroup, source, records); err != nil {
@@ -223,7 +223,7 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 		if err != nil {
 			return counts, err
 		}
-		if err := writeEvidenceBatchClaimBounds(ctx, tx, batchID, group); err != nil {
+		if err := writeEvidenceBatchBounds(ctx, tx, batchID, group); err != nil {
 			return counts, err
 		}
 		for slot, r := range group {
