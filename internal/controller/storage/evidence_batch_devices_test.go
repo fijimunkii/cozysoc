@@ -180,6 +180,10 @@ func TestMixedDeviceListBoundsIneligibleWorkWithoutSkippingEvidence(t *testing.T
 	if !errors.Is(err, ErrEvidenceBatchQueryLimit) || !reflect.DeepEqual(got, DeviceEvidencePage{}) {
 		t.Fatal("work limit claimed completeness", got, err)
 	}
+	scope, err := readMixedScopeDevices(t, db, base, DeviceQuery{ScopeID: "scope.fixture"})
+	if !errors.Is(err, ErrEvidenceBatchQueryLimit) || !reflect.DeepEqual(scope, DevicePage{}) {
+		t.Fatal("scope work limit claimed completeness", scope, err)
+	}
 }
 
 func TestMixedDeviceListSnapshotRetirementAndClosedTransaction(t *testing.T) {

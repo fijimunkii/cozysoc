@@ -290,4 +290,34 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 		activityDevices[item.DeviceID] = true
 	}
 
+	// Scope membership uses the real collector's ten-minute validity interval.
+	after = ""
+	seen = map[string]bool{}
+	for pageNumber := 0; pageNumber < 100; pageNumber++ {
+		page, err := reader.ListDevicesForScope(context.Background(), storage.DeviceQuery{ScopeID: o.ScopeID, AsOf: source.snapshot.CapturedAt, AfterID: after, Limit: 17})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, device := range page.Devices {
+			if seen[device.ID] || !deviceIDs[device.ID] {
+				t.Fatal("incorrect scope device", device)
+			}
+			seen[device.ID] = true
+		}
+		if page.NextID == "" {
+			break
+		}
+		if len(page.Devices) != 17 || page.NextID != page.Devices[len(page.Devices)-1].ID {
+			t.Fatal("invalid scope cursor", page)
+		}
+		after = page.NextID
+	}
+	if len(seen) != 100 {
+		t.Fatal("scope pagination lost devices", len(seen))
+	}
+	page, err := reader.ListDevicesForScope(context.Background(), storage.DeviceQuery{ScopeID: o.ScopeID, AsOf: source.snapshot.CapturedAt.Add(10 * time.Minute)})
+	if err != nil || len(page.Devices) != 0 || page.NextID != "" {
+		t.Fatal("scope membership widened presence interval", page, err)
+	}
+
 }

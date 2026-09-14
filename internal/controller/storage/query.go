@@ -106,11 +106,19 @@ func (s *Store) ListObservations(ctx context.Context, query ObservationQuery) (O
 }
 
 func (s *Store) ListDevicesForScope(ctx context.Context, query DeviceQuery) (DevicePage, error) {
-	query, err := s.normalizeDeviceQuery(query)
+	now := s.now().UTC()
+	query, err := normalizeDeviceQuery(query, now)
 	if err != nil {
 		return DevicePage{}, err
 	}
-	now := s.now().UTC()
+	devices, err := listLegacyDevicesForScope(ctx, s.conn, now, query)
+	if err != nil {
+		return DevicePage{}, err
+	}
+	return scopeDevicePage(devices, query.Limit), nil
+}
+
+func listLegacyDevicesForScope(ctx context.Context, reader deviceEvidenceReader, now time.Time, query DeviceQuery) ([]domain.Device, error) {
 	args := []any{
 		query.ScopeID,
 		unixNanos(query.AsOf), unixNanos(query.AsOf),
@@ -125,7 +133,7 @@ func (s *Store) ListDevicesForScope(ctx context.Context, query DeviceQuery) (Dev
 	}
 	args = append(args, query.Limit+1)
 
-	rows, err := s.conn.QueryContext(ctx, `SELECT DISTINCT d.id, d.user_label, d.created_at_ns, d.retired_at_ns
+	rows, err := reader.QueryContext(ctx, `SELECT DISTINCT d.id, d.user_label, d.created_at_ns, d.retired_at_ns
 		FROM devices d
 		JOIN device_claim_links l ON l.device_id = d.id
 		JOIN identity_claims c ON c.id = l.claim_id
@@ -138,18 +146,18 @@ func (s *Store) ListDevicesForScope(ctx context.Context, query DeviceQuery) (Dev
 		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)`+cursorClause+`
 		ORDER BY d.id ASC LIMIT ?`, args...)
 	if err != nil {
-		return DevicePage{}, fmt.Errorf("list devices for scope: %w", err)
+		return nil, fmt.Errorf("list devices for scope: %w", err)
 	}
 	defer rows.Close()
 
-	page := DevicePage{Devices: make([]domain.Device, 0, query.Limit+1)}
+	devices := make([]domain.Device, 0, query.Limit+1)
 	for rows.Next() {
 		var device domain.Device
 		var userLabel sql.NullString
 		var createdAt int64
 		var retiredAt sql.NullInt64
 		if err := rows.Scan(&device.ID, &userLabel, &createdAt, &retiredAt); err != nil {
-			return DevicePage{}, fmt.Errorf("scan device: %w", err)
+			return nil, fmt.Errorf("scan device: %w", err)
 		}
 		if userLabel.Valid {
 			device.UserLabel = userLabel.String
@@ -159,16 +167,21 @@ func (s *Store) ListDevicesForScope(ctx context.Context, query DeviceQuery) (Dev
 			value := time.Unix(0, retiredAt.Int64).UTC()
 			device.RetiredAt = &value
 		}
-		page.Devices = append(page.Devices, device)
+		devices = append(devices, device)
 	}
 	if err := rows.Err(); err != nil {
-		return DevicePage{}, fmt.Errorf("iterate devices: %w", err)
+		return nil, fmt.Errorf("iterate devices: %w", err)
 	}
-	if len(page.Devices) > query.Limit {
-		page.Devices = page.Devices[:query.Limit]
-		page.NextID = page.Devices[len(page.Devices)-1].ID
+	return devices, nil
+}
+
+func scopeDevicePage(devices []domain.Device, limit int) DevicePage {
+	page := DevicePage{Devices: devices}
+	if len(devices) > limit {
+		page.Devices = devices[:limit]
+		page.NextID = page.Devices[limit-1].ID
 	}
-	return page, nil
+	return page
 }
 
 func (s *Store) normalizeObservationQuery(query ObservationQuery) (ObservationQuery, error) {
@@ -218,12 +231,12 @@ func (s *Store) normalizeObservationQuery(query ObservationQuery) (ObservationQu
 	return query, nil
 }
 
-func (s *Store) normalizeDeviceQuery(query DeviceQuery) (DeviceQuery, error) {
+func normalizeDeviceQuery(query DeviceQuery, now time.Time) (DeviceQuery, error) {
 	if err := validateQueryID("scope id", query.ScopeID); err != nil {
 		return DeviceQuery{}, err
 	}
 	if query.AsOf.IsZero() {
-		query.AsOf = s.now().UTC()
+		query.AsOf = now
 	} else {
 		query.AsOf = query.AsOf.UTC()
 	}
