@@ -50,18 +50,27 @@ type DevicePage struct {
 }
 
 func (s *Store) ListObservations(ctx context.Context, query ObservationQuery) (ObservationPage, error) {
-	query, err := s.normalizeObservationQuery(query)
+	now := s.now().UTC()
+	query, err := normalizeObservationQuery(query, now)
 	if err != nil {
 		return ObservationPage{}, err
 	}
 
+	observations, err := listLegacyObservations(ctx, s.conn, now, query, false)
+	if err != nil {
+		return ObservationPage{}, err
+	}
+	return observationPage(observations, query.Limit), nil
+}
+
+func listLegacyObservations(ctx context.Context, reader deviceEvidenceReader, now time.Time, query ObservationQuery, bounded bool) ([]domain.Observation, error) {
 	clauses := []string{
 		"scope_id = ?",
 		"ingested_at_ns >= ?",
 		"ingested_at_ns <= ?",
 		"expires_at_ns > ?",
 	}
-	args := []any{query.ScopeID, unixNanos(query.Since), unixNanos(query.Until), unixNanos(s.now().UTC())}
+	args := []any{query.ScopeID, unixNanos(query.Since), unixNanos(query.Until), unixNanos(now)}
 	if query.SensorID != "" {
 		clauses = append(clauses, "sensor_id = ?")
 		args = append(args, query.SensorID)
@@ -77,32 +86,50 @@ func (s *Store) ListObservations(ctx context.Context, query ObservationQuery) (O
 	}
 	args = append(args, query.Limit+1)
 
-	rows, err := s.conn.QueryContext(ctx, `SELECT id, scope_id, sensor_id, kind, source_stream, source_key,
-		source_event_id, source_time_ns, ingested_at_ns, schema_version, confidence, attribution, payload, retention_class
-		FROM observations WHERE `+strings.Join(clauses, " AND ")+`
+	columns := "id,scope_id,sensor_id,kind,source_stream,source_key,source_event_id,source_time_ns,ingested_at_ns,schema_version,confidence,attribution,payload,retention_class"
+	if bounded {
+		text := func(column string) string { return "CAST(substr(CAST(" + column + " AS BLOB),1,513) AS TEXT)" }
+		columns = strings.Join([]string{text("id"), text("scope_id"), text("sensor_id"), text("kind"), text("source_stream"), text("source_key"), text("source_event_id"), "source_time_ns", "ingested_at_ns", "schema_version", "confidence", text("attribution"), "CASE WHEN length(CAST(payload AS BLOB))<=1048576 THEN payload ELSE NULL END", text("retention_class")}, ",")
+	}
+	rows, err := reader.QueryContext(ctx, "SELECT "+columns+" FROM observations WHERE "+strings.Join(clauses, " AND ")+`
 		ORDER BY ingested_at_ns DESC, id ASC LIMIT ?`, args...)
 	if err != nil {
-		return ObservationPage{}, fmt.Errorf("list observations: %w", err)
+		return nil, fmt.Errorf("list observations: %w", err)
 	}
 	defer rows.Close()
 
-	page := ObservationPage{Observations: make([]domain.Observation, 0, query.Limit+1)}
+	observations := make([]domain.Observation, 0, query.Limit+1)
+	projectionBytes := 0
 	for rows.Next() {
 		observation, err := scanObservation(rows)
 		if err != nil {
-			return ObservationPage{}, err
+			return nil, err
 		}
-		page.Observations = append(page.Observations, observation)
+		if bounded {
+			if err := domain.ValidateObservation(observation); err != nil {
+				return nil, err
+			}
+			projectionBytes += observationProjectionBytes(observation)
+			if projectionBytes > observationQueryMaxBytes {
+				return nil, ErrEvidenceBatchQueryLimit
+			}
+		}
+		observations = append(observations, observation)
 	}
 	if err := rows.Err(); err != nil {
-		return ObservationPage{}, fmt.Errorf("iterate observations: %w", err)
+		return nil, fmt.Errorf("iterate observations: %w", err)
 	}
-	if len(page.Observations) > query.Limit {
-		page.Observations = page.Observations[:query.Limit]
-		last := page.Observations[len(page.Observations)-1]
+	return observations, nil
+}
+
+func observationPage(observations []domain.Observation, limit int) ObservationPage {
+	page := ObservationPage{Observations: observations}
+	if len(observations) > limit {
+		page.Observations = observations[:limit]
+		last := page.Observations[limit-1]
 		page.Next = &ObservationCursor{IngestedAt: last.IngestedAt, ID: last.ID}
 	}
-	return page, nil
+	return page
 }
 
 func (s *Store) ListDevicesForScope(ctx context.Context, query DeviceQuery) (DevicePage, error) {
@@ -184,7 +211,7 @@ func scopeDevicePage(devices []domain.Device, limit int) DevicePage {
 	return page
 }
 
-func (s *Store) normalizeObservationQuery(query ObservationQuery) (ObservationQuery, error) {
+func normalizeObservationQuery(query ObservationQuery, now time.Time) (ObservationQuery, error) {
 	if err := validateQueryID("scope id", query.ScopeID); err != nil {
 		return ObservationQuery{}, err
 	}
@@ -197,7 +224,7 @@ func (s *Store) normalizeObservationQuery(query ObservationQuery) (ObservationQu
 		return ObservationQuery{}, fmt.Errorf("invalid observation kind filter")
 	}
 	if query.Until.IsZero() {
-		query.Until = s.now().UTC()
+		query.Until = now
 	} else {
 		query.Until = query.Until.UTC()
 	}

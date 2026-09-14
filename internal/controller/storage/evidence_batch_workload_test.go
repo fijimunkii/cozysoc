@@ -330,7 +330,7 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 		if err := storage.ValidateEvidenceBatchIdentityGroupForTest(ctx, tx, identityGroup, source, records); err != nil {
 			t.Fatal(err)
 		}
-		if err := storage.ValidateEvidenceBatchClaimBoundsForTest(ctx, tx, id, records); err != nil {
+		if err := storage.ValidateEvidenceBatchBoundsForTest(ctx, tx, id, records); err != nil {
 			t.Fatal(err)
 		}
 		for _, record := range records {

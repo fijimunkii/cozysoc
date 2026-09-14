@@ -147,7 +147,7 @@ Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys,
-all history readers, retention-driven quota recovery,
+live history-reader wiring, retention-driven quota recovery,
 schema migration or rollback compatibility. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
@@ -372,7 +372,7 @@ device routing index. The real queue/collector fixture also verifies four origin
 collections and eight claim/link detail rows for each of 100 devices.
 The index changes the reserved schema; previous footprint
 measurements retain their exact source and do not measure this index. Live device
-list/detail/activity wiring, other readers, lifecycle and migration gates remain
+history reader wiring, lifecycle and migration gates remain
 open, as does the unchanged full-controller storage measurement.
 
 ## Mixed device lists
@@ -406,8 +406,8 @@ selection and staged
 snapshot rollback. The real 100-device/four-collection queue fixture checks
 pagination with no duplicate or missing devices and exact last-seen times. These
 checks do not activate live readers or establish the full controller budget;
-other history readers, referential integrity, lifecycle, migration and runtime
-wiring remain required.
+referential integrity, lifecycle, migration and runtime reader wiring remain
+required.
 
 
 ## Mixed device activity
@@ -447,7 +447,7 @@ the legacy SQL readers; a regression verifies stored original timestamp offsets
 remain unchanged.
 
 This reader adds no schema or index and does not activate live batch history.
-Other history readers, full mixed-format uniqueness and deletion, retention and
+Live reader wiring, full mixed-format uniqueness and deletion, retention and
 quota lifecycle, migration/rollback and runtime wiring remain required. Earlier
 daily footprint evidence retains its exact measured source; the unchanged full
 controller workload must measure the integrated result against 30 MiB/day.
@@ -479,6 +479,54 @@ limits and cursors. They also cover selected corruption, work exhaustion, older
 valid evidence below a newer invalid batch, staged state, cancellation and closed
 transactions. The real 100-device collector fixture verifies paginated scope
 membership and its disappearance after the collection validity interval ends.
-Observation-history pagination, full mixed-format referential integrity and
-lifecycle, migration/rollback, runtime wiring and the complete controller resource
+Full mixed-format referential integrity and lifecycle, migration/rollback,
+runtime reader wiring and the complete controller resource
 measurement remain required.
+
+
+## Mixed observation history
+
+`MixedIdentitySnapshot.ListObservations` merges original legacy and batch
+observations in the caller's fixed transaction and retention clock. Scope,
+optional sensor/kind filters, the inclusive ingestion-time window, original
+observation expiry, limits up to 200 and the descending-time/ascending-ID cursor
+match the legacy history reader. Source event times and claim times do not order
+observation history. Payload bytes and provenance remain original; returned
+ingestion/source timestamps use the legacy UTC representation without changing
+stored timestamp offsets. Independently retained claims do not make an expired
+observation reappear.
+
+The reserved schema stores each batch's first and last original ingestion time
+and maximum observation expiry. An ingestion-time index supports ordered candidate
+selection across identity groups; append and pruning write these bounds with
+payloads and lookup changes in the same transaction. Pruning recomputes bounds
+from surviving observations, including zero bounds when only claims remain.
+Existing persisted bounds must validate before append or pruning can rewrite a
+batch. These fields and this index are not included in earlier exact-source
+footprint measurements. The schema is still reserved and not installed by live
+migration.
+
+History candidates use ingestion bounds only for selection. Every selected batch
+passes codec, source, routing, lookup, independent expiry and original-time-bound
+validation before projection. Original observations decide filter membership and
+ordering. All equal-time candidates are considered before truncation; a validated
+older upper bound permits an early stop only when it cannot change the page or
+its next cursor. Examined duplicate original IDs across formats return an error.
+
+Each query decodes at most 1,024 candidate batches and retains at most the limit
+plus one observation after each batch. Retained projections are charged against
+16 MiB; mixed legacy reads additionally bound metadata and individual raw payload
+materialization to 1 MiB. The fixed candidate/codec limits also bound temporary
+decoding and examined-ID tracking. Corruption, schema errors, oversized legacy
+projections and exhausted work budgets return no partial page. These logical
+bounds are not measured process RAM, CPU or sustained-run results.
+
+Tests compare mixed/all-batch history with legacy results across overlapping
+batches, ingestion ties, source and claim times outside the query window, filters,
+cursors, expiry and pruning. Other tests cover selected corruption, duplicates,
+index plans, work and projection budgets, transactional bound updates, cancellation
+and snapshot isolation. The real queue/collector fixture verifies pagination of
+400 original batch observations together with its existing legacy observation.
+Live reader wiring, full mixed-format uniqueness/deletion, retention and quota
+lifecycle, migration/rollback and the unchanged full controller workload against
+30 MiB/day remain required.

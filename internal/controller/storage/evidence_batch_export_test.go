@@ -10,4 +10,4 @@ var ValidateEvidenceBatchLookupsForTest = validateEvidenceBatchLookups
 var NextEvidenceBatchExpiryForTest = nextEvidenceBatchExpiry
 
 var ValidateEvidenceBatchIdentityGroupForTest = validateEvidenceBatchIdentityGroup
-var ValidateEvidenceBatchClaimBoundsForTest = validateEvidenceBatchClaimBounds
+var ValidateEvidenceBatchBoundsForTest = validateEvidenceBatchBounds

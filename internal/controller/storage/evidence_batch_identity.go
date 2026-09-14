@@ -204,9 +204,13 @@ func evidenceBatchClaimBounds(records []EvidenceBatchRecord) (first, last, expir
 	return
 }
 
-func writeEvidenceBatchClaimBounds(ctx context.Context, tx *sql.Tx, batch int64, records []EvidenceBatchRecord) error {
+func writeEvidenceBatchBounds(ctx context.Context, tx *sql.Tx, batch int64, records []EvidenceBatchRecord) error {
 	first, last, expiry := evidenceBatchClaimBounds(records)
-	_, err := tx.ExecContext(ctx, `UPDATE evidence_batches SET first_claim_ns=?,last_claim_ns=?,last_claim_expiry_ns=? WHERE id=?`, first, last, expiry, batch)
+	of, ol, oe, err := evidenceBatchObservationBounds(records)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE evidence_batches SET first_claim_ns=?,last_claim_ns=?,last_claim_expiry_ns=?,first_observation_ns=?,last_observation_ns=?,last_observation_expiry_ns=? WHERE id=?`, first, last, expiry, of, ol, oe, batch)
 	return err
 }
 
@@ -221,7 +225,7 @@ func validateEvidenceBatchClaimTimes(records []EvidenceBatchRecord) error {
 	return nil
 }
 
-func validateEvidenceBatchClaimBounds(ctx context.Context, tx *sql.Tx, batch int64, records []EvidenceBatchRecord) error {
+func validateEvidenceBatchBounds(ctx context.Context, tx *sql.Tx, batch int64, records []EvidenceBatchRecord) error {
 	if err := validateEvidenceBatchClaimTimes(records); err != nil {
 		return err
 	}
@@ -233,5 +237,5 @@ func validateEvidenceBatchClaimBounds(ctx context.Context, tx *sql.Tx, batch int
 	if f != first || l != last || e != expiry {
 		return ErrEvidenceBatchData
 	}
-	return nil
+	return validateEvidenceBatchObservationBounds(ctx, tx, batch, records)
 }

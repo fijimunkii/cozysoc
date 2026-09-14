@@ -168,6 +168,7 @@ func TestMixedDeviceListBoundsIneligibleWorkWithoutSkippingEvidence(t *testing.T
 	storeLegacyDetailRecord(t, s, detailRecord(9999, -time.Minute))
 	for n := 1; n <= evidenceBatchDeviceListMaxCandidates+1; n++ {
 		r := detailRecord(n, 0)
+		r.Observation.Kind = "fixture-status"
 		r.Claims[0].Claim.Value = fmt.Sprintf("02:00:00:01:%02x:%02x", n>>8, n&255)
 		r.Claims[0].ExpiresAt = base
 		r.Claims[1].Claim.ObservedAt = base.Add(time.Hour)
@@ -184,6 +185,11 @@ func TestMixedDeviceListBoundsIneligibleWorkWithoutSkippingEvidence(t *testing.T
 	if !errors.Is(err, ErrEvidenceBatchQueryLimit) || !reflect.DeepEqual(scope, DevicePage{}) {
 		t.Fatal("scope work limit claimed completeness", scope, err)
 	}
+	history, err := readMixedObservations(t, db, base, ObservationQuery{ScopeID: "scope.fixture", Since: base, Until: base.Add(time.Hour), Kind: "device-neighbor-seen"})
+	if !errors.Is(err, ErrEvidenceBatchQueryLimit) || !reflect.DeepEqual(history, ObservationPage{}) {
+		t.Fatal("history work limit claimed completeness", history, err)
+	}
+
 }
 
 func TestMixedDeviceListSnapshotRetirementAndClosedTransaction(t *testing.T) {
