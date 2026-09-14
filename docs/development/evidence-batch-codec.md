@@ -147,7 +147,7 @@ Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys,
-activity and other history readers, retention-driven quota recovery,
+all history readers, retention-driven quota recovery,
 schema migration or rollback compatibility. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
@@ -406,5 +406,48 @@ selection and staged
 snapshot rollback. The real 100-device/four-collection queue fixture checks
 pagination with no duplicate or missing devices and exact last-seen times. These
 checks do not activate live readers or establish the full controller budget;
-activity/other history readers, referential integrity, lifecycle, migration and
-runtime wiring remain required.
+other history readers, referential integrity, lifecycle, migration and runtime
+wiring remain required.
+
+
+## Mixed device activity
+
+`MixedIdentitySnapshot.ListDeviceActivity` combines retained legacy and batch raw
+history per device before classifying first observations, address changes and the
+latest observation. The seven-day predecessor window and 24-hour display window
+match the legacy reader. Address changes compare consecutive addresses within the
+same address family, including predecessors outside the display window. Original
+claim times, source provenance, independent observation and claim expiry, link
+start, scope and device retirement determine eligibility. Presence validity does
+not erase historical activity. The per-observation MAX aggregates and equal-time
+ranking retain legacy semantics; final ties use device ID for deterministic order.
+
+Both formats are read in the caller's fixed transaction and retention clock. The
+reader uses the existing device routing index and validates selected batches,
+lookups, routing and bounds before projecting evidence. It writes no data and owns
+no connection or transaction. Duplicate original observation IDs for one device,
+selected corruption, schema errors and exhausted work budgets return no partial
+activity page. The result retains at most the requested limit plus one candidate
+to establish truncation.
+
+A query examines at most 1,024 candidate devices, decodes at most 32,768 batches
+and projects at most 2,097,152 raw rows. Each device's history is capped at 32,768
+rows and 16 MiB of charged projection bytes before classification. These are
+logical work and allocation bounds, not measured process RAM or CPU results.
+The full seven-day, 100-device history performance and complete controller
+resource and lifecycle gates remain unmeasured.
+
+Parity tests compare mixed and all-legacy activity across first observations,
+cross-format address changes, dual-stack history, ties, limits, scope, retention,
+pruning and retirement. They also cover snapshot rollback, closed transactions,
+corrupt selected evidence, duplicate originals, exhausted work budgets and indexed
+query plans. The real four-collection, 100-device queue fixture verifies stable
+latest activity. Activity, list and detail projections return UTC timestamps like
+the legacy SQL readers; a regression verifies stored original timestamp offsets
+remain unchanged.
+
+This reader adds no schema or index and does not activate live batch history.
+Other history readers, full mixed-format uniqueness and deletion, retention and
+quota lifecycle, migration/rollback and runtime wiring remain required. Earlier
+daily footprint evidence retains its exact measured source; the unchanged full
+controller workload must measure the integrated result against 30 MiB/day.

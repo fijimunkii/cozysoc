@@ -141,15 +141,15 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 				if err != nil {
 					return deviceEvidenceDetailRows{}, err
 				}
-				item := DeviceIdentityEvidence{Kind: claim.Kind, Value: value, ObservedAt: claim.ObservedAt, ClaimValidUntil: claim.ValidUntil, ClaimConfidence: claim.Confidence, SourceSensorID: claim.SourceSensorID, LinkValidUntil: link.ValidUntil, LinkConfidence: link.Confidence, Authority: link.Authority, Reason: link.Reason}
+				item := DeviceIdentityEvidence{Kind: claim.Kind, Value: value, ObservedAt: claim.ObservedAt.UTC(), ClaimValidUntil: queryUTCTime(claim.ValidUntil), ClaimConfidence: claim.Confidence, SourceSensorID: claim.SourceSensorID, LinkValidUntil: queryUTCTime(link.ValidUntil), LinkConfidence: link.Confidence, Authority: link.Authority, Reason: link.Reason}
 				if record.Observation != nil && record.ObservationExpiresAt.After(now) && claim.SourceObservationID == record.Observation.ID {
 					o := record.Observation
-					item.Observation = &DeviceEvidenceObservation{ID: o.ID, SensorID: o.SensorID, Kind: o.Kind, SourceStream: o.SourceStream, IngestedAt: o.IngestedAt, Attribution: o.Attribution}
+					item.Observation = &DeviceEvidenceObservation{ID: o.ID, SensorID: o.SensorID, Kind: o.Kind, SourceStream: o.SourceStream, IngestedAt: o.IngestedAt.UTC(), Attribution: o.Attribution}
 				}
 				if result.Summary.Device.ID == "" {
-					result.Summary = DeviceEvidenceSummary{Device: device, FirstSeen: device.CreatedAt, LastSeen: claim.ObservedAt}
+					result.Summary = DeviceEvidenceSummary{Device: device, FirstSeen: device.CreatedAt, LastSeen: claim.ObservedAt.UTC()}
 				} else if claim.ObservedAt.After(result.Summary.LastSeen) {
-					result.Summary.LastSeen = claim.ObservedAt
+					result.Summary.LastSeen = claim.ObservedAt.UTC()
 				}
 				result.Evidence = append(result.Evidence, deviceEvidenceRow{Evidence: item, ClaimID: claim.ID, LinkID: link.ID})
 			}

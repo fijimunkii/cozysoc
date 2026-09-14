@@ -219,3 +219,13 @@ func getLegacyDeviceEvidenceDetail(ctx context.Context, reader deviceEvidenceRea
 	}
 	return detail, nil
 }
+
+// Query projections use the legacy SQL reader's UTC representation without
+// mutating original retained timestamps.
+func queryUTCTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	at := value.UTC()
+	return &at
+}

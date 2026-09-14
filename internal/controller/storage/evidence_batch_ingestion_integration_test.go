@@ -278,4 +278,16 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 		t.Fatal("pagination lost devices", len(seen))
 	}
 
+	activity, err := reader.ListDeviceActivity(context.Background(), storage.DeviceActivityQuery{ScopeID: o.ScopeID, AsOf: source.snapshot.CapturedAt})
+	if err != nil || len(activity.Items) != 100 || !activity.Truncated {
+		t.Fatal(activity, err)
+	}
+	activityDevices := map[string]bool{}
+	for _, item := range activity.Items {
+		if item.Kind != storage.DeviceActivityObserved || !item.At.Equal(source.snapshot.CapturedAt.Add(-time.Minute)) || !deviceIDs[item.DeviceID] || activityDevices[item.DeviceID] || item.PreviousAddress != "" || item.Source.ObservationID == "" {
+			t.Fatal("incorrect stable-device activity", item)
+		}
+		activityDevices[item.DeviceID] = true
+	}
+
 }
