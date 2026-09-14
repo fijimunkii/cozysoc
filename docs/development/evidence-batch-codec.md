@@ -627,3 +627,37 @@ duplicate cross-format IDs, a late lookup-insertion failure with rollback,
 foreign-key prerequisites, cancellation and owner-only commit. Explicit claim
 deletion, global uniqueness, lifecycle/quota integration, migration/rollback and
 the unchanged full controller resource measurement remain required.
+
+## Owned mixed-format retention and audit
+
+`Store.PruneEvidenceBatchExpired` owns one mixed-format retention pass on a
+separate pinned writer. The connection uses the same foreign keys, FULL
+synchronous writes, DELETE journal, disabled trusted schema, busy timeout and
+configured page quota as batch ingestion. The two paths share connection setup;
+neither creates a missing database or installs the reserved schema. Each
+maintenance call closes its private writer and leaves the parent Store open.
+
+One transaction prunes the bounded legacy tables, prunes and validates up to
+100 selected batches, and inserts a `retention-expired` storage event. The caller
+sets separate limits of 1–10,000 rows per legacy table and 1–100 batches. Original
+observation and claim expiry remain independent. Rewrites preserve retained
+fields, clear expired observation references, cascade expired claims to links,
+and rebuild routing, lookup slots and time bounds. Any staging, audit or commit
+failure returns no result; transaction rollback preserves both evidence and audit.
+A no-op pass produces no new event. Successful counts are returned after commit.
+
+The result and audit `expired_rows`/`total` fields count expired observations and
+claims across both formats plus the other expired legacy rows. As in legacy
+retention, they exclude cascaded links and internal index/batch rows. Separate
+`batch_observations`, `batch_claims` and `batch_links` fields describe the batch
+portion; they must not be added again to `total`. `batches_processed` counts
+visited batches. Audit expiry uses the configured audit policy at write time.
+
+Regression coverage verifies exact committed audit counts and reopen, independent
+expiry, no-op behavior, separate work limits, missing schema, cancellation,
+legacy/batch rollback after audit or rewrite failure, real SQLite quota failure
+and recovery, and a held-reader commit failure followed by successful retry.
+The existing live `Store.PruneExpired` behavior is unchanged. Scheduling, proactive
+pressure policy, global identity constraints, explicit claim deletion,
+migration/rollback and full-controller measurement remain activation gates; this
+owner is not wired into live maintenance and adds no new index or schema.
