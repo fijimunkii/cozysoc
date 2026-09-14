@@ -28,6 +28,9 @@ CREATE TABLE evidence_batch_identity_routes (
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX evidence_batch_identity_device ON evidence_batch_identity_routes(device_id,group_id);
 CREATE INDEX evidence_batch_identity_value ON evidence_batch_identity_routes(kind,value,device_id,group_id);
+CREATE TRIGGER evidence_batch_device_delete_guard BEFORE DELETE ON devices
+ WHEN EXISTS(SELECT 1 FROM evidence_batch_identity_routes WHERE device_id=OLD.id)
+ BEGIN SELECT RAISE(ABORT, 'device has batch evidence links'); END;
 `
 
 type evidenceBatchIdentityRoute struct {
