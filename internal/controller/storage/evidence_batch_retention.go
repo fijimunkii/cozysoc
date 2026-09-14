@@ -208,30 +208,36 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 			retained = append(retained, next)
 		}
 	}
-	// Removing observations can disable derived-ID packing, increasing encoded
-	// size. Repartition if needed; never drop retained evidence to fit a batch.
+	return counts, rewriteEvidenceBatchRecords(ctx, tx, id, source, identityGroup, retained)
+}
+
+// The caller has validated the original payload, bounds, routing and lookups.
+// Rewrite retained evidence and every derived index in the same transaction.
+func rewriteEvidenceBatchRecords(ctx context.Context, tx *sql.Tx, id, source, identityGroup int64, retained []EvidenceBatchRecord) error {
+	// Removing observations or links can disable derived-ID packing, increasing
+	// encoded size. Repartition rather than dropping retained evidence.
 	groups, err := partitionIdentityEvidence(retained)
 	if err != nil {
-		return counts, err
+		return err
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM evidence_batch_lookup WHERE batch_id=?`, id); err != nil {
-		return counts, err
+		return err
 	}
 	if len(groups) == 0 {
 		_, err = tx.ExecContext(ctx, `DELETE FROM evidence_batches WHERE id=?`, id)
 		if err != nil {
-			return counts, err
+			return err
 		}
-		return counts, removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
+		return removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
 	}
 	for i, group := range groups {
 		data, err := EncodeEvidenceBatch(group)
 		if err != nil {
-			return counts, err
+			return err
 		}
 		newIdentityGroup, err := ensureEvidenceBatchIdentityGroup(ctx, tx, source, group[0])
 		if err != nil {
-			return counts, err
+			return err
 		}
 		batchID := id
 		if i == 0 {
@@ -244,10 +250,10 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 			}
 		}
 		if err != nil {
-			return counts, err
+			return err
 		}
 		if err := writeEvidenceBatchBounds(ctx, tx, batchID, group); err != nil {
-			return counts, err
+			return err
 		}
 		for slot, r := range group {
 			if r.Observation == nil {
@@ -259,11 +265,11 @@ func pruneEvidenceBatch(ctx context.Context, tx *sql.Tx, id int64, now time.Time
 				storedKey = nil
 			}
 			if _, err = tx.ExecContext(ctx, `INSERT INTO evidence_batch_lookup(id,source_id,source_key,batch_id,slot,expires_at_ns) VALUES(?,?,?,?,?,?)`, id, source, storedKey, batchID, slot, r.ObservationExpiresAt.UnixNano()); err != nil {
-				return counts, err
+				return err
 			}
 		}
 	}
-	return counts, removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
+	return removeUnusedEvidenceBatchIdentityGroup(ctx, tx, identityGroup)
 }
 
 func partitionRetainedEvidence(records []EvidenceBatchRecord) ([][]EvidenceBatchRecord, error) {

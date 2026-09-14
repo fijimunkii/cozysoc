@@ -554,6 +554,43 @@ reader corruption fixtures explicitly introduce legacy conflicts after append.
 
 These checks enforce incoming-batch conflicts with existing legacy rows. They do
 not establish global uniqueness between arbitrary batch records, guard later
-legacy writers, or implement explicit device/claim deletion across formats.
-Those contracts, retention/quota lifecycle, migration/rollback, runtime activation
-and full-controller resource verification remain required.
+legacy writers, or implement explicit claim deletion across formats. Device
+deletion uses the transaction primitive below. Global uniqueness, retention/quota
+lifecycle, migration/rollback, runtime activation and full-controller resource
+verification remain required.
+
+
+## Transactional mixed device deletion
+
+`DeleteEvidenceBatchDevice` removes a global device and its links from both
+storage formats in an exclusively owned caller transaction. The existing device
+routing index selects affected batches across all scopes, without filtering out
+expired but unpruned evidence. Every selected payload, routing group, lookup and
+time/expiry bound must validate before rewriting. Original observations, claim
+IDs, claim values, expiry and source provenance survive; only links to the target
+device are removed. Links to other devices remain intact.
+
+Deletion shares pruning's transactional repartition/rewrite path. It rebuilds
+routing groups, lookups and bounds, preserving original IDs even when compact
+ID encoding is no longer applicable, and removes unused routing dictionaries.
+After batch rewrites, deleting the device cascades its legacy links through
+SQLite foreign keys. A reserved-schema trigger rejects direct device deletion
+while routing entries still reference that device, including when foreign keys
+are disabled. The primitive requires foreign keys enabled for the legacy cascade.
+It processes at most 1,024 candidate batches; corruption, work-budget exhaustion or
+any later
+SQL failure requires the owner to roll back the entire transaction. Success
+must not be acknowledged until the owner commits. No new index, UI deletion
+action or live runtime wiring is added. The guard is part of the reserved schema.
+
+Tests compare deletion with legacy cascading links across scopes, retain exact
+original observations/claims and unrelated-device links, and verify observation
+pruning before deletion, rebuilt bounds/lookups/routing, repeat deletion and
+reopen durability. Injected late deletion failure, corruption in a later batch
+and exhausted work budgets verify rollback after earlier rewrites. Other checks
+cover indexed selection, foreign-key prerequisites, cancellation, closed
+transactions and visibility before owner commit.
+
+Explicit claim/observation deletion, global cross-batch/later-legacy-writer
+uniqueness, lifecycle/quota integration, migration/rollback and full-controller
+resource verification remain required.
