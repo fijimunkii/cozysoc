@@ -23,12 +23,8 @@ func deleteEvidenceBatchDevice(ctx context.Context, tx *sql.Tx, device string, l
 	if err := validateQueryID("device", device); err != nil {
 		return false, err
 	}
-	var fk int
-	if err := tx.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&fk); err != nil {
+	if err := requireEvidenceBatchForeignKeys(ctx, tx); err != nil {
 		return false, err
-	}
-	if fk != 1 {
-		return false, ErrEvidenceBatchData
 	}
 	// Global device IDs can have evidence in multiple scopes: delete every link,
 	// not just the scope that happened to select the device in the UI.

@@ -591,6 +591,39 @@ and exhausted work budgets verify rollback after earlier rewrites. Other checks
 cover indexed selection, foreign-key prerequisites, cancellation, closed
 transactions and visibility before owner commit.
 
-Explicit claim/observation deletion, global cross-batch/later-legacy-writer
+Explicit claim deletion, global cross-batch/later-legacy-writer
 uniqueness, lifecycle/quota integration, migration/rollback and full-controller
 resource verification remain required.
+
+
+## Transactional scoped observation deletion
+
+`DeleteEvidenceBatchObservation` deletes one original observation within an
+explicit scope in the caller's exclusively owned transaction. It handles legacy
+rows or a batch lookup and refuses an ambiguous original ID present in both
+formats. Missing or out-of-scope observations return not found without mutation.
+Expired but unpruned originals can still be deleted. The primitive requires
+foreign keys enabled and a reserved schema; the caller must roll back on error
+and commit before acknowledging success.
+
+Legacy deletion uses SQLite's existing `ON DELETE SET NULL` references. Batch
+deletion validates the selected complete batch, routing, lookups and bounds,
+removes only the selected observation and its expiry, and clears source/evidence
+observation references in its claims and links. It preserves every claim/link ID,
+value, time, expiry and other field. It does not prune independently expired
+claims or links. An observation-only record is removed when it has no remaining
+evidence; an empty batch and its unused routing dictionary are removed.
+
+The existing packed observation lookup selects at most one batch. The shared
+bounded codec and transactional rewrite path rebuild slots, bounds and routing,
+including original ID expansion and repartition if needed. Unrelated observations
+remain exact and readable. No new schema, index, UI action or live runtime wiring
+is introduced.
+
+Tests compare legacy reference clearing and exact retained batch evidence,
+including expired originals, other records, scope isolation, empty batches,
+lookup remapping and reopen. They cover corrupt payload/source/bounds/slots,
+duplicate cross-format IDs, a late lookup-insertion failure with rollback,
+foreign-key prerequisites, cancellation and owner-only commit. Explicit claim
+deletion, global uniqueness, lifecycle/quota integration, migration/rollback and
+the unchanged full controller resource measurement remain required.
