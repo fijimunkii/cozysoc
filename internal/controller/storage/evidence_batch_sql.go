@@ -145,6 +145,9 @@ func appendEvidenceBatch(ctx context.Context, tx *sql.Tx, r EvidenceBatchRecord)
 	if !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
+	if err := validateBatchLegacyIdentityIDs(ctx, tx, r); err != nil {
+		return false, err
+	}
 	identityGroup, err := ensureEvidenceBatchIdentityGroup(ctx, tx, source, r)
 	if err != nil {
 		return false, err

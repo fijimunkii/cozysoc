@@ -178,13 +178,15 @@ func TestMixedActivityRejectsCorruptionAndDuplicateOriginals(t *testing.T) {
 			s, db := detailBatchFixture(t)
 			base := batchRecordFixture().Claims[0].Claim.ObservedAt
 			r := activityRecord(1, "device.fixture", 0, "192.168.50.10", domain.ClaimIPv4)
-			if mode == "duplicate" {
-				storeLegacyDetailRecord(t, s, r)
-			} else {
+			if mode != "duplicate" {
 				storeLegacyDetailRecord(t, s, activityRecord(2, "device.fixture", time.Minute, "192.168.50.20", domain.ClaimIPv4))
 			}
 			if ok, err := batchSQLAppend(t, db, r); err != nil || !ok {
 				t.Fatal(ok, err)
+			}
+			if mode == "duplicate" {
+				// Simulate a legacy writer introducing corruption after the batch.
+				storeLegacyDetailRecord(t, s, r)
 			}
 			mutations := map[string]string{"payload": "UPDATE evidence_batches SET data=x'00'", "bounds": "UPDATE evidence_batches SET last_claim_ns=last_claim_ns+1", "lookup": "UPDATE evidence_batch_lookup SET slot=99", "routes": "DELETE FROM evidence_batch_identity_routes WHERE kind='ipv4'"}
 			if sql, ok := mutations[mode]; ok {

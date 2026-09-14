@@ -257,7 +257,8 @@ func TestRetainedEvidencePartitionIsLossless(t *testing.T) {
 	}
 }
 func TestEvidenceBatchPruningMatchesLegacyForeignKeys(t *testing.T) {
-	s, db := batchSQLFixture(t)
+	s, _ := batchSQLFixture(t)
+	_, db := batchSQLFixture(t)
 	r := batchSQLRecord(1)
 	ctx := context.Background()
 	if err := s.CreateDevice(ctx, domain.Device{ID: r.Links[0].DeviceID, CreatedAt: r.Observation.IngestedAt}); err != nil {

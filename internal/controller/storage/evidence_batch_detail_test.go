@@ -279,10 +279,11 @@ func TestMixedDeviceDetailRejectsDuplicateSelectedLinkIDs(t *testing.T) {
 	r := detailRecord(1, 0)
 	old := detailRecord(2, -time.Minute)
 	old.Links[0].ID = r.Links[0].ID
-	storeLegacyDetailRecord(t, s, old)
 	if ok, err := batchSQLAppend(t, db, r); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
+	// Simulate a legacy writer introducing corruption after the batch.
+	storeLegacyDetailRecord(t, s, old)
 	at := r.Claims[0].Claim.ObservedAt
 	if got, err := readMixedDetail(t, db, at, DeviceEvidenceDetailQuery{ScopeID: "scope.fixture", DeviceID: "device.fixture", AsOf: at}); err == nil || !reflect.DeepEqual(got, DeviceEvidenceDetail{}) {
 		t.Fatal(got, err)

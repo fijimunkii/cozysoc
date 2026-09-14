@@ -138,13 +138,15 @@ func TestMixedObservationsRejectCorruptionAndDuplicateOriginals(t *testing.T) {
 			s, db := detailBatchFixture(t)
 			r := detailRecord(1, 0)
 			base := r.Observation.IngestedAt
-			if mode == "duplicate" {
-				storeLegacyDetailRecord(t, s, r)
-			} else {
+			if mode != "duplicate" {
 				storeLegacyDetailRecord(t, s, detailRecord(2, 0))
 			}
 			if ok, err := batchSQLAppend(t, db, r); err != nil || !ok {
 				t.Fatal(ok, err)
+			}
+			if mode == "duplicate" {
+				// Simulate a legacy writer introducing corruption after the batch.
+				storeLegacyDetailRecord(t, s, r)
 			}
 			mutations := map[string]string{"payload": "UPDATE evidence_batches SET data=x'00'", "bounds": "UPDATE evidence_batches SET last_observation_ns=last_observation_ns+1", "lookup": "UPDATE evidence_batch_lookup SET slot=99", "routes": "DELETE FROM evidence_batch_identity_routes WHERE kind='ipv4'", "schema": "DROP INDEX evidence_batches_observation_time"}
 			if mutation, ok := mutations[mode]; ok {
