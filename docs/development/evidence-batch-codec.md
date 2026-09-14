@@ -451,3 +451,34 @@ Other history readers, full mixed-format uniqueness and deletion, retention and
 quota lifecycle, migration/rollback and runtime wiring remain required. Earlier
 daily footprint evidence retains its exact measured source; the unchanged full
 controller workload must measure the integrated result against 30 MiB/day.
+
+
+## Mixed scope device membership
+
+`MixedIdentitySnapshot.ListDevicesForScope` preserves the legacy scope query's
+claim and link validity intervals. A retained claim must have been observed by
+the requested as-of time, and its validity end must be absent or at least that
+time. The linked device must match, the link must have started, and its validity
+end must also be absent or at least that time. Claim expiry uses the fixed
+retention clock; device retirement is inclusive at the as-of boundary. Original
+observation expiry does not erase independently retained claims. Historical
+evidence alone does not establish scope membership or fill presence gaps.
+
+The reader shares legacy SQL, indexed batch selection and selected-batch
+validation with the history device list. It continues past ineligible batches
+and stops scanning a device after an actual valid claim/link match. Sorted device
+IDs are deduplicated across formats, with the exclusive cursor and one extra
+device preserving pagination. The same 1,024-candidate budget bounds a whole
+page; corruption, query failure and exhausted work return no partial result.
+The caller owns the transaction and fixed retention clock. No new index, schema
+migration or live runtime wiring is added.
+
+Tests compare legacy and mixed/all-batch results across both validity ends, future
+link starts, unbounded intervals, gaps, retirement, retention, observation pruning,
+limits and cursors. They also cover selected corruption, work exhaustion, older
+valid evidence below a newer invalid batch, staged state, cancellation and closed
+transactions. The real 100-device collector fixture verifies paginated scope
+membership and its disappearance after the collection validity interval ends.
+Observation-history pagination, full mixed-format referential integrity and
+lifecycle, migration/rollback, runtime wiring and the complete controller resource
+measurement remain required.

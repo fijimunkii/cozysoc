@@ -70,6 +70,12 @@ const batchDeviceListCandidateSQL = `SELECT d.id,d.user_label,d.created_at_ns,d.
  ORDER BY d.id,b.last_claim_ns DESC,b.id DESC LIMIT 1`
 
 func listBatchDeviceEvidence(ctx context.Context, tx *sql.Tx, now time.Time, q DeviceEvidenceQuery, throughID string) ([]DeviceEvidenceSummary, error) {
+	return listBatchDeviceCandidates(ctx, tx, now, q, throughID, false)
+}
+
+// requireValidity selects scope membership, whose legacy contract includes both
+// claim and link presence intervals. History summaries deliberately omit them.
+func listBatchDeviceCandidates(ctx context.Context, tx *sql.Tx, now time.Time, q DeviceEvidenceQuery, throughID string, requireValidity bool) ([]DeviceEvidenceSummary, error) {
 	devices := make([]DeviceEvidenceSummary, 0, q.Limit+1)
 	cursorDevice := q.AfterID
 	var cursorTime, cursorBatch int64
@@ -111,13 +117,14 @@ func listBatchDeviceEvidence(ctx context.Context, tx *sql.Tx, now time.Time, q D
 		for _, record := range records {
 			claims := map[string]time.Time{}
 			for _, c := range record.Claims {
-				if c.ExpiresAt.After(now) && !c.Claim.ObservedAt.After(q.AsOf) {
+				if c.ExpiresAt.After(now) && !c.Claim.ObservedAt.After(q.AsOf) && (!requireValidity || c.Claim.ValidUntil == nil || !c.Claim.ValidUntil.Before(q.AsOf)) {
 					claims[c.Claim.ID] = c.Claim.ObservedAt.UTC()
 				}
 			}
 			for _, link := range record.Links {
-				// Legacy device-list membership intentionally does not filter link start or
-				// presence validity. Detail and activity have their own stricter contracts.
+				if requireValidity && (link.ValidFrom.After(q.AsOf) || (link.ValidUntil != nil && link.ValidUntil.Before(q.AsOf))) {
+					continue
+				}
 				if at, ok := claims[link.ClaimID]; ok && link.DeviceID == device.ID && (latest.LastSeen.IsZero() || at.After(latest.LastSeen)) {
 					latest.LastSeen = at
 				}
@@ -136,7 +143,7 @@ func listBatchDeviceEvidence(ctx context.Context, tx *sql.Tx, now time.Time, q D
 		}
 		cursorDevice, cursorTime, cursorBatch = device.ID, candidate.LastClaim, candidate.ID
 		allowSame = true
-		if !latest.LastSeen.IsZero() && (latest.LastSeen.UnixNano() >= candidate.LastClaim || latest.LastSeen.Equal(q.AsOf)) {
+		if !latest.LastSeen.IsZero() && (requireValidity || latest.LastSeen.UnixNano() >= candidate.LastClaim || latest.LastSeen.Equal(q.AsOf)) {
 			allowSame = false
 		}
 	}
