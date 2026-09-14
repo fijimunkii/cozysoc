@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 )
 
 const evidenceBatchMaxPruneBatches = 100
@@ -26,9 +28,30 @@ func validateRetainedBatchBundle(r EvidenceBatchRecord, scope, sensor, stream st
 		observationID = r.Observation.ID
 	}
 	claims := make(map[string]bool, len(r.Claims))
+	claimKeys := map[struct {
+		kind  domain.ClaimKind
+		value string
+	}]bool{}
 	for _, c := range r.Claims {
 		if !batchTimeFits(c.ExpiresAt) || c.Claim.ScopeID != scope || c.Claim.SourceSensorID != sensor || c.Claim.SourceObservationID != observationID || claims[c.Claim.ID] {
 			return ErrEvidenceBatchData
+		}
+		// Legacy UNIQUE(source_observation_id,kind,value) applies only while
+		// the source observation exists. NULL sources intentionally permit
+		// independently retained claims with the same normalized value.
+		if observationID != "" {
+			value, err := domain.NormalizeClaimValue(c.Claim.Kind, c.Claim.Value)
+			if err != nil {
+				return err
+			}
+			key := struct {
+				kind  domain.ClaimKind
+				value string
+			}{c.Claim.Kind, value}
+			if claimKeys[key] {
+				return ErrEvidenceBatchData
+			}
+			claimKeys[key] = true
 		}
 		claims[c.Claim.ID] = true
 	}

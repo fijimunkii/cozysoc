@@ -530,3 +530,30 @@ and snapshot isolation. The real queue/collector fixture verifies pagination of
 Live reader wiring, full mixed-format uniqueness/deletion, retention and quota
 lifecycle, migration/rollback and the unchanged full controller workload against
 30 MiB/day remain required.
+
+
+## Batch claim constraints and legacy ID conflicts
+
+The SQL adapter validates each retained bundle against the legacy normalized
+`(source_observation_id, kind, value)` uniqueness rule. While an original
+observation is present, different claim IDs cannot carry the same normalized
+kind/value for that source. Reads, append and pruning reject invalid retained
+bundles without silently merging evidence. After observation removal, the source
+reference is null and repeated normalized values remain permitted, matching
+SQLite's null-source uniqueness semantics.
+
+After resolving observation replay, a new batch append probes existing legacy
+claim and link primary keys before writing identity routing or payload data.
+An occupied ID is rejected even when the legacy row has expired but has not been
+pruned. These bounded primary-key checks require no new schema or index. The
+transaction owner rolls back all staged changes on error, including any proposed
+new device. Tests verify normalized aliases, null-source behavior, expired rows,
+claim/link conflicts, rollback and retry, and rejection of corrupt stored bundles
+by reads and pruning. Retention parity uses separate legacy and batch databases;
+reader corruption fixtures explicitly introduce legacy conflicts after append.
+
+These checks enforce incoming-batch conflicts with existing legacy rows. They do
+not establish global uniqueness between arbitrary batch records, guard later
+legacy writers, or implement explicit device/claim deletion across formats.
+Those contracts, retention/quota lifecycle, migration/rollback, runtime activation
+and full-controller resource verification remain required.
