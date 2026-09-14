@@ -112,7 +112,7 @@ func listBatchDeviceEvidence(ctx context.Context, tx *sql.Tx, now time.Time, q D
 			claims := map[string]time.Time{}
 			for _, c := range record.Claims {
 				if c.ExpiresAt.After(now) && !c.Claim.ObservedAt.After(q.AsOf) {
-					claims[c.Claim.ID] = c.Claim.ObservedAt
+					claims[c.Claim.ID] = c.Claim.ObservedAt.UTC()
 				}
 			}
 			for _, link := range record.Links {

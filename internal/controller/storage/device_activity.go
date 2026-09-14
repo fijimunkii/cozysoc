@@ -56,54 +56,15 @@ type DeviceActivityPage struct {
 }
 
 func (s *Store) ListDeviceActivity(ctx context.Context, query DeviceActivityQuery) (DeviceActivityPage, error) {
-	if err := validateQueryID("scope id", query.ScopeID); err != nil {
+	now := s.now().UTC()
+	query, err := normalizeActivityQuery(query, now)
+	if err != nil {
 		return DeviceActivityPage{}, err
 	}
-	if query.AsOf.IsZero() {
-		query.AsOf = s.now().UTC()
-	} else {
-		query.AsOf = query.AsOf.UTC()
-	}
-	if query.Limit == 0 {
-		query.Limit = MaxDeviceActivityItems
-	}
-	if query.Limit < 1 || query.Limit > MaxDeviceActivityItems {
-		return DeviceActivityPage{}, fmt.Errorf("device activity limit must be between 1 and %d", MaxDeviceActivityItems)
-	}
 
-	now := s.now().UTC()
 	since := query.AsOf.Add(-DeviceActivityWindow)
 	historySince := query.AsOf.Add(-deviceActivityHistoryWindow)
-	rows, err := s.conn.QueryContext(ctx, `WITH raw AS (
-		SELECT
-			o.id AS observation_id,
-			d.id AS device_id,
-			d.user_label AS user_label,
-			d.created_at_ns AS created_at_ns,
-			MAX(c.observed_at_ns) AS observed_at_ns,
-			MAX(CASE WHEN c.kind = 'mac' THEN c.value END) AS hardware_address,
-			MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.kind END) AS address_family,
-			MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.value END) AS address,
-			o.sensor_id AS sensor_id,
-			o.kind AS source_kind,
-			o.source_stream AS source_stream,
-			o.ingested_at_ns AS ingested_at_ns,
-			o.attribution AS attribution
-		FROM observations o
-		JOIN device_claim_links l ON l.evidence_observation_id = o.id
-		JOIN identity_claims c ON c.id = l.claim_id AND c.source_observation_id = o.id
-		JOIN devices d ON d.id = l.device_id
-		WHERE o.scope_id = ?
-		  AND o.kind = 'device-neighbor-seen'
-		  AND o.expires_at_ns > ?
-		  AND c.expires_at_ns > ?
-		  AND c.observed_at_ns >= ?
-		  AND c.observed_at_ns <= ?
-		  AND l.valid_from_ns <= ?
-		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)
-		GROUP BY o.id, d.id, d.user_label, d.created_at_ns, o.sensor_id, o.kind, o.source_stream, o.ingested_at_ns, o.attribution
-		HAVING MAX(CASE WHEN c.kind = 'mac' THEN c.value END) IS NOT NULL
-		   AND MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.value END) IS NOT NULL
+	rows, err := s.conn.QueryContext(ctx, "WITH raw AS ("+legacyActivityRawSQL(false)+`
 	), sequenced AS (
 		SELECT raw.*,
 			LAG(address) OVER (PARTITION BY device_id, address_family ORDER BY observed_at_ns ASC, observation_id ASC) AS previous_address,
@@ -129,7 +90,7 @@ func (s *Store) ListDeviceActivity(ctx context.Context, query DeviceActivityQuer
 		address_family, address, previous_address, hardware_address,
 		sensor_id, source_kind, source_stream, ingested_at_ns, attribution
 	FROM selected
-	ORDER BY observed_at_ns DESC, observation_id ASC
+	ORDER BY observed_at_ns DESC, observation_id ASC, device_id ASC
 	LIMIT ?`,
 		query.ScopeID,
 		unixNanos(now), unixNanos(now), unixNanos(historySince), unixNanos(query.AsOf), unixNanos(query.AsOf), unixNanos(query.AsOf),
@@ -171,4 +132,43 @@ func (s *Store) ListDeviceActivity(ctx context.Context, query DeviceActivityQuer
 		page.Truncated = true
 	}
 	return page, nil
+}
+
+// Keep the legacy grouping contract shared with the mixed reader. Device values
+// are bound parameters; the optional filter is controller-owned SQL.
+func legacyActivityRawSQL(forDevice bool) string {
+	sql := `
+		SELECT
+			o.id AS observation_id,
+			d.id AS device_id,
+			d.user_label AS user_label,
+			d.created_at_ns AS created_at_ns,
+			MAX(c.observed_at_ns) AS observed_at_ns,
+			MAX(CASE WHEN c.kind = 'mac' THEN c.value END) AS hardware_address,
+			MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.kind END) AS address_family,
+			MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.value END) AS address,
+			o.sensor_id AS sensor_id,
+			o.kind AS source_kind,
+			o.source_stream AS source_stream,
+			o.ingested_at_ns AS ingested_at_ns,
+			o.attribution AS attribution
+		FROM observations o
+		JOIN device_claim_links l ON l.evidence_observation_id = o.id
+		JOIN identity_claims c ON c.id = l.claim_id AND c.source_observation_id = o.id
+		JOIN devices d ON d.id = l.device_id
+		WHERE o.scope_id = ?
+		  AND o.kind = 'device-neighbor-seen'
+		  AND o.expires_at_ns > ?
+		  AND c.expires_at_ns > ?
+		  AND c.observed_at_ns >= ?
+		  AND c.observed_at_ns <= ?
+		  AND l.valid_from_ns <= ?
+		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)`
+	if forDevice {
+		sql += " AND d.id = ?"
+	}
+	return sql + `
+		GROUP BY o.id, d.id, d.user_label, d.created_at_ns, o.sensor_id, o.kind, o.source_stream, o.ingested_at_ns, o.attribution
+		HAVING MAX(CASE WHEN c.kind = 'mac' THEN c.value END) IS NOT NULL
+		   AND MAX(CASE WHEN c.kind IN ('ipv4', 'ipv6') THEN c.value END) IS NOT NULL`
 }
