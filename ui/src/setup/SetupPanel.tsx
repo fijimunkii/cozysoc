@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AppData } from "../app-data";
 import { coverageStatePresentation } from "../coverage/presentation";
@@ -19,13 +19,49 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const enrolled = data.networks.enrolled;
   const enabled = enrolled !== undefined && data.devices.configured;
   const selectedNetwork = data.networks.candidates.find((candidate) => candidate.interface_name === selected);
+  const stage = data.network_error !== undefined ? "unavailable" : enrolled === undefined ? "choose" : enabled ? "verify" : "enable";
+  const heading = useRef<HTMLHeadingElement>(null);
+  const pauseHeading = useRef<HTMLHeadingElement>(null);
+  const enrollmentReviewHeading = useRef<HTMLHeadingElement>(null);
+  const disableReviewHeading = useRef<HTMLHeadingElement>(null);
+  const reviewSelectionButton = useRef<HTMLButtonElement>(null);
+  const pauseDeviceWatchButton = useRef<HTMLButtonElement>(null);
+  const panel = dismissed ? "paused" : confirmingEnrollment && enrolled === undefined && selectedNetwork !== undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
+  const previousPanel = useRef(panel);
+  const previousRead = useRef(data);
+  const previousStage = useRef(stage);
+  const focusAfterMutation = useRef(false);
+
+  useEffect(() => {
+    if (previousRead.current === data) return;
+    if (focusAfterMutation.current && previousStage.current !== stage) heading.current?.focus();
+    focusAfterMutation.current = false;
+    previousRead.current = data;
+    previousStage.current = stage;
+  }, [data, stage]);
+
+  useEffect(() => {
+    if (previousPanel.current === panel) return;
+    if (panel === "paused") pauseHeading.current?.focus();
+    else if (panel === "enrollment-review") enrollmentReviewHeading.current?.focus();
+    else if (panel === "disable-review") disableReviewHeading.current?.focus();
+    else if (previousPanel.current === "paused") heading.current?.focus();
+    else if (previousPanel.current === "enrollment-review") reviewSelectionButton.current?.focus();
+    else if (previousPanel.current === "disable-review") pauseDeviceWatchButton.current?.focus();
+    previousPanel.current = panel;
+  }, [panel]);
+
+  const onMutationChanged = () => {
+    focusAfterMutation.current = true;
+    onChanged();
+  };
 
   if (dismissed) {
     return (
       <section className="product-card setup-paused" aria-labelledby="setup-paused-title">
         <div>
           <p className="eyebrow">Setup paused</p>
-          <h2 id="setup-paused-title">Continue when you are ready</h2>
+          <h2 ref={pauseHeading} id="setup-paused-title" tabIndex={-1}>Continue when you are ready</h2>
           <p>No network or monitoring setting changes while setup is paused.</p>
         </div>
         <button type="button" className="primary-action" onClick={() => setDismissed(false)}>Resume setup</button>
@@ -39,7 +75,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         <header className="setup-header">
           <div>
             <p className="eyebrow">Setup</p>
-            <h2 id="setup-title">Network setup information is unavailable</h2>
+            <h2 ref={heading} id="setup-title" tabIndex={-1}>Network setup information is unavailable</h2>
             <p>{data.network_error} Existing device and coverage evidence remains available; no network authorization is changed.</p>
           </div>
         </header>
@@ -56,7 +92,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         <header className="setup-header">
           <div>
             <p className="eyebrow">First-time setup</p>
-            <h2 id="setup-title">Choose the home network to authorize</h2>
+            <h2 ref={heading} id="setup-title" tabIndex={-1}>Choose the home network to authorize</h2>
             <p>Cozy SOC will not select a network automatically. Authorization only records the scope you choose; Device Watch stays off until you enable it separately. This choice and resulting device evidence stay on this machine by default; no account or router change is required.</p>
           </div>
           <span className="setup-step">Step 1 of 3</span>
@@ -67,12 +103,12 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         {confirmingEnrollment && selectedNetwork ? (
           <div className="setup-confirmation">
             <p className="setup-kicker">Review authorization</p>
-            <h3>Authorize {selectedNetwork.interface_name}?</h3>
+            <h3 ref={enrollmentReviewHeading} tabIndex={-1}>Authorize {selectedNetwork.interface_name}?</h3>
             <p>This authorizes Device Watch to use this interface and its currently observed local prefixes as the home-network scope. It does not start monitoring yet.</p>
             <NetworkDetail network={selectedNetwork} />
             <div className="setup-actions">
               <button type="button" className="secondary-action" disabled={pending !== null} onClick={() => setConfirmingEnrollment(false)}>Back</button>
-              <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enroll", () => client.enrollNetwork(selectedNetwork.interface_name), setPending, setError, onChanged)}>
+              <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enroll", () => client.enrollNetwork(selectedNetwork.interface_name), setPending, setError, onMutationChanged)}>
                 {pending === "enroll" ? "Authorizing…" : "Authorize this network"}
               </button>
             </div>
@@ -108,7 +144,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
             {data.networks.candidates_truncated ? <p className="setup-note" role="status">Only the first bounded set of eligible interfaces is shown.</p> : null}
             <div className="setup-actions setup-actions--split">
               <button type="button" className="quiet-button" onClick={() => setDismissed(true)}>Not now</button>
-              <button type="button" className="primary-action" disabled={selectedNetwork === undefined || pending !== null} onClick={() => setConfirmingEnrollment(true)}>Review selection</button>
+              <button ref={reviewSelectionButton} type="button" className="primary-action" disabled={selectedNetwork === undefined || pending !== null} onClick={() => setConfirmingEnrollment(true)}>Review selection</button>
             </div>
           </div>
         )}
@@ -122,7 +158,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         <header className="setup-header">
           <div>
             <p className="eyebrow">Home network authorized</p>
-            <h2 id="setup-title">Enable Device Watch when you are ready</h2>
+            <h2 ref={heading} id="setup-title" tabIndex={-1}>Enable Device Watch when you are ready</h2>
             <p>{enrolled.interface.interface_name} is authorized, but monitoring is still off. Enabling starts passive Device Watch only after controller preflight succeeds.</p>
           </div>
           <span className="setup-step">Step 2 of 3</span>
@@ -132,7 +168,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
           {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
           <div className="setup-actions setup-actions--split">
             <button type="button" className="quiet-button" onClick={() => setDismissed(true)}>Not now</button>
-            <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enable", () => client.enableDeviceWatch(), setPending, setError, onChanged)}>
+            <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enable", () => client.enableDeviceWatch(), setPending, setError, onMutationChanged)}>
               {pending === "enable" ? "Enabling…" : "Enable Device Watch"}
             </button>
           </div>
@@ -150,7 +186,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
       <header className="setup-header">
         <div>
           <p className="eyebrow">Device Watch</p>
-          <h2 id="setup-title">{verified ? "Device Watch is reporting current evidence" : awaitingEvidence ? "Verify Device Watch coverage" : "Device Watch coverage needs review"}</h2>
+          <h2 ref={heading} id="setup-title" tabIndex={-1}>{verified ? "Device Watch is reporting current evidence" : awaitingEvidence ? "Verify Device Watch coverage" : "Device Watch coverage needs review"}</h2>
           <p>{enrolled.interface.interface_name} is authorized and Device Watch is enabled. {verified
             ? "Current passive neighbor evidence supports limited local visibility, not complete network or traffic monitoring."
             : "Enabled intent does not establish current visibility; check the reported evidence and gaps before relying on it."}</p>
@@ -172,18 +208,18 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
         {confirmingDisable ? (
           <div className="setup-confirmation setup-confirmation--inline">
-            <h3>Disable Device Watch?</h3>
+            <h3 ref={disableReviewHeading} tabIndex={-1}>Disable Device Watch?</h3>
             <p>This stops Device Watch monitoring intent but keeps the network authorization so you can enable it again later.</p>
             <div className="setup-actions">
               <button type="button" className="secondary-action" disabled={pending !== null} onClick={() => setConfirmingDisable(false)}>Back</button>
-              <button type="button" className="danger-action" disabled={pending !== null} onClick={() => void run("disable", () => client.disableDeviceWatch(), setPending, setError, onChanged)}>
+              <button type="button" className="danger-action" disabled={pending !== null} onClick={() => void run("disable", () => client.disableDeviceWatch(), setPending, setError, onMutationChanged)}>
                 {pending === "disable" ? "Disabling…" : "Disable Device Watch"}
               </button>
             </div>
           </div>
         ) : (
           <div className="setup-actions setup-actions--end">
-            <button type="button" className="secondary-action" onClick={() => setConfirmingDisable(true)}>Pause Device Watch</button>
+            <button ref={pauseDeviceWatchButton} type="button" className="secondary-action" onClick={() => setConfirmingDisable(true)}>Pause Device Watch</button>
           </div>
         )}
       </div>
