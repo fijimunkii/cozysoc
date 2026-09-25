@@ -76,7 +76,22 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 		  )`,
 		deviceID, unixNanos(now), scopeID, unixNanos(now), unixNanos(now)).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, fmt.Errorf("%w: %s", ErrDeviceNotInScope, deviceID)
+		// Canonical Device Watch evidence retains claims and links in batches.
+		// Resolve that evidence inside this write transaction before authorizing
+		// the label, so a stale route or another scope cannot grant a mutation.
+		snapshot, snapshotErr := NewMixedIdentitySnapshot(tx, now)
+		if snapshotErr != nil {
+			return false, fmt.Errorf("resolve device label evidence: %w", snapshotErr)
+		}
+		detail, detailErr := snapshot.GetDeviceEvidenceDetail(ctx, DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: deviceID, AsOf: now, Limit: 1})
+		if errors.Is(detailErr, ErrDeviceEvidenceNotFound) {
+			return false, fmt.Errorf("%w: %s", ErrDeviceNotInScope, deviceID)
+		}
+		if detailErr != nil {
+			return false, fmt.Errorf("resolve device label evidence: %w", detailErr)
+		}
+		current = sql.NullString{String: detail.Summary.Device.UserLabel, Valid: detail.Summary.Device.UserLabel != ""}
+		err = nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("resolve device label target: %w", err)

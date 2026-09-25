@@ -120,6 +120,8 @@ It invokes only two fixed, read-only system utilities without a shell:
 
 Command output is capped at 1 MiB, individual parsed lines are bounded, and a snapshot may contain at most 4096 neighbors. Incomplete entries and entries without a valid unicast link-layer address are ignored because they do not establish a visible peer.
 
+macOS may omit a leading zero in an ARP or NDP link-layer octet (for example `0:2b`). The parser accepts one or two hexadecimal digits per octet in exactly six colon-separated octets and normalizes the address before recording evidence.
+
 One source may be unavailable while the other remains usable; coverage evidence records source availability independently. A current gap in either expected source degrades Device Watch verification. If neither source is available, Device Watch records an `unavailable` coverage sample and emits no device-arrival/departure inference.
 
 ## Controller runtime
@@ -199,7 +201,7 @@ cozysoc device-label --state-dir PATH DEVICE_ID "Living Room TV"
 
 An empty label clears the user label. Labels are user metadata only; they do not alter the underlying temporal identity claims or increase inference confidence.
 
-Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update. A guessed device ID from another scope therefore cannot be labeled through this method.
+Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update, including evidence held in canonical batches. The scope/evidence check and label update use one transaction. A guessed device ID from another scope therefore cannot be labeled through this method.
 
 Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event.
 

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/netip"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -87,8 +88,8 @@ func parseARP(data []byte, interfaceName string) ([]Neighbor, error) {
 		if err != nil || !address.Is4() {
 			continue
 		}
-		hardware, err := net.ParseMAC(hardwareText[0])
-		if err != nil || len(hardware) != 6 {
+		hardware, ok := parseMacOSLinkLayerAddress(hardwareText[0])
+		if !ok {
 			continue
 		}
 		neighbors = append(neighbors, Neighbor{
@@ -127,8 +128,8 @@ func parseNDP(data []byte, interfaceName string) ([]Neighbor, error) {
 		if err != nil || !address.Is6() {
 			continue
 		}
-		hardware, err := net.ParseMAC(fields[1])
-		if err != nil || len(hardware) != 6 {
+		hardware, ok := parseMacOSLinkLayerAddress(fields[1])
+		if !ok {
 			continue
 		}
 		state := ""
@@ -150,6 +151,27 @@ func parseNDP(data []byte, interfaceName string) ([]Neighbor, error) {
 		return nil, fmt.Errorf("parse NDP snapshot: %w", err)
 	}
 	return deduplicateNeighbors(neighbors), nil
+}
+
+// macOS arp/ndp may omit the leading zero from an octet (for example, 0:2b).
+// Keep the accepted format to exactly six colon-separated hex octets.
+func parseMacOSLinkLayerAddress(value string) (net.HardwareAddr, bool) {
+	octets := strings.Split(value, ":")
+	if len(octets) != 6 {
+		return nil, false
+	}
+	address := make(net.HardwareAddr, 6)
+	for i, octet := range octets {
+		if len(octet) < 1 || len(octet) > 2 {
+			return nil, false
+		}
+		parsed, err := strconv.ParseUint(octet, 16, 8)
+		if err != nil {
+			return nil, false
+		}
+		address[i] = byte(parsed)
+	}
+	return address, true
 }
 
 func deduplicateNeighbors(neighbors []Neighbor) []Neighbor {

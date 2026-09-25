@@ -81,7 +81,9 @@ The authenticated local API test round-trips the nested shared contract as JSON.
 
 ## What this does not prove
 
-A Linux process E2E suite does not certify macOS service lifetime, macOS permissions, real ARP/NDP observation behavior, sleep/resume, switched-network visibility, mirror/TAP capture, or USB Wi-Fi behavior. Darwin cross-compilation proves only that the current macOS code path builds.
+The dedicated disposable macOS network lab runs the actual controller on a hosted Mac, enrolls its isolated `feth42` interface, and confirms that the approved gateway check leaves Device Watch disabled and writes no monitoring evidence. It then enables Device Watch, reads a synthetic peer from the host ARP cache through the passive runtime, checks arrival activity, device presence and source provenance, saves a label, checks limited coverage with no traffic directions, disables the runtime, and verifies canonical batch evidence after shutdown. This establishes that one IPv4 native path works in that lab; it does not establish broader household visibility or the remaining #11 network and lifecycle scenarios.
+
+A Linux process E2E suite does not certify macOS service lifetime, macOS permissions, real ARP/NDP observation behavior, sleep/resume, switched-network visibility, mirror/TAP capture, or USB Wi-Fi behavior. Darwin cross-compilation proves only that the current macOS code path builds; the hosted macOS lab covers the specific isolated native scenario above.
 
 Network-enrollment/control/coverage-read E2E proves authorization and control/read-plane behavior on the Linux runner; it does not prove that Linux provides useful Device Watch presence evidence. The v0.1 passive observation source remains macOS-first until real platform evidence says otherwise.
 

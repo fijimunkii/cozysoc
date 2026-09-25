@@ -62,6 +62,39 @@ func TestSetDeviceLabelIsScopedIdempotentAndAudited(t *testing.T) {
 	}
 }
 
+func TestSetDeviceLabelAuthorizesRetainedBatchEvidence(t *testing.T) {
+	store, db := detailBatchFixture(t)
+	record := batchSQLRecord(1)
+	if inserted, err := batchSQLAppend(t, db, record); err != nil || !inserted {
+		t.Fatal("stage batch evidence", inserted, err)
+	}
+	at := record.Claims[0].Claim.ObservedAt
+	store.now = func() time.Time { return at.Add(2 * time.Minute) }
+	ctx := context.Background()
+	if changed, err := store.SetDeviceLabel(ctx, "scope.fixture", "device.fixture", "Lab peer"); err != nil || !changed {
+		t.Fatal("label batch-backed device", changed, err)
+	}
+	if got := readDeviceLabel(t, store, "device.fixture"); got != "Lab peer" {
+		t.Fatal("label was not saved", got)
+	}
+	if changed, err := store.SetDeviceLabel(ctx, "scope.fixture", "device.fixture", "Lab peer"); err != nil || changed {
+		t.Fatal("idempotent batch label", changed, err)
+	}
+	if changed, err := store.SetDeviceLabel(ctx, "scope.other", "device.fixture", "Other scope"); changed || !errors.Is(err, ErrDeviceNotInScope) {
+		t.Fatal("cross-scope batch label", changed, err)
+	}
+	store.now = func() time.Time { return record.Claims[len(record.Claims)-1].ExpiresAt.Add(time.Second) }
+	if changed, err := store.SetDeviceLabel(ctx, "scope.fixture", "device.fixture", "Expired evidence"); changed || !errors.Is(err, ErrDeviceNotInScope) {
+		t.Fatal("expired batch label", changed, err)
+	}
+	if got := readDeviceLabel(t, store, "device.fixture"); got != "Lab peer" {
+		t.Fatal("rejected label changed the device", got)
+	}
+	if got := labelAuditCount(t, store, "device.fixture"); got != 1 {
+		t.Fatal("batch label audit count", got)
+	}
+}
+
 func TestSetDeviceLabelFailsClosedOutsideScopeAndOnHostileLabels(t *testing.T) {
 	store, scopeID, deviceID := newLabelFixture(t)
 	ctx := context.Background()

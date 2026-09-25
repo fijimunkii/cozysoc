@@ -28,6 +28,31 @@ malformed row
 	}
 }
 
+func TestParseMacOSLinkLayerAddressWithUnpaddedOctets(t *testing.T) {
+	arp := `? (192.168.250.1) at 66:65:74:68:0:2b on feth42 ifscope [ethernet]
+? (192.168.250.2) at 66:65:74:68:000:2b on feth42 ifscope [ethernet]
+? (192.168.250.3) at 66:65:74:68:gg:2b on feth42 ifscope [ethernet]
+`
+	neighbors, err := parseARP([]byte(arp), "feth42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(neighbors) != 1 || neighbors[0].HardwareAddr.String() != "66:65:74:68:00:2b" || neighbors[0].Address.String() != "192.168.250.1" {
+		t.Fatalf("macOS ARP neighbor = %+v", neighbors)
+	}
+
+	ndp := `fe80::1%feth42 66:65:74:68:0:2b feth42 1m S
+fe80::2%feth42 66:65:74:68::2b feth42 1m S
+`
+	neighbors, err = parseNDP([]byte(ndp), "feth42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(neighbors) != 1 || neighbors[0].HardwareAddr.String() != "66:65:74:68:00:2b" || neighbors[0].Address.String() != "fe80::1%feth42" {
+		t.Fatalf("macOS NDP neighbor = %+v", neighbors)
+	}
+}
+
 func TestParseNDPFiltersInterfaceAndRequiresLinkLayerAddress(t *testing.T) {
 	fixture := `Neighbor                             Linklayer Address  Netif Expire    S Flags
 fe80::1%en0                         aa:bb:cc:dd:ee:ff en0 23h59m S R
