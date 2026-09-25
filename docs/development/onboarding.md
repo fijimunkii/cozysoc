@@ -9,7 +9,14 @@ Network authorization and Device Watch enablement are separate decisions.
 1. Cozy SOC reads the bounded `GET /api/networks` candidate list.
 2. No candidate is selected automatically.
 3. The user selects one local interface and reviews its currently observed local prefixes.
-4. `POST /api/networks/enroll` records that explicit scope authorization only.
+   The review freezes the interface, index and prefixes shown. If a later network
+   read changes or removes that candidate, authorization is disabled until the
+   user goes back and reviews the current details again.
+4. `POST /api/networks/enroll` sends that reviewed binding. The browser route
+   requires it; the controller recaptures the current binding and rejects an
+   index or prefix mismatch before writing authorization. The native
+   `network-enroll INTERFACE` command retains its separate interface-name-only
+   contract. Enrollment records explicit scope authorization only.
 5. Device Watch remains disabled until the user separately chooses **Enable Device Watch**.
 6. Enablement still passes through the controller lifecycle preflight; a browser button is not permission to bypass platform/scope/current-interface checks.
 7. The user verifies Device Watch coverage after enablement. Only a current `active-limited` report completes this setup step; it establishes limited passive neighbor evidence, not whole-network or traffic visibility.
@@ -30,6 +37,9 @@ The frontend accepts only the existing allowlisted routes:
 - `POST /api/device-watch/disable`
 
 It validates bounded network and Device Watch response shapes before using them.
+The browser enrollment request carries only the validated reviewed interface,
+index and prefixes; a controller precondition failure requires a fresh read and
+review rather than an optimistic UI update.
 
 ## Setup states
 
@@ -55,4 +65,4 @@ Synthetic demo mode never renders live setup controls. Demo data remains labeled
 
 ## Test boundary
 
-Component tests cover explicit network choice, review-before-enrollment, separate enablement, focus through confirmation, pause/resume, and successful step changes without refresh focus theft, prerequisite failure, coverage verification and review navigation, confirmation-before-disable, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.
+Component and controller tests cover explicit network choice, a frozen reviewed binding, rejection when the interface changes before storage, separate enablement, focus through confirmation, pause/resume, and successful step changes without refresh focus theft, prerequisite failure, coverage verification and review navigation, confirmation-before-disable, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	webCSRFHeader           = "X-Cozy-CSRF"
-	maxWebMutationBodyBytes = 1024
+	webCSRFHeader             = "X-Cozy-CSRF"
+	maxWebMutationBodyBytes   = 1024
+	maxWebEnrollmentBodyBytes = 8192
 )
 
 type networkLoader func(context.Context) (api.NetworkList, error)
@@ -172,12 +173,12 @@ func (h *webHandler) handleNetworkEnroll(w http.ResponseWriter, r *http.Request)
 		writeWebError(w, http.StatusUnsupportedMediaType, "content_type_required", "network enrollment requires JSON")
 		return
 	}
-	limited := http.MaxBytesReader(w, r.Body, maxWebMutationBodyBytes)
+	limited := http.MaxBytesReader(w, r.Body, maxWebEnrollmentBodyBytes)
 	defer limited.Close()
 	decoder := json.NewDecoder(limited)
 	decoder.DisallowUnknownFields()
 	var params api.NetworkEnrollParams
-	if err := decoder.Decode(&params); err != nil || params.InterfaceName == "" {
+	if err := decoder.Decode(&params); err != nil || params.InterfaceName == "" || params.Expected == nil {
 		writeWebError(w, http.StatusBadRequest, "invalid_request", "network enrollment request is invalid")
 		return
 	}

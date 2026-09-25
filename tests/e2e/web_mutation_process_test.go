@@ -152,7 +152,7 @@ func TestWebProcessMutationBoundaryRejectsCSRFAndAvoidsRealNetworkEnrollment(t *
 		t.Fatalf("fresh-state enable status=%d body=%s", validEnableResponse.StatusCode, validEnableBody)
 	}
 
-	enrollRequest, err := http.NewRequest(http.MethodPost, rootURL+"api/networks/enroll", strings.NewReader(`{"interface_name":"cozysoc-no-such-iface"}`))
+	enrollRequest, err := http.NewRequest(http.MethodPost, rootURL+"api/networks/enroll", strings.NewReader(`{"interface_name":"cozysoc-no-such-iface","expected":{"interface_name":"cozysoc-no-such-iface","interface_index":4,"prefixes":["192.0.2.0/24"]}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

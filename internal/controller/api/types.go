@@ -170,7 +170,8 @@ type NetworkList struct {
 }
 
 type NetworkEnrollParams struct {
-	InterfaceName string `json:"interface_name"`
+	InterfaceName string            `json:"interface_name"`
+	Expected      *NetworkInterface `json:"expected,omitempty"`
 }
 
 type NetworkEnrollResult struct {

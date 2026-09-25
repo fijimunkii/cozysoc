@@ -51,7 +51,7 @@ State-changing browser endpoints require an additional mutation guard; the SameS
 
 The CSRF value is designed for in-memory frontend use only. It is not stored in a URL, localStorage, controller configuration, or the UDS credential file. Cross-origin requests cannot obtain it through a readable response, and unknown `/api/*` routes remain unavailable.
 
-The onboarding mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to typed controller methods. No arbitrary method name, command, file path, or network destination enters the native bridge. The setup UI uses these routes for network enrollment and Device Watch enable/disable.
+The onboarding mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to typed controller methods. Browser enrollment requires the reviewed interface index and prefix snapshot alongside its name; the controller compares it with a fresh binding before storage. No arbitrary method name, command, file path, or network destination enters the native bridge. The setup UI uses these routes for network enrollment and Device Watch enable/disable.
 
 Expected typed controller mutation errors are mapped to bounded HTTP outcomes (`400`, `404`, `409`, `412`, `501`); transport/internal failures remain a generic `503 controller_unavailable` without copying controller diagnostic strings into the browser.
 
