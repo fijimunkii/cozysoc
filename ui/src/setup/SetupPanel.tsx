@@ -8,7 +8,7 @@ import "./setup.css";
 
 type SetupAction = "enroll" | "enable" | "disable";
 
-export function SetupPanel({ data, client, onChanged }: { data: AppData; client: SetupClient; onChanged: () => void }) {
+export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data: AppData; client: SetupClient; onChanged: () => void; onReviewCoverage: () => void }) {
   const [dismissed, setDismissed] = useState(false);
   const [selected, setSelected] = useState("");
   const [confirmingEnrollment, setConfirmingEnrollment] = useState(false);
@@ -57,9 +57,9 @@ export function SetupPanel({ data, client, onChanged }: { data: AppData; client:
           <div>
             <p className="eyebrow">First-time setup</p>
             <h2 id="setup-title">Choose the home network to authorize</h2>
-            <p>Cozy SOC will not select a network automatically. Authorization only records the scope you choose; Device Watch stays off until you enable it separately.</p>
+            <p>Cozy SOC will not select a network automatically. Authorization only records the scope you choose; Device Watch stays off until you enable it separately. This choice and resulting device evidence stay on this machine by default; no account or router change is required.</p>
           </div>
-          <span className="setup-step">Step 1 of 2</span>
+          <span className="setup-step">Step 1 of 3</span>
         </header>
 
         {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
@@ -125,7 +125,7 @@ export function SetupPanel({ data, client, onChanged }: { data: AppData; client:
             <h2 id="setup-title">Enable Device Watch when you are ready</h2>
             <p>{enrolled.interface.interface_name} is authorized, but monitoring is still off. Enabling starts passive Device Watch only after controller preflight succeeds.</p>
           </div>
-          <span className="setup-step">Step 2 of 2</span>
+          <span className="setup-step">Step 2 of 3</span>
         </header>
         <div className="setup-body">
           <NetworkDetail network={enrolled.interface} />
@@ -143,19 +143,32 @@ export function SetupPanel({ data, client, onChanged }: { data: AppData; client:
 
   const report = data.coverage.reports.find((item) => item.capability_id === "device-watch");
   const coverage = report === undefined ? undefined : coverageStatePresentation(report.state);
+  const verified = report?.state === "active-limited";
+  const awaitingEvidence = report === undefined || report.state === "unverified";
   return (
-    <section className="product-card setup-panel setup-panel--complete" aria-labelledby="setup-title">
+    <section className={`product-card setup-panel${verified ? " setup-panel--complete" : ""}`} aria-labelledby="setup-title">
       <header className="setup-header">
         <div>
           <p className="eyebrow">Device Watch</p>
-          <h2 id="setup-title">Monitoring is enabled for {enrolled.interface.interface_name}</h2>
-          <p>Coverage still determines whether evidence is current and what remains out of view. Enabled intent is not presented as proof of complete monitoring.</p>
+          <h2 id="setup-title">{verified ? "Device Watch is reporting current evidence" : awaitingEvidence ? "Verify Device Watch coverage" : "Device Watch coverage needs review"}</h2>
+          <p>{enrolled.interface.interface_name} is authorized and Device Watch is enabled. {verified
+            ? "Current passive neighbor evidence supports limited local visibility, not complete network or traffic monitoring."
+            : "Enabled intent does not establish current visibility; check the reported evidence and gaps before relying on it."}</p>
         </div>
-        <span className="setup-step">Setup complete</span>
+        <span className="setup-step">{verified ? "Setup complete" : awaitingEvidence ? "Step 3 of 3" : "Coverage needs review"}</span>
       </header>
       <div className="setup-body">
         <NetworkDetail network={enrolled.interface} />
-        {coverage ? <p className="setup-note">Current coverage: <strong>{coverage.label}</strong>. Review Coverage for evidence freshness and known gaps.</p> : null}
+        <div className="setup-verification" aria-live="polite">
+          <strong>{verified ? "Current limited coverage verified" : awaitingEvidence ? "Waiting for current coverage evidence" : `Current coverage: ${coverage?.label ?? "No report yet"}`}</strong>
+          <p>{verified
+            ? "Review the Coverage view for the observation point, evidence time, and known gaps."
+            : report?.next_step ?? "Refresh local evidence after the first passive collection, then review Coverage for scope and gaps."}</p>
+          <div className="setup-actions">
+            {!verified ? <button type="button" className="secondary-action" onClick={onChanged}>Refresh evidence</button> : null}
+            <button type="button" className="secondary-action" onClick={onReviewCoverage}>Review coverage evidence</button>
+          </div>
+        </div>
         {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
         {confirmingDisable ? (
           <div className="setup-confirmation setup-confirmation--inline">

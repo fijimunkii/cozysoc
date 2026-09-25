@@ -12,9 +12,10 @@ Network authorization and Device Watch enablement are separate decisions.
 4. `POST /api/networks/enroll` records that explicit scope authorization only.
 5. Device Watch remains disabled until the user separately chooses **Enable Device Watch**.
 6. Enablement still passes through the controller lifecycle preflight; a browser button is not permission to bypass platform/scope/current-interface checks.
-7. Disabling Device Watch preserves the enrolled network authorization. There is no hidden unenroll operation in this flow.
+7. The user verifies Device Watch coverage after enablement. Only a current `active-limited` report completes this setup step; it establishes limited passive neighbor evidence, not whole-network or traffic visibility.
+8. Disabling Device Watch preserves the enrolled network authorization. There is no hidden unenroll operation in this flow.
 
-The UI intentionally does not describe enrollment as monitoring and does not describe enabled intent as proof that current evidence is healthy. Coverage remains the authority for verified observation state and gaps.
+The UI explains that network authorization and resulting device evidence stay on this machine by default; setup needs no account or router change. It intentionally does not describe enrollment as monitoring or enabled intent as proof that current evidence is healthy. Coverage remains the authority for verified observation state and gaps.
 
 ## Browser mutation client
 
@@ -38,7 +39,9 @@ The Overview setup card represents these states explicitly:
 - **Choose network** — eligible interfaces are shown with no default selection.
 - **Review authorization** — the selected interface/prefix scope is shown again before mutation.
 - **Network authorized / Device Watch off** — authorization succeeded but monitoring has not started.
-- **Device Watch enabled** — desired monitoring state is enabled; friendly coverage state is shown separately.
+- **Awaiting coverage evidence** — Device Watch is enabled but a current coverage report is absent or unverified; setup remains at step three with a read-only refresh and a link to Coverage.
+- **Current limited coverage** — Device Watch reports `active-limited`; setup shows completion while explicitly describing passive neighbor-cache limits and linking to Coverage for evidence time and gaps.
+- **Coverage needs review** — degraded, stale, disconnected, unavailable, or permission-required coverage never appears complete; the report's next step and Coverage view guide recovery.
 - **Setup paused** — session-only “Not now” state with an explicit Resume action.
 - **Disable confirmation** — pausing monitoring requires a second confirmation and explicitly says network authorization remains.
 
@@ -50,4 +53,4 @@ Synthetic demo mode never renders live setup controls. Demo data remains labeled
 
 ## Test boundary
 
-Component tests cover explicit network choice, review-before-enrollment, separate enablement, prerequisite failure, confirmation-before-disable, pause/resume, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.
+Component tests cover explicit network choice, review-before-enrollment, separate enablement, prerequisite failure, coverage verification and review navigation, confirmation-before-disable, pause/resume, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.

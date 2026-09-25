@@ -29,6 +29,9 @@
 .danger-action { border: 1px solid #9a5d58; background: #fffaf8; color: #7d403b; }
 .primary-action:disabled, .secondary-action:disabled, .danger-action:disabled { cursor: not-allowed; opacity: .55; }
 .setup-note { margin: 14px 0 0; color: #6c7168; font-size: .8rem; line-height: 1.5; }
+.setup-verification { margin-top: 18px; padding: 16px 18px; border-radius: 14px; background: #f3f1e9; }
+.setup-verification strong { color: #303b30; }
+.setup-verification p { margin: 7px 0 0; color: #5e665c; line-height: 1.5; }
 .setup-empty { padding: 18px; border-radius: 14px; background: #f6f3eb; }
 .setup-empty p { color: #656a61; line-height: 1.55; }
 .setup-error { display: flex; justify-content: space-between; gap: 18px; margin: 0 28px 18px; padding: 14px 16px; border-radius: 12px; background: #fbefec; color: #653f3b; }
