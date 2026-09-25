@@ -73,5 +73,6 @@ settings, restart/list/retirement behavior, atomic audit failures, concurrent ac
 limits, lifetime retention, maximum request size, strict decoding, private-data
 redaction, canceled and queued reads, reader/writer isolation and invalid clocks.
 These are storage/fixture tests, not external networking or packaged support evidence.
-Durable settings now support the next native review/route/consent work; actual HTTPS
-collection and byte/deadline enforcement remain unimplemented.
+Durable settings feed the separate [native review](https-controller.md) and
+[experimental consent path](https-consent.md), which enforce bounded one-shot
+execution. Saving or listing settings alone sends no traffic or grants consent.

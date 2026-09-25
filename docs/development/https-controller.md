@@ -51,10 +51,10 @@ routable prefix comparison; source and target retain the HTTPS plan restrictions
 The escaped JSON output deliberately includes the exact HTTP/1.1 request bytes,
 endpoint, TLS identity, scope/interface/source, privacy notes, TLS policy and all
 request, header, transport-byte, call-count and timing ceilings. Durations use
-explicit millisecond fields. These are the future executor's requirements, not
-measurements of transmitted data. The route observation and expiry timestamps
-remain separate from review creation and expiry. Reloading settings does not
-refresh route evidence.
+explicit millisecond fields. These are the executor's requirements, not
+measurements of transmitted data or approval to execute. The route observation
+and expiry timestamps remain separate from review creation and expiry. Reloading
+settings does not refresh route evidence.
 
 Preview returns `mode: preview-only`, `execution_available: false` and
 `consent_granted: false`. It sends no HTTPS request, creates no ticket, reserves no

@@ -3,12 +3,14 @@
 Related issues: #14 and #29. `httpsexchange.Exchange` implements the TLS and HTTP
 portion of one [selected HTTPS review](https-review-plan.md). It accepts an
 already connected stream from trusted native run control and owns/always closes
-that stream. It does not dial or resolve a name. No product execution path invokes
-it yet; saved settings and preview do not enable traffic.
+that stream. It does not dial or resolve a name. The controller's
+[experimental native HTTPS path](https-consent.md) invokes it through the
+verified TCP candidate after one-shot consent; saved settings and preview alone
+do not enable traffic.
 
 ## Required caller responsibilities
 
-A future native caller must consume one-shot approval, reload enrollment/settings,
+The native caller must consume one-shot approval, reload enrollment/settings,
 verify current route and actual TCP socket source/interface, and pass the original
 absolute run deadline. The caller also owns connect-stage evidence, measurement
 identity, durable audits, controller-wide concurrency and cooldown. This component
@@ -55,14 +57,15 @@ are excluded. TLS identity/protocol errors, stream failures, malformed HTTP,
 timeouts, cancellation and budget exhaustion remain distinct. A response alone
 is not an internet-availability or security claim.
 
-## Evidence and remaining work
+## Evidence and support limits
 
 Owned loopback TCP fixtures exercise real TLS 1.2/1.3 handshakes, trust/name/ALPN
 rejection before HTTP, exact request fields, informational responses, redirects,
 error statuses, malformed/oversized headers and absent bodies. In-memory stream
 tests exercise cancellation/deadlines and exact byte/call limits with partial
-writes. These tests do not prove native socket binding, external reachability,
-packaged permissions or one-shot consent. A [native TCP candidate](https-native-tcp.md) now verifies socket binding and
-connects this exchange internally. Admission/audit integration and real isolated
-end-to-end execution remain required before product
-HTTPS traffic is exposed. #14 and #29 remain open.
+writes. These component tests do not prove native socket binding, external
+reachability, packaged permissions or one-shot consent. The
+[native TCP candidate](https-native-tcp.md) verifies socket binding and connects
+this exchange internally. The [isolated controller/terminal lab](https-consent.md)
+separately exercises the integrated path; physical hardware and
+packaged-permission gates in #29 remain open.

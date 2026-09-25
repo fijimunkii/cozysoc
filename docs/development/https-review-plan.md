@@ -5,8 +5,9 @@ of one explicitly selected HTTPS request. It extends the
 [normalized HTTPS evidence contract](external-https-evidence.md) with private
 configuration, exact request encoding, destination disclosure and required
 executor limits. It performs no I/O, chooses no external service, stores no
-configuration and grants no consent. No external collector or CLI/browser
-execution is enabled by this work.
+configuration and grants no consent. The separately gated
+[native one-shot command](https-consent.md) consumes a matching review after
+foreground approval; there is no browser execution route or scheduler.
 
 ## Exact configuration and binding
 
@@ -62,8 +63,10 @@ the controller store.
 The fixed profile requires HTTP/1.1 with only the `http/1.1` ALPN, TLS 1.2–1.3,
 system trust and selected-name verification. It requires a fresh connection with
 no client authentication, session resumption or early data. Name lookups, proxies,
-redirects and response-body reads are disabled. These values are requirements for
-a future executor, not evidence that any runtime behavior has been enforced.
+redirects and response-body reads are disabled. The
+[bounded exchange](https-bounded-exchange.md) and [native TCP candidate](https-native-tcp.md)
+enforce them in the experimental one-shot path; the plan alone is not runtime
+evidence.
 
 Each plan discloses:
 
@@ -92,6 +95,8 @@ TLS, public-endpoint, packaged permission or hardware behavior.
 [Durable settings](https-configuration.md) and [native settings commands](https-controller.md) are now available.
 [Native route inspection](https-route-inspection.md) is available internally.
 [Native preview](https-controller.md) now reloads settings and enrollment around
-inspection. The [bounded TLS/HTTP exchange](https-bounded-exchange.md) implements
-stream and header ceilings on a supplied connection. Remaining work includes
-native socket binding, one-shot consent and durable audit/recovery.
+inspection. The [bounded TLS/HTTP exchange](https-bounded-exchange.md),
+[native socket binding](https-native-tcp.md), [one-shot consent](https-consent.md)
+and [durable audit/recovery](https-run-control.md) are now integrated behind the
+experimental macOS flag. Physical-network and packaged support validation remain
+open.
