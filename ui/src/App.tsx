@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import "./connection.css";
 import { ActivityPage } from "./activity/ActivityPage";
@@ -34,8 +34,12 @@ type Page = "overview" | "devices" | "activity" | "coverage" | "tools";
 type DataView =
   | { mode: "loading" }
   | { mode: "live"; data: AppData }
+  | { mode: "stale"; lastReadAt: number; message: string }
   | { mode: "unavailable"; message: string }
   | { mode: "demo"; data: AppData };
+
+const liveRefreshIntervalMS = 60_000;
+const delayedRefreshMS = 90_000;
 
 const demoData: AppData = {
   coverage: { as_of: "2026-09-09T23:21:00Z", reports: [parseCoverageReport(demoCoverageRaw)] },
@@ -80,20 +84,65 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
+  const refreshInFlight = useRef(false);
+  const lastSuccessfulRead = useRef<number | null>(null);
   const defaultMutationClient = useMemo(() => createWebSetupClient(), []);
   const liveSetupClient = setupClient ?? defaultMutationClient;
   const liveDeviceLabelClient = deviceLabelClient ?? defaultMutationClient;
 
   useEffect(() => {
     let cancelled = false;
-    setView({ mode: "loading" });
-    void loadData()
-      .then((data) => { if (!cancelled) setView({ mode: "live", data }); })
+    refreshInFlight.current = true;
+    setView((current) => current.mode === "live" || current.mode === "stale" ? current : { mode: "loading" });
+    void Promise.resolve().then(loadData)
+      .then((data) => {
+        if (!cancelled) {
+          lastSuccessfulRead.current = Date.now();
+          setView({ mode: "live", data });
+        }
+      })
       .catch((error: unknown) => {
-        if (!cancelled) setView({ mode: "unavailable", message: error instanceof Error ? error.message : "Live Cozy SOC data is unavailable." });
-      });
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Live Cozy SOC data is unavailable.";
+          setView((current) => current.mode === "live"
+            ? { mode: "stale", lastReadAt: lastSuccessfulRead.current ?? Date.now(), message }
+            : current.mode === "stale"
+              ? { ...current, message }
+              : { mode: "unavailable", message });
+        }
+      })
+      .finally(() => { if (!cancelled) refreshInFlight.current = false; });
     return () => { cancelled = true; };
   }, [attempt, loadData]);
+
+  useEffect(() => {
+    if (view.mode !== "live" && view.mode !== "stale") return;
+    const refreshIfIdle = () => {
+      if (refreshInFlight.current) return;
+      setAttempt((value) => value + 1);
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (lastSuccessfulRead.current !== null && Date.now() - lastSuccessfulRead.current > delayedRefreshMS) {
+        setView((current) => current.mode === "live"
+          ? { mode: "stale", lastReadAt: lastSuccessfulRead.current ?? Date.now(), message: "This view has not been refreshed recently." }
+          : current);
+      }
+      refreshIfIdle();
+    }, liveRefreshIntervalMS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      setView((current) => current.mode === "live"
+        ? { mode: "stale", lastReadAt: lastSuccessfulRead.current ?? Date.now(), message: "This tab was away. Refreshing local evidence." }
+        : current);
+      refreshIfIdle();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [view.mode]);
 
   const retryLive = () => setAttempt((value) => value + 1);
   const activeData = view.mode === "live" || view.mode === "demo" ? view.data : undefined;
@@ -123,6 +172,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
 
         {view.mode === "loading" ? <section className="product-card empty-product-state"><h2>Reading local evidence</h2><p>Cozy SOC is connecting to the local controller.</p></section> : null}
         {view.mode === "unavailable" ? <section className="product-card empty-product-state"><h2>Live data is unavailable</h2><p>Retry the local connection or explicitly enter the synthetic demo. Demo data is never substituted automatically.</p></section> : null}
+        {view.mode === "stale" ? <section className="product-card empty-product-state"><h2>Waiting for fresh evidence</h2><p>Current presence and coverage are hidden until the local controller responds. Retry the live read above.</p></section> : null}
 
         {activeData && page === "overview" ? (
           <>
@@ -165,7 +215,8 @@ function NavButton({ page, current, onNavigate, children }: { page: Page; curren
 
 function ConnectionState({ view, retryLive, useDemo }: { view: DataView; retryLive: () => void; useDemo: () => void }) {
   if (view.mode === "loading") return <div className="connection-banner" role="status" aria-label="Live data connection status"><strong>Connecting</strong><span>Reading local Cozy SOC data.</span></div>;
-  if (view.mode === "live") return <div className="connection-banner connection-banner--live" role="status" aria-label="Live controller data"><strong>Live controller data</strong><span>Local evidence read at {formatTimestamp(view.data.coverage.as_of)}.</span></div>;
+  if (view.mode === "live") return <div className="connection-banner connection-banner--live" role="status" aria-label="Live controller data"><div><strong>Live controller data</strong><span>Local evidence read at {formatTimestamp(view.data.coverage.as_of)}.</span></div><button type="button" onClick={retryLive}>Refresh evidence</button></div>;
+  if (view.mode === "stale") return <div className="connection-banner connection-banner--stale" role="alert" aria-label="Live evidence out of date"><div><strong>Live evidence may be out of date</strong><span>{view.message} Last successful read: {formatTimestamp(view.lastReadAt)}.</span></div><button type="button" onClick={retryLive}>Retry live read</button></div>;
   if (view.mode === "unavailable") return (
     <div className="connection-banner connection-banner--unavailable" role="alert" aria-label="Live monitoring unavailable">
       <div><strong>Live monitoring unavailable</strong><span>{view.message} Synthetic data will never replace live data automatically.</span></div>
@@ -180,6 +231,6 @@ function ConnectionState({ view, retryLive, useDemo }: { view: DataView; retryLi
   );
 }
 
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string | number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
 }

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AppData } from "./app-data";
 import { App } from "./App";
@@ -34,6 +34,85 @@ const liveData: AppData = {
 };
 
 describe("App product navigation", () => {
+  it("refreshes live evidence on a bounded visible-tab interval without resetting navigation", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const next = { ...liveData, devices: parseDeviceList({
+        configured: true,
+        scope_id: "scope.home",
+        as_of: "2026-09-10T01:01:00Z",
+        devices: [
+          ...liveData.devices.devices,
+          { id: "device.two", first_seen: "2026-09-10T01:01:00Z", last_seen: "2026-09-10T01:01:00Z", state: "visible" },
+        ],
+        truncated: false,
+      }) };
+      const loadData = vi.fn().mockResolvedValueOnce(liveData).mockResolvedValue(next);
+      render(<App loadData={loadData} />);
+      await screen.findByRole("status", { name: "Live controller data" });
+      fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+      expect(screen.getByText("Living Room TV")).toBeTruthy();
+      await act(async () => { vi.advanceTimersByTime(60_000); });
+      expect(loadData).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("heading", { name: "What Cozy SOC has actually seen" })).toBeTruthy();
+      expect(screen.getByText("device.two")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hides stale presence and coverage after a failed refresh and recovers on retry", async () => {
+    let rejectRefresh: (error: Error) => void = () => undefined;
+    const loadData = vi.fn()
+      .mockResolvedValueOnce(liveData)
+      .mockImplementationOnce(() => new Promise<AppData>((_resolve, reject) => { rejectRefresh = reject; }))
+      .mockResolvedValue(liveData);
+    render(<App loadData={loadData} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh evidence" }));
+    expect(screen.getByText("Living Room TV")).toBeTruthy();
+    await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+    await act(async () => { rejectRefresh(new Error("controller unavailable")); });
+    expect(screen.getByRole("alert", { name: "Live evidence out of date" })).toBeTruthy();
+    expect(screen.queryByText("Living Room TV")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rename Living Room TV" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.queryByRole("button", { name: "Pause Device Watch" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Waiting for fresh evidence" })).toBeTruthy();
+    expect(screen.queryByText("1 visible now")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry live read" }));
+    await screen.findByRole("status", { name: "Live controller data" });
+    expect(screen.getByRole("button", { name: "Pause Device Watch" })).toBeTruthy();
+  });
+
+  it("does not poll a hidden tab and marks its prior snapshot stale on return", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    try {
+      let finishRefresh: (data: AppData) => void = () => undefined;
+      const loadData = vi.fn().mockResolvedValueOnce(liveData)
+        .mockImplementationOnce(() => new Promise<AppData>((resolve) => { finishRefresh = resolve; }));
+      render(<App loadData={loadData} />);
+      await screen.findByRole("status", { name: "Live controller data" });
+      await act(async () => { await Promise.resolve(); });
+      visibility.mockReturnValue("hidden");
+      await act(async () => { vi.advanceTimersByTime(120_000); });
+      expect(loadData).toHaveBeenCalledTimes(1);
+      visibility.mockReturnValue("visible");
+      fireEvent(document, new Event("visibilitychange"));
+      expect(screen.getByRole("alert", { name: "Live evidence out of date" })).toBeTruthy();
+      await act(async () => { await Promise.resolve(); });
+      await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+      await act(async () => { finishRefresh(liveData); });
+      expect(screen.getByRole("status", { name: "Live controller data" })).toBeTruthy();
+      expect(loadData).toHaveBeenCalledTimes(2);
+    } finally {
+      visibility.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("starts on a live evidence-based overview and navigates to devices, activity, coverage, and tools", async () => {
     render(<App loadData={async () => liveData} />);
     expect(await screen.findByRole("status", { name: "Live controller data" })).toBeTruthy();

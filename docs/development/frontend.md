@@ -104,6 +104,8 @@ The root UI establishes or reuses its local web session and then attempts the sa
 - Synthetic data is **never** substituted automatically.
 - Demo mode requires user action and remains labeled **Synthetic demo — This screen is not connected to live monitoring.**
 - Returning from demo to live coverage is explicit and retries the authenticated local endpoint.
+- While a live tab is visible, read-only evidence refreshes automatically once per minute; the user can also request an immediate read. Hidden tabs do not poll, and returning to a tab marks the prior snapshot out of date until a new read succeeds.
+- If a later refresh fails, the last successful read time remains visible with an out-of-date warning. Prior device, activity, coverage and tool data are withheld until a live read succeeds again, so old presence is not described as current. Setup, label and network-quality actions are also withheld. Neither a failed refresh nor tab resume starts an active network check.
 
 Demo data remains source code only; it is not written into controller storage or mixed with real observations/findings.
 
