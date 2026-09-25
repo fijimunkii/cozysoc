@@ -81,7 +81,7 @@ validity, confidence values and versioned IDs remain the existing producer rules
 Ambiguous continuity retains claims without inventing a device or links. Failed
 validation or lookup returns no partial plan.
 
-The live reconciler uses this planner before its existing individual storage writes.
+The canonical batch writer uses this planner in the observation transaction.
 The earlier individual-row reconciler remains available for retained-record
 repair. The live collector now submits to the batch ingestion owner, which checks
 source-key replay before planning in the same transaction's identity snapshot,
