@@ -181,8 +181,8 @@ func evidenceBatchObservationReplay(ctx context.Context, tx *sql.Tx, o domain.Ob
 	if sensorScope != o.ScopeID {
 		return false, ErrEvidenceBatchData
 	}
-	// Probe both schemas even on a legacy replay: missing reserved schema is an
-	// integration error, not permission to bypass the configured storage path.
+	// Probe both schemas even on a legacy replay: an incomplete installed schema
+	// is an integration error, not permission to bypass the configured path.
 	var batchSource sql.NullInt64
 	var batchScope string
 	err := tx.QueryRowContext(ctx, `SELECT id,scope_id FROM evidence_batch_sources WHERE sensor_id=? AND stream=?`, o.SensorID, o.SourceStream).Scan(&batchSource, &batchScope)

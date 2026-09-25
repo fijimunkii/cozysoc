@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// evidenceBatchSchema is reserved for the batch adapter. It is deliberately not
-// part of migrate: live queries, retention and migration must be integrated first.
+// evidenceBatchSchema is installed by schema migration v4. Installation reserves
+// storage only: live ingestion, readers and maintenance remain separately gated.
 const evidenceBatchSchema = `
 CREATE TABLE evidence_batch_sources (
  id INTEGER PRIMARY KEY,

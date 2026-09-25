@@ -221,9 +221,6 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journal); err != nil || journal != "delete" {
 		t.Fatal(journal, err)
 	}
-	if _, err := db.ExecContext(ctx, storage.EvidenceBatchSchemaForTest); err != nil {
-		t.Fatal(err)
-	}
 	start := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
 	binding := devicewatch.ScopeBinding{InterfaceName: "fixture0", InterfaceIndex: 7, Prefixes: []string{"192.168.50.0/24"}}
 	metadata, err := devicewatch.EncodeScopeMetadata(binding)

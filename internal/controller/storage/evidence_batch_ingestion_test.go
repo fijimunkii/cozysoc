@@ -56,13 +56,16 @@ func TestBatchIngestorRequiresSchemaAndAdapters(t *testing.T) {
 	planner := func(context.Context, *MixedIdentitySnapshot, domain.Observation) (EvidenceBatchPlan, error) {
 		return EvidenceBatchPlan{}, nil
 	}
-	if i, err := NewEvidenceBatchIngestor(s, 1, nil, planner, unusedLegacyRepair); err == nil {
-		i.Close(context.Background())
-		t.Fatal("silently enabled missing schema")
-	}
 	if i, err := NewEvidenceBatchIngestor(s, 1, nil, planner, nil); err == nil {
 		i.Close(context.Background())
 		t.Fatal("missing repair accepted")
+	}
+	if _, err := s.conn.ExecContext(context.Background(), "DROP TABLE evidence_batch_identity_routes"); err != nil {
+		t.Fatal(err)
+	}
+	if i, err := NewEvidenceBatchIngestor(s, 1, nil, planner, unusedLegacyRepair); err == nil {
+		i.Close(context.Background())
+		t.Fatal("silently enabled incomplete schema")
 	}
 	if err := s.conn.PingContext(context.Background()); err != nil {
 		t.Fatal(err)

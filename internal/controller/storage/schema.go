@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -250,3 +250,9 @@ CREATE TRIGGER https_configuration_retired AFTER UPDATE ON https_configurations 
  'audit', NEW.audit_expires_at_ns);
 END;
 `
+
+// Schema 4 installs the batch adapter's storage objects while leaving all live
+// writers, readers and maintenance on their existing legacy paths. Existing
+// evidence is read through the mixed-format compatibility layer after later
+// runtime activation; this migration never rewrites or deletes legacy rows.
+const migrationV4 = evidenceBatchSchema

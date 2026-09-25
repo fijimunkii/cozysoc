@@ -38,9 +38,6 @@ func legacyRepairFixture(t *testing.T) (*storage.Store, *sql.DB, domain.Observat
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	if _, err := db.Exec(storage.EvidenceBatchSchemaForTest); err != nil {
-		t.Fatal(err)
-	}
 	o := domain.Observation{ID: "obs.original", ScopeID: "scope.fixture", SensorID: "sensor.fixture", Kind: "device-neighbor-seen", SourceStream: "fixture", SourceKey: "source.original", SourceEventID: "original.event", SourceTime: &at, IngestedAt: at, SchemaVersion: 1, Attribution: "fixture", Retention: domain.RetentionStandard, Payload: json.RawMessage(` {"schema_version":1,"address":"192.168.50.20","hardware_address":"02:00:00:00:00:01","interface":"fixture0","family":"ipv4","method":"arp-cache","state":"reachable"} `)}
 	if ok, err := s.InsertObservation(ctx, o); err != nil || !ok {
 		t.Fatal(ok, err)

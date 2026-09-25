@@ -98,14 +98,16 @@ func Open(stateDir string, limits Limits) (*Store, error) {
 	if err := store.configure(ctx); err != nil {
 		return cleanup(err)
 	}
+	// Bound migration allocation on this connection. If a schema upgrade cannot
+	// fit, its transaction rolls back before Open returns an error.
+	if err := store.applyQuota(ctx); err != nil {
+		return cleanup(err)
+	}
 	if err := store.migrate(ctx); err != nil {
 		return cleanup(err)
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
 		return cleanup(fmt.Errorf("secure SQLite database: %w", err))
-	}
-	if err := store.applyQuota(ctx); err != nil {
-		return cleanup(err)
 	}
 	store.gatewayHistoryDB, err = openGatewayHistoryDB(path)
 	if err != nil {
@@ -472,7 +474,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if version == schemaVersion {
 		return nil
 	}
-	if version < 0 || version > 2 {
+	if version < 0 || version > 3 {
 		return fmt.Errorf("no migration path from storage schema version %d", version)
 	}
 	tx, err := s.conn.BeginTx(ctx, nil)
@@ -490,8 +492,15 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("apply storage schema v2: %w", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, migrationV3); err != nil {
-		return fmt.Errorf("apply storage schema v3: %w", err)
+	if version < 3 {
+		if _, err := tx.ExecContext(ctx, migrationV3); err != nil {
+			return fmt.Errorf("apply storage schema v3: %w", err)
+		}
+	}
+	if version < 4 {
+		if _, err := tx.ExecContext(ctx, migrationV4); err != nil {
+			return fmt.Errorf("apply storage schema v4: %w", err)
+		}
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 		return fmt.Errorf("set storage schema version: %w", err)

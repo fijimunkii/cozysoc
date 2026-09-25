@@ -27,9 +27,6 @@ func batchSQLFixture(t *testing.T) (*Store, *sql.DB) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	t.Cleanup(func() { _ = db.Close() })
-	if _, err = db.Exec(evidenceBatchSchema); err != nil {
-		t.Fatal(err)
-	}
 	return s, db
 }
 func batchSQLAppend(t *testing.T, db *sql.DB, r EvidenceBatchRecord) (bool, error) {
@@ -219,11 +216,14 @@ func TestPackedEvidenceKeysAreDisjoint(t *testing.T) {
 		seen[key] = true
 	}
 }
-func TestEvidenceBatchSchemaNotActivated(t *testing.T) {
+func TestEvidenceBatchSchemaInstalledButEmpty(t *testing.T) {
 	s := openTestStore(t)
-	var count int
-	if err := s.conn.QueryRowContext(context.Background(), "SELECT count(*) FROM sqlite_master WHERE name LIKE 'evidence_batch%'").Scan(&count); err != nil || count != 0 {
-		t.Fatal("reserved schema activated", count, err)
+	var tables, rows int
+	if err := s.conn.QueryRowContext(context.Background(), "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE 'evidence_batch%'").Scan(&tables); err != nil || tables != 5 {
+		t.Fatal("batch schema not installed", tables, err)
+	}
+	if err := s.conn.QueryRowContext(context.Background(), "SELECT count(*) FROM evidence_batches").Scan(&rows); err != nil || rows != 0 {
+		t.Fatal("schema installation activated batch storage", rows, err)
 	}
 }
 
