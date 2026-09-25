@@ -264,6 +264,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return err
 	}
 	defer server.Close()
+	stopStorageMaintenance, err := startStorageMaintenance(ctx, store, logger)
+	if err != nil {
+		return fmt.Errorf("start storage maintenance: %w", err)
+	}
+	defer stopStorageMaintenance()
 
 	// Only initialize run ownership AFTER acquiring the controller socket. A
 	// rejected duplicate must not construct a second coordinator or reset limits.
