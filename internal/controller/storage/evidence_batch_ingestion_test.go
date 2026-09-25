@@ -178,6 +178,15 @@ func TestBatchIngestorCommitFailureDoesNotAcknowledge(t *testing.T) {
 	if err := reader.Rollback(); err != nil {
 		t.Fatal(err)
 	}
+	// The failed receipt queues a storage event on the same writer. Restore
+	// production timeouts before checking rollback and retrying, so its
+	// concurrent audit write cannot make the fixture's 100 ms reader fail.
+	if _, err := owned.conn.ExecContext(context.Background(), "PRAGMA busy_timeout=5000"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(context.Background(), "PRAGMA busy_timeout=5000"); err != nil {
+		t.Fatal(err)
+	}
 	assertStageTableCount(t, db, "evidence_batches", 0)
 	assertStageTableCount(t, db, "devices", 0)
 	receipt, err = i.SubmitObservation(context.Background(), *r.Observation, nil)
