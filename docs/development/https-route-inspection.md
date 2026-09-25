@@ -3,8 +3,9 @@
 Related issues: #14 and #29. `httpsroute.NewInspector` verifies the current local
 route and source for an explicitly configured numeric HTTPS endpoint on macOS.
 It builds the existing [HTTPS review plan](https-review-plan.md) from verified
-metadata for the [native preview command](https-controller.md). No HTTPS approval
-or execution command is exposed.
+metadata for the [native preview command](https-controller.md) and the gated
+one-shot [HTTPS run](https-consent.md). Inspection alone grants no approval or
+send authority.
 
 ## Shared metadata checks
 
@@ -35,7 +36,7 @@ creation. Follow-up interface reads and review construction never extend the
 thirty-second route lifetime. Cancellation, clock reversal, stale inspection,
 missing metadata, source loss or enrollment mismatch returns no selection.
 
-## Evidence and remaining integration
+## Evidence and support limits
 
 Shared fixture and Darwin parser tests cover direct/routed IPv4 and IPv6,
 malformed route messages, scope IDs, source/interface changes, cancellation and
@@ -48,7 +49,9 @@ paths retain synthetic evidence only.
 
 Route inspection does not prove a TCP socket used that source/interface, that a
 TLS identity is valid, or that an endpoint is reachable. Controller-owned
-preflight must reload enrollment and immutable settings, and a future executor
-must independently bind and verify its socket while enforcing the disclosed
-traffic limits. One-shot consent, TLS/HTTP execution and durable run audits
-remain required before HTTPS traffic can be exposed. #14 and #29 remain open.
+preflight reloads enrollment and immutable settings; the
+[native TCP candidate](https-native-tcp.md) independently binds and verifies its
+socket while enforcing the disclosed traffic limits. The
+[experimental consent path](https-consent.md) adds one-shot approval and durable
+audits. These integration checks do not certify physical networking, packaged
+permissions or general support; #14 and #29 remain open.

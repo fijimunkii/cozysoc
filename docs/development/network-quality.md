@@ -84,7 +84,7 @@ These tests do not certify macOS interface behavior, ICMP permissions, resolver
 selection, HTTPS response validation, captive portals, VPN routing, metered
 connections, or physical network quality. They do not complete #14 or #29.
 
-## Next integration boundary
+## Current integration boundary
 
 The narrow [local-interface evidence producer and native read projection](local-network-quality.md)
 now revalidates the enrolled interface/prefix binding before attributing local OS
@@ -92,12 +92,14 @@ metadata. A [shared frontend projection](browser-network-quality.md) is also ava
 observer fields alone remains neither authorization nor proof that the laptop
 stayed on the same network.
 
-Active gateway/resolver/external checks must follow separately with explicit
-scope/target selection, destination and privacy disclosure, cancellation,
-timeouts, retry/rate/concurrency/bandwidth limits, routing/DNS/redirect controls,
-and durable bounded history. External dependencies must remain independently
-disableable while the app works offline. A real source must supply truthful
-protocol success semantics and measurement provenance before UI claims expand.
+Gateway, resolver and selected-HTTPS checks now have separate experimental
+native one-shot paths. Each requires its own saved or reviewed target, bounded
+run and deliberate foreground consent; none is enabled by Device Watch
+enrollment or exposed as a browser Run action. Retained results are available
+through bounded read-only history, while local interface evidence remains a
+separate passive read. The app continues to work offline with these active
+paths disabled. Physical-network, packaged permission, VPN, sleep/resume and
+sustained resource gates remain open before broader support claims.
 
 Do not infer permission to send traffic from Device Watch enrollment or from a
 fixture. Do not automatically tune network settings. Preserve the separation of
@@ -159,12 +161,15 @@ The [corroboration contract](quality-corroboration.md) now compares bounded,
 already-collected evidence from matching device/scope/interface/time contexts.
 It preserves DNS expectations and explicit collection discontinuities, keeps
 address families separate, and explains selected-check associations without an
-internet-wide or root-cause verdict. The [native retained diagnosis](retained-quality-diagnosis.md) now supplies a
-controller-owned gateway/resolver pair from one read-only snapshot. Overview exposes
-that historical comparison through a manual, typed read-only card. External
-collectors remain separately scoped work.
+internet-wide or root-cause verdict. The [native retained diagnosis](retained-quality-diagnosis.md)
+now selects gateway, resolver and HTTPS runs from one read-only snapshot. Overview
+exposes that historical comparison through a manual, typed read-only card. At
+least two comparable layers are required; selected HTTPS evidence remains
+endpoint-specific, not an internet-wide verdict.
 
 The [selected HTTPS evidence contract](external-https-evidence.md) now preserves
 external connection/TLS/HTTP stages and expected-status semantics for pure
-assessment and comparison. External collection, disclosure and execution consent
-remain unimplemented; this contract sends no traffic.
+assessment and comparison. This pure contract sends no traffic. The separately
+gated [native HTTPS consent path](https-consent.md) now performs one explicitly
+approved check on macOS; [retained history](https-history.md) and the shared
+frontend expose its historical evidence without adding browser execution.

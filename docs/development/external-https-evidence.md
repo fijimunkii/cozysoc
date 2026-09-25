@@ -3,10 +3,13 @@
 Related issues: #14 and #29. `networkquality.AssessHTTPS` validates and interprets
 bounded normalized evidence from one explicitly selected endpoint/request at a
 known observing interface. `Corroborate` can consume this specialized snapshot
-alongside ICMP, local-link and DNS evidence. This is a pure evidence contract:
-there is no external collector, CLI/browser execution,
-DNS resolution, TLS connection, HTTP request, scheduling or new consent path.
-The existing retained diagnosis continues to compare its gateway/DNS pair only.
+alongside ICMP, local-link and DNS evidence. This pure evidence contract performs
+no DNS resolution, TLS connection or HTTP request. A separately gated
+[native macOS consent path](https-consent.md) now collects one selected HTTPS
+result; no browser execution route or scheduler exists. The
+[retained diagnosis](retained-quality-diagnosis.md) now selects gateway, DNS and
+HTTPS histories from one snapshot, while [HTTPS history](https-history.md)
+exposes the individual historical result.
 
 ## One selected exchange
 
@@ -69,22 +72,23 @@ external silence. One external layer cannot corroborate itself, and no compariso
 establishes an internet outage, common root cause, security or monitoring coverage.
 The earlier standalone generic `Assess` fixture contract remains available.
 
-## Remaining collection work
+## Collection boundary and support limits
 
 The [explicit HTTPS review plan](https-review-plan.md) now specifies pinned
-configuration, exact request encoding, disclosure and required executor ceilings.
-It remains pure. [Durable HTTPS settings](https-configuration.md) now preserve
-explicit configuration separately and expose [native save/list/retire commands](https-controller.md).
-These paths do not enable a collector.
+configuration, exact request encoding, disclosure and executor ceilings.
+It remains pure. [Durable HTTPS settings](https-configuration.md) preserve explicit
+configuration, and [native commands](https-controller.md) save, list, preview and
+retire selections without sending traffic. Only the opt-in
+[one-shot consent path](https-consent.md) can execute. It discloses the exact
+endpoint, TLS identity, request, data use and privacy impact; verifies pinned
+addressing, route/source/interface and TLS identity; and enforces bounded traffic,
+no implicit proxy, DNS fallback, redirects or retries, cooldown and durable
+audits. An external operator can still observe the connecting address, timing
+and requested resource.
 
-Before external traffic is exposed, a collector must implement explicit immutable
-destination configuration and local disclosure of the exact endpoint, TLS identity,
-request, data use and privacy impact. It must enforce eligible pinned addressing,
-route/source/interface binding, certificate verification, no implicit proxy or
-DNS fallback, no redirects/retries/alternate destinations, bounded bytes/requests/
-deadlines/concurrency/cooldown, separate one-shot consent and durable audits.
-An external operator can observe the connecting address, timing and requested
-resource; that disclosure cannot be replaced by an opaque reference.
+The isolated native lab exercises a real controller, terminal approval, TCP/TLS
+exchange and audits on an owned virtual network. It does not certify physical
+NICs, VPN changes, packaged permissions or general external-network support.
 
 Fixture tests cover expected and unexpected HTTP statuses, redirects, connection
 and TLS failures, stage-specific timeouts, uncertain/canceled work, missing and

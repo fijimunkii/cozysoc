@@ -74,6 +74,7 @@ Unit/race tests exercise replay, concurrent admission, changed selections, expir
 route/review evidence, clock reversal, timeout stages, malformed measurements,
 panics and shutdown joining. Real SQLite tests verify commit-before-execution,
 reopen durability, phase uniqueness, retention and failures at every audit phase.
-These are synthetic executor tests, not integrated native HTTPS traffic evidence.
-Interactive consent and an integrated native lab remain required before product
-execution. #14 and #29 remain open.
+These coordinator tests use synthetic executors. The separate
+[native controller/terminal lab](https-consent.md) exercises interactive consent,
+real TCP/TLS and persisted audits on an isolated owned network. Physical NIC,
+packaged permission and sustained-operation gates in #29 remain open.

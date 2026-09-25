@@ -2,8 +2,9 @@
 
 Related issues: #14 and #29. `httpstcp.NewCandidate` constructs an inert native
 candidate. `Execute` combines a pinned TCP connection with the existing
-[bounded TLS/HTTP exchange](https-bounded-exchange.md). No product endpoint,
-scheduler or consent flow invokes it yet.
+[bounded TLS/HTTP exchange](https-bounded-exchange.md). The controller invokes it
+only through the explicitly opted-in [native one-shot consent flow](https-consent.md);
+there is no browser execution endpoint or scheduler.
 
 ## Admission and route lifetime
 
@@ -67,7 +68,7 @@ name, request target, raw errors or response content. IDs and durable run audits
 remain the responsibility of run control; this method does not persist or
 schedule measurements.
 
-## Evidence and remaining integration
+## Evidence and support limits
 
 Candidate fixtures exercise exact target/deadline propagation, one connect,
 per-write route checks, changed bindings at each phase, status invalidation,
@@ -80,10 +81,10 @@ retain plan and route validation that excludes loopback destinations/interfaces.
 These tests establish socket-option behavior, not physical NIC, routed external,
 VPN, packaged-permission or full HTTPS run support. TLS exchange has separate real
 loopback evidence; route inspection has separate isolated native lab evidence.
-The internal measurement/audit coordinator now supplies one-shot admission and
-cooldown. An integrated native HTTPS lab and
-interactive one-shot consent remain required before enabling product traffic.
-#14 and #29 remain open.
+The internal measurement/audit coordinator supplies one-shot admission and
+cooldown. The [isolated native controller/terminal lab](https-consent.md) now
+exercises interactive approval and an integrated HTTPS run. Physical NIC, VPN,
+packaged-permission and sustained-operation evidence remain open in #29.
 
 The [isolated native lab](macos-network-lab.md) now includes a restricted libslirp
 TCP peer forwarding only to an owned Unix-socket TLS server. Its required
