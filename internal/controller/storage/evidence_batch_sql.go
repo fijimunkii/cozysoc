@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// evidenceBatchSchema is installed by schema migration v4. Installation reserves
-// storage only: live ingestion, readers and maintenance remain separately gated.
+// evidenceBatchSchema is installed by schema migration v4 and used by live
+// Device Watch ingestion, reads, and retention.
 const evidenceBatchSchema = `
 CREATE TABLE evidence_batch_sources (
  id INTEGER PRIMARY KEY,

@@ -22,7 +22,8 @@ type EvidenceBatchRetentionResult struct {
 
 // PruneEvidenceBatchExpired commits one bounded mixed-format retention pass and
 // its storage event atomically on a private, quota-configured connection. The
-// reserved schema must already exist; this does not activate live maintenance.
+// installed schema must already exist. Live controller maintenance schedules
+// this owner after socket acquisition.
 // maxRows bounds each legacy table, while maxBatches bounds decoded batches.
 func (s *Store) PruneEvidenceBatchExpired(ctx context.Context, now time.Time, maxRows, maxBatches int) (*EvidenceBatchRetentionResult, error) {
 	if err := validateMixedRetentionLimits(now, maxRows, maxBatches); err != nil {

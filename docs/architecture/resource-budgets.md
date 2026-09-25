@@ -66,10 +66,11 @@ integration over further compaction solely to meet 25 MiB. It does not establish
 that the original target was impossible.
 
 The workload, collection cadence, evidence fidelity, durability, retention and
-1 GiB quota are unchanged. Installation recommendations and release claims are
-unchanged: live storage still measures 474.50 MiB/day. Production query, lifecycle
-and migration integration and a full workload rerun must establish compliance with
-30 MiB/day. Historical evidence retains the target used when it was recorded.
+1 GiB quota are unchanged. The canonical batch writer and read view are now the
+live Device Watch path. The last completed full-controller workload measured the
+earlier writer at 474.50 MiB/day; the live path needs its own full workload result
+before a 30 MiB/day claim. Historical evidence retains the target used when it
+was recorded.
 
 ## Optional capability budgets
 

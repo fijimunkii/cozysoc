@@ -16,9 +16,8 @@ import (
 type EvidenceBatchLegacyRepair func(context.Context, *sql.Tx, Limits, domain.Observation) (bool, error)
 
 // NewEvidenceBatchIngestor connects the bounded ingestion queue to atomic Device
-// Watch evidence writes. The reserved schema must already exist. This constructor
-// does not migrate or enable live storage; reader, lifecycle and compatibility
-// gates must be completed before runtime wiring. Do not wrap this queue in a
+// Watch evidence writes. The installed schema must already exist. This constructor
+// does not migrate storage. Do not wrap this queue in a
 // second reconciler: its successful receipts already include reconciliation.
 // Close the ingestor before its parent Store; Close drains accepted work and
 // releases the private writer even if an earlier Close call timed out.
@@ -42,6 +41,7 @@ func NewEvidenceBatchIngestor(store *Store, capacity int, logger *slog.Logger, p
 	if err != nil {
 		return nil, errors.Join(err, writer.Close())
 	}
+	i.atomicDeviceWatchEvidence = true
 	return i, nil
 }
 
