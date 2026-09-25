@@ -63,6 +63,9 @@ func newRuntime(store *storage.Store, ingestor *storage.Ingestor, logger *slog.L
 	if store == nil || ingestor == nil {
 		return nil, fmt.Errorf("device watch runtime requires storage and ingestion")
 	}
+	if !ingestor.AtomicDeviceWatchEvidence() {
+		return nil, fmt.Errorf("device watch runtime requires atomic batch evidence ingestion")
+	}
 	if inspector == nil || snapshotter == nil {
 		return nil, fmt.Errorf("device watch runtime requires interface and snapshot sources")
 	}
@@ -152,14 +155,7 @@ func (r *Runtime) Start(ctx context.Context, scopeID string) error {
 		return err
 	}
 
-	reconciler, err := NewReconciler(r.store)
-	if err != nil {
-		return err
-	}
-	collector, err := NewCollector(r.snapshotter, r.inspector, ReconcilingSink{
-		Evidence:   StorageSink{Ingestor: r.ingestor},
-		Reconciler: reconciler,
-	})
+	collector, err := NewCollector(r.snapshotter, r.inspector, StorageSink{Ingestor: r.ingestor})
 	if err != nil {
 		return err
 	}

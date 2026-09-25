@@ -1,9 +1,9 @@
 # Evidence batch storage codec
 
 Related: #150. `storage.EncodeEvidenceBatch` and `storage.DecodeEvidenceBatch`
-define a bounded format for retained evidence. New live Device Watch writes do
-not yet use the codec, but the controller's canonical read view can serve
-retained batch evidence through one fixed snapshot. Schema 4 installs the
+define a bounded format for retained evidence. New live Device Watch writes use
+the codec through the atomic batch ingestor, and the controller's canonical
+read view serves retained batch evidence through one fixed snapshot. Schema 4 installs the
 adapter tables transactionally. The [standalone prototype](device-watch-persistent-batch-prototype.md)
 remains separate evidence; its 22.42 MiB result does not measure this codec with
 production expiry metadata or establish the controller's budget.
@@ -82,13 +82,11 @@ Ambiguous continuity retains claims without inventing a device or links. Failed
 validation or lookup returns no partial plan.
 
 The live reconciler uses this planner before its existing individual storage writes.
-It preserves original claim IDs returned by legacy idempotent insertion and derives
-links from those resolved IDs. A lookup failure now occurs before any new claim
-write. This refactor does not make live ingestion atomic or activate batch storage.
-A batch transaction owner must check source-key replay first, plan against that
-same transaction's identity snapshot, assign each stored expiry, persist all related
-changes, and acknowledge only after commit. Plans must not be queued and applied
-against a later identity state. Query integration and migration remain required.
+The earlier individual-row reconciler remains available for retained-record
+repair. The live collector now submits to the batch ingestion owner, which checks
+source-key replay before planning in the same transaction's identity snapshot,
+assigns stored expiry, writes evidence and indexes, and acknowledges only after
+commit. The collector does not run a second reconciliation pass.
 
 `storage.NewLegacyIdentitySnapshot` supplies the legacy-table identity reader for
 an exclusively owned SQL transaction and fixed retention-evaluation time. It shares
@@ -100,8 +98,9 @@ transaction's own staged changes and fail once it is committed or rolled back;
 the reader never owns transaction completion or falls back to another connection.
 
 This is only the legacy half of mixed-history reconciliation. It must not be used
-alone once batch-only claims are written. The combined reader described below adds reserved batch identity routes; it
-remains separate from live activation. Snapshot tests cover staged ambiguity and retirement,
+alone once batch-only claims are written. The combined reader described below
+adds batch identity routes and is used by the live batch ingestor. Snapshot tests
+cover staged ambiguity and retirement,
 external read isolation, commit/rollback, cancellation, clock and query validation,
 expiry/time boundaries, scope filtering and planner use of the same transaction.
 
@@ -147,10 +146,9 @@ lookups return `sql.ErrNoRows`; corrupt evidence returns no partial record.
 Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
-ownership. These primitives do not yet implement full identity foreign keys or
-runtime batch ingestion. The queue owner below supplies a
-private configured connection and legacy replay dispatch. Live activation still
-requires the remaining contracts to be implemented and tested. Re-measure
+ownership. These primitives do not enforce arbitrary identity-ID uniqueness
+across batches. The live queue owner below supplies a private configured
+connection and legacy replay dispatch. Re-measure
 the unchanged full controller workload, including all database pages and
 expiry/index overhead, before claiming #150's storage target. CPU/RAM and sustained-run gates remain open.
 
@@ -216,9 +214,9 @@ Appending and pruning validate existing routing and bounds before mutation.
 Pruning regroups records if independent claim expiry changes their surviving keys,
 rebuilds observation slots and bounds in the same transaction, and removes unused
 dictionaries and routes. It does not retain expired lookup values in empty groups.
-Schema 4 installs these objects empty, while live ingestion,
-history/detail/activity queries and complete mixed-format foreign-key behavior
-remain gated before activation. Live mixed-format retention is scheduled below.
+Schema 4 installs these objects empty on upgrade. Live ingestion and the
+canonical read view use them, and live mixed-format retention is scheduled below.
+Arbitrary mixed-format identity-ID uniqueness remains open.
 
 Regression coverage includes unchanged evidence under interleaved grouping,
 normalized routing, exact-time gaps, independent expiry, mixed-format ambiguity and
@@ -240,8 +238,8 @@ observations still suppress insertion. Legacy replay instead returns
 `ErrEvidenceBatchLegacyReplay`: the owner must use the compatibility/repair path
 with the original stored observation. A legacy observation may have been committed
 before reconciliation completed, so acknowledging it as a complete atomic batch
-could silently skip missing claims or links. Live compatibility handling remains
-an activation requirement.
+could silently skip missing claims or links. The live queue owner handles this
+signal through the original retained observation.
 
 For a new observation, the planner reads the same transaction through the mixed
 identity snapshot. Observation bytes and pointer fields are copied so the planner
@@ -254,8 +252,9 @@ that transaction. Ambiguity may retain claims without a device or links.
 The returned record and inserted flag are provisional. The owner must roll back
 any error and acknowledge only after successful commit. The stager never opens,
 commits or rolls back a transaction and must not use shared `Store.conn`. It does
-not configure connection quota/durability, provide full mixed-format claim/link
-uniqueness or deletion semantics, install migrations or activate the live queue.
+not configure connection quota/durability, provide arbitrary cross-batch
+claim/link ID uniqueness, or install migrations. The live queue owner supplies
+the transaction and connection policy.
 
 Tests cover source replay in both formats, explicit legacy repair signaling,
 unpruned expiry, ID conflicts, sensor/scope separation, missing schema, source-ID
@@ -286,17 +285,15 @@ Repair never updates the original observation, commits, or acknowledges ingestio
 The owner must roll back failures and commit before acknowledgment. Tests cover
 changed retry payloads/IDs/times, partial noncanonical claim IDs, preserved original
 payload/expiry, owner-only commit, late-write rollback and retry, expired/missing
-originals, wrong scope and corrupt or oversized stored data. The queue owner below
-dispatches repair in its transaction. Runtime wiring and the remaining
-batch-reader/foreign-key gates are still required before activation.
+originals, wrong scope and corrupt or oversized stored data. The live queue owner
+dispatches repair in its transaction.
 
 ## Queue and connection ownership
 
 `NewEvidenceBatchIngestor` connects the existing bounded queue to the stager and
-trusted producer repair adapter. It requires the reserved schema and does not
-install it. The live runtime still uses the legacy ingestor until the remaining
-reader and referential-integrity gates are ready.
-A runtime using this constructor must use `StorageSink` without an outer
+trusted producer repair adapter. The live controller selects it for new Device
+Watch evidence after opening the installed schema. The runtime uses `StorageSink`
+without an outer
 `ReconcilingSink`: successful observation receipts already include reconciliation.
 
 The queue owns a separate pinned SQLite connection opened against the existing
@@ -315,8 +312,10 @@ storage-full health reporting. Other observation kinds keep their legacy SQL
 representation, with replay/conflict checks across both formats and a checkpoint
 in the same transaction. Changing the kind on a retry cannot create duplicate
 evidence or bypass legacy Device Watch repair. Other ingestion kinds retain their
-existing SQL behavior on the private writer. This does not add automatic batch
-pruning or resolve the remaining mixed-format uniqueness contracts.
+existing SQL behavior on the private writer. The controller schedules batch
+pruning separately. Arbitrary cross-batch identity-ID uniqueness remains an
+unresolved integrity limit; the live producer uses its frozen derived IDs and
+does not expose arbitrary batch writes.
 
 Queue capacity, input copying, submission backpressure, receipt waiting and
 processing deadlines use the existing ingestor. Close rejects new submissions,
@@ -371,9 +370,9 @@ metadata, duplicate selected link IDs, equal-time ordering, bounded work and the
 device routing index. The real queue/collector fixture also verifies four original
 collections and eight claim/link detail rows for each of 100 devices.
 The index changes the reserved schema; previous footprint
-measurements retain their exact source and do not measure this index. Global
-identity and live batch-ingestion gates remain open, as does the unchanged
-full-controller storage measurement.
+measurements retain their exact source and do not measure this index. Arbitrary
+global identity-ID uniqueness and the unchanged full-controller storage
+measurement remain open.
 
 ## Mixed device lists
 
@@ -405,8 +404,8 @@ selected corruption, exhausted work budgets, indexed query plans, page-boundary
 selection and staged
 snapshot rollback. The real 100-device/four-collection queue fixture checks
 pagination with no duplicate or missing devices and exact last-seen times. These
-checks do not establish the full controller budget; referential integrity and
-runtime batch-ingestion wiring remain required.
+checks do not establish the full controller budget; arbitrary identity-ID
+uniqueness remains open.
 
 
 ## Mixed device activity
@@ -470,7 +469,7 @@ IDs are deduplicated across formats, with the exclusive cursor and one extra
 device preserving pagination. The same 1,024-candidate budget bounds a whole
 page; corruption, query failure and exhausted work return no partial result.
 The caller owns the transaction and fixed retention clock. This reader adds no
-further index or live runtime wiring.
+further index; the canonical read view can serve this membership.
 
 Tests compare legacy and mixed/all-batch results across both validity ends, future
 link starts, unbounded intervals, gaps, retirement, retention, observation pruning,
@@ -478,9 +477,8 @@ limits and cursors. They also cover selected corruption, work exhaustion, older
 valid evidence below a newer invalid batch, staged state, cancellation and closed
 transactions. The real 100-device collector fixture verifies paginated scope
 membership and its disappearance after the collection validity interval ends.
-Full mixed-format referential integrity, runtime batch-ingestion wiring and the
-complete controller resource
-measurement remain required.
+Arbitrary identity-ID uniqueness and the complete controller resource
+measurement remain open.
 
 
 ## Mixed observation history
@@ -502,8 +500,8 @@ payloads and lookup changes in the same transaction. Pruning recomputes bounds
 from surviving observations, including zero bounds when only claims remain.
 Existing persisted bounds must validate before append or pruning can rewrite a
 batch. These fields and this index are not included in earlier exact-source
-footprint measurements. Migration 4 installs the schema, but live runtime paths
-do not select these tables or this index.
+footprint measurements. Migration 4 installs the schema; the live canonical
+writer and reader use these tables and indexes.
 
 History candidates use ingestion bounds only for selection. Every selected batch
 passes codec, source, routing, lookup, independent expiry and original-time-bound
@@ -526,9 +524,8 @@ cursors, expiry and pruning. Other tests cover selected corruption, duplicates,
 index plans, work and projection budgets, transactional bound updates, cancellation
 and snapshot isolation. The real queue/collector fixture verifies pagination of
 400 original batch observations together with its existing legacy observation.
-Full mixed-format uniqueness, runtime batch-ingestion wiring and the unchanged
-full controller workload against
-30 MiB/day remain required.
+Arbitrary identity-ID uniqueness and the unchanged full controller workload
+against 30 MiB/day remain open.
 
 
 ## Batch claim constraints and legacy ID conflicts
@@ -554,8 +551,8 @@ reader corruption fixtures explicitly introduce legacy conflicts after append.
 These checks enforce incoming-batch conflicts with existing legacy rows. They do
 not establish global uniqueness between arbitrary batch records or guard later
 legacy writers. The scoped deletion primitive below removes all current matches
-without claiming that future writers are constrained. Global uniqueness,
-runtime activation and full-controller resource
+without claiming that future writers are constrained. Arbitrary global
+uniqueness and full-controller resource
 verification remain required.
 
 
@@ -579,8 +576,8 @@ are disabled. The primitive requires foreign keys enabled for the legacy cascade
 It processes at most 1,024 candidate batches; corruption, work-budget exhaustion or
 any later
 SQL failure requires the owner to roll back the entire transaction. Success
-must not be acknowledged until the owner commits. No new index, UI deletion
-action or live runtime wiring is added. The guard is part of the reserved schema.
+must not be acknowledged until the owner commits. No new index or UI deletion
+action is added. The guard is part of the installed schema.
 
 Tests compare deletion with legacy cascading links across scopes, retain exact
 original observations/claims and unrelated-device links, and verify observation
@@ -590,8 +587,8 @@ and exhausted work budgets verify rollback after earlier rewrites. Other checks
 cover indexed selection, foreign-key prerequisites, cancellation, closed
 transactions and visibility before owner commit.
 
-Global cross-batch/later-legacy-writer uniqueness,
-runtime wiring and full-controller resource verification remain required.
+Arbitrary cross-batch identity uniqueness and full-controller resource
+verification remain open.
 
 
 ## Transactional scoped observation deletion
@@ -615,15 +612,15 @@ evidence; an empty batch and its unused routing dictionary are removed.
 The existing packed observation lookup selects at most one batch. The shared
 bounded codec and transactional rewrite path rebuild slots, bounds and routing,
 including original ID expansion and repartition if needed. Unrelated observations
-remain exact and readable. No new schema, index, UI action or live runtime wiring
+remain exact and readable. No new schema, index or UI action
 is introduced.
 
 Tests compare legacy reference clearing and exact retained batch evidence,
 including expired originals, other records, scope isolation, empty batches,
 lookup remapping and reopen. They cover corrupt payload/source/bounds/slots,
 duplicate cross-format IDs, a late lookup-insertion failure with rollback,
-foreign-key prerequisites, cancellation and owner-only commit. Global uniqueness,
-runtime wiring and the unchanged full controller
+foreign-key prerequisites, cancellation and owner-only commit. Arbitrary global
+uniqueness and the unchanged full controller
 resource measurement remain required.
 
 ## Transactional scoped claim deletion
@@ -656,25 +653,25 @@ claims. Scope isolation remains exact.
 The shared rewrite path removes dependent links, rebuilds routing groups, lookup
 slots and time bounds, and repartitions if materialized IDs exceed a codec bound.
 An observationless record is removed when its last claim is deleted. No new
-schema, index, UI action or live runtime wiring is introduced.
+schema, index or UI action is introduced.
 
 Tests compare legacy cascading behavior and exact retained batch evidence,
 including expired claims, unrelated records and reopen. They cover same-scope
 duplicates across batches and a later legacy collision, scope isolation, empty
 record cleanup, a scan beyond 1,024 batches, work exhaustion, corruption after
 an earlier rewrite, late SQL
-failure, foreign-key prerequisites, cancellation and owner-only commit. Global
-uniqueness, runtime wiring and the unchanged full
+failure, foreign-key prerequisites, cancellation and owner-only commit. Arbitrary
+global uniqueness and the unchanged full
 controller resource measurement remain required.
 
-## Inactive schema migration
+## Schema migration
 
 Storage schema 4 installs the adapter's five tables, seven explicit indexes and
 three integrity triggers in the same transaction as the schema-version update.
 It does not copy, rewrite or delete legacy observations, claims, links, devices
-or settings. The controller continues to use the legacy writer and readers after
-migration; mixed-format retention runs in live maintenance, while other batch
-components remain internal until the remaining activation gates pass.
+or settings. The controller uses the installed batch writer for new Device Watch
+evidence, the canonical mixed-format read view for Device Watch API responses,
+and mixed-format retention for expiry. Existing records remain available.
 
 Upgrades from schema 3 preserve legacy evidence and make the private batch owner
 available against the empty adapter tables. A late conflicting DDL object rolls
@@ -688,8 +685,8 @@ retryable with adequate capacity. A newer unsupported schema remains rejected.
 The migration installs the exact schema measured by adapter work, including the
 later identity and observation-query indexes; it introduces no additional
 identity-ID index. Historical daily-growth measurements remain exact-source
-evidence and do not include every later adapter change. Runtime activation and
-the unchanged full-controller workload are still required before claiming the
+evidence and do not include every later adapter change. The unchanged
+full-controller workload is required before claiming the
 30 MiB/day target.
 
 ## Owned mixed-format retention and audit
@@ -727,5 +724,5 @@ database-quota or host-volume health reports pressure or full, it repeats up to
 64 passes while due evidence is deleted, stopping sooner when pressure clears or
 no due evidence remains. A cycle has a five-minute deadline and uses one fixed
 retention clock. Cancellation joins the maintenance worker before closing the
-store. Global identity constraints, batch runtime wiring and unchanged
-full-controller measurement remain activation gates.
+store. Arbitrary global identity-ID uniqueness and unchanged full-controller
+measurement remain open gates.

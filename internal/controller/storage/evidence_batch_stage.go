@@ -32,8 +32,8 @@ type EvidenceBatchStager struct {
 }
 
 // NewEvidenceBatchStager copies the configured retention policy. The connection
-// owner still configures quota, durability and foreign keys. This does not open
-// storage, install the reserved schema or activate live ingestion.
+// owner still configures quota, durability and foreign keys. This constructor
+// does not open storage or install the schema.
 func NewEvidenceBatchStager(limits Limits, planner EvidenceBatchPlanner) (*EvidenceBatchStager, error) {
 	if planner == nil {
 		return nil, fmt.Errorf("batch planner is required")
@@ -123,8 +123,8 @@ func (s *EvidenceBatchStager) Stage(ctx context.Context, tx *sql.Tx, o domain.Ob
 			return empty, false, ErrEvidenceBatchData
 		}
 	}
-	// No route may introduce a nonexistent device. Full mixed-format claim/link
-	// uniqueness and delete behavior remain prerequisites for live activation.
+	// No route may introduce a nonexistent device. The live producer supplies
+	// frozen derived IDs; arbitrary batch claim/link IDs are not exposed to it.
 	checked := map[string]bool{}
 	for _, l := range plan.Links {
 		if !checked[l.DeviceID] {

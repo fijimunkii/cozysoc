@@ -108,12 +108,13 @@ type ingestionEpisode struct {
 }
 
 type Ingestor struct {
-	sink       ingestionSink
-	queue      chan ingestionItem
-	eventQueue chan ingestionEpisode
-	logger     *slog.Logger
-	now        func() time.Time
-	latency    *ingestionLatencyTracker
+	sink                      ingestionSink
+	atomicDeviceWatchEvidence bool
+	queue                     chan ingestionItem
+	eventQueue                chan ingestionEpisode
+	logger                    *slog.Logger
+	now                       func() time.Time
+	latency                   *ingestionLatencyTracker
 
 	stateMu sync.Mutex
 	closing bool
@@ -129,6 +130,12 @@ type Ingestor struct {
 	overflowActive bool
 	failureActive  bool
 	failureClass   string
+}
+
+// AtomicDeviceWatchEvidence reports whether a successful observation receipt
+// already includes the Device Watch identity decision and its durable write.
+func (i *Ingestor) AtomicDeviceWatchEvidence() bool {
+	return i != nil && i.atomicDeviceWatchEvidence
 }
 
 func NewIngestor(store *Store, capacity int, logger *slog.Logger) (*Ingestor, error) {

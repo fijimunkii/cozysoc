@@ -204,7 +204,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		}
 	}()
 
-	ingestor, err := storage.NewIngestor(store, 0, logger)
+	ingestor, err := storage.NewEvidenceBatchIngestor(store, 0, logger, devicewatch.PlanBatchEvidence, devicewatch.RepairLegacyObservation)
 	if err != nil {
 		return fmt.Errorf("initialize storage ingestion: %w", err)
 	}
@@ -241,17 +241,6 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	if err != nil {
 		return err
 	}
-	if _, enabled, currentErr := deviceWatchControl.Current(); currentErr != nil {
-		return currentErr
-	} else if enabled {
-		if _, reconcileErr := deviceWatchControl.Enable(ctx); reconcileErr != nil {
-			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(reconcileErr))
-		}
-	}
-	if err := startDeviceWatchVerification(ctx, lifecycle, logger); err != nil {
-		return fmt.Errorf("start Device Watch verification: %w", err)
-	}
-
 	canonicalEvidence, err := storage.NewCanonicalEvidenceView(store)
 	if err != nil {
 		return fmt.Errorf("initialize canonical evidence reads: %w", err)
@@ -273,6 +262,16 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("start storage maintenance: %w", err)
 	}
 	defer stopStorageMaintenance()
+	if _, enabled, currentErr := deviceWatchControl.Current(); currentErr != nil {
+		return currentErr
+	} else if enabled {
+		if _, reconcileErr := deviceWatchControl.Enable(ctx); reconcileErr != nil {
+			logger.Warn("device_watch_not_started", "reason", deviceWatchStartupReason(reconcileErr))
+		}
+	}
+	if err := startDeviceWatchVerification(ctx, lifecycle, logger); err != nil {
+		return fmt.Errorf("start Device Watch verification: %w", err)
+	}
 
 	// Only initialize run ownership AFTER acquiring the controller socket. A
 	// rejected duplicate must not construct a second coordinator or reset limits.

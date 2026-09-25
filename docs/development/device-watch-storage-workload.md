@@ -1,7 +1,7 @@
 # Device Watch storage-growth workload
 
-Related issues: #29 and #11. This workload measures the existing Device Watch
-collector, ingestion, temporal identity reconciliation and SQLite persistence path
+Related issues: #150, #29 and #11. This workload measures the live Device Watch
+collector, atomic batch ingestion, temporal identity reconciliation and SQLite persistence path
 using 100 stable synthetic IPv4 neighbors. It sends no traffic, reads no real
 neighbor cache, and does not enroll or change a real network.
 
@@ -10,9 +10,9 @@ neighbor cache, and does not enroll or change a real network.
 The small fixture check runs in ordinary Go CI. The full measurement is opt-in:
 
 ```sh
-TMPDIR=/private/tmp COZYSOC_STORAGE_WORKLOAD=1 go test \
+TMPDIR=/private/tmp COZYSOC_CANONICAL_STORAGE_WORKLOAD=1 go test \
   ./internal/controller/devicewatch \
-  -run '^TestDeviceWatchDailyStorageWorkload$' -count=1 -timeout=35m -v
+  -run '^TestCanonicalDeviceWatchDailyStorageWorkload$' -count=1 -timeout=35m -v
 ```
 
 Use a suitable temporary directory on Linux. The workload has a thirty-minute
@@ -24,16 +24,18 @@ daily measurement.
 ## Workload and measurement boundary
 
 One synthetic scope and source feed the production collector through fixture
-interface/cache readers. The production storage sink and reconciler persist all
-records through the real SQLite implementation and default ingestion queue.
+interface/cache readers. The live storage sink and batch ingestion owner commit
+each observation with its identity decision through the real SQLite implementation
+and default bounded queue.
 A warm-up collection establishes 100 represented devices before measuring growth.
 The next 1,440 collections use successive one-minute source timestamps, matching
 the current runtime's default cadence. Each collection presents the same 100
 locally administered synthetic MAC addresses and private IPv4 addresses.
 
 The report verifies all 144,000 new observations, all expected ingestion receipts,
-no drops or failures, 100 final devices, and retained observation counts after
-closing and reopening SQLite. Coverage samples are written on every collection.
+no drops or failures, 100 final devices, and original observations, claims, links
+and lookups after closing and reopening SQLite. Coverage samples are written on
+every collection.
 The schema, indexes, quota, rollback journal, synchronization and retention settings
 are unchanged. All source times are in the past. The shortest applicable retention
 is seven days, so expiry does not remove workload data during this first simulated
@@ -56,7 +58,7 @@ workload already exceeds the application's 30 MiB/day architecture envelope.
 
 ## Interpreting output
 
-The final `storage-workload-report` JSON identifies the workload version, platform,
+The final `canonical-storage-workload-report` JSON identifies the workload version, platform,
 Go toolchain, simulated duration, represented-device and observation counts, before/
 after database lengths, growth, actual elapsed time and the architecture target.
 `target_comparison` is separate from whether the Go measurement test completed:

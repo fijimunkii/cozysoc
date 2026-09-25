@@ -35,7 +35,6 @@ type RetainedIdentityClaim struct {
 // EvidenceBatchRecord preserves independently retained evidence. Observation may
 // be nil after its payload expires while claims/links remain. The caller applies
 // retention and foreign-key semantics; encoding/decoding never changes evidence.
-// This codec does not activate a new storage schema or alter existing readers.
 type EvidenceBatchRecord struct {
 	Observation          *domain.Observation      `json:"observation"`
 	ObservationExpiresAt *time.Time               `json:"observation_expires_at"`

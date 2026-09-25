@@ -2,10 +2,12 @@ package devicewatch
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +21,7 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ingestor, err := storage.NewIngestor(store, 8, slog.Default())
+	ingestor, err := storage.NewEvidenceBatchIngestor(store, 8, slog.Default(), PlanBatchEvidence, RepairLegacyObservation)
 	if err != nil {
 		_ = store.Close()
 		t.Fatal(err)
@@ -78,7 +80,11 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	presence, err := ListPresence(ctx, store, "scope.home", now.Add(time.Minute), "", 10)
+	view, err := storage.NewCanonicalEvidenceView(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presence, err := ListPresence(ctx, view, "scope.home", now.Add(time.Minute), "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,6 +97,97 @@ func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 	}
 	if snapshotter.calls != 1 {
 		t.Fatalf("snapshot calls = %d, want 1", snapshotter.calls)
+	}
+}
+
+func TestCanonicalRuntimeCommitsBatchEvidenceBeforePresence(t *testing.T) {
+	store, err := storage.Open(t.TempDir(), storage.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingestor, err := storage.NewEvidenceBatchIngestor(store, 8, slog.Default(), PlanBatchEvidence, RepairLegacyObservation)
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer closeCancel()
+		_ = ingestor.Close(closeCtx)
+		_ = store.Close()
+	})
+	now := time.Now().UTC().Truncate(time.Second)
+	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
+	metadata, err := EncodeScopeMetadata(binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateNetworkScope(ctx, domain.NetworkScope{ID: "scope.home", Kind: "lan", EnrolledAt: now, Metadata: metadata}); err != nil {
+		t.Fatal(err)
+	}
+	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast | net.FlagMulticast, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.42/24")}}}
+	snapshotter := &fakeSnapshotter{snapshot: Snapshot{CapturedAt: now, InterfaceName: "en0", Sources: []SourceStatus{{Method: MethodARPCache, Available: true}}, Neighbors: []Neighbor{neighborFixture("192.168.1.10", "aa:bb:cc:dd:ee:01", "en0", MethodARPCache)}}}
+	r, err := newRuntime(store, ingestor, slog.Default(), inspector, snapshotter, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.now = func() time.Time { return now }
+	if err := r.Start(ctx, "scope.home"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopCancel()
+		_, _ = r.Stop(stopCtx)
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for r.State().LastSuccessfulAt.IsZero() {
+		if time.Now().After(deadline) {
+			t.Fatal("canonical runtime did not complete its first collection", r.State())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	view, err := storage.NewCanonicalEvidenceView(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presence, err := ListPresence(ctx, view, "scope.home", now.Add(time.Minute), "", 10)
+	if err != nil || len(presence.Devices) != 1 || presence.Devices[0].State != PresenceVisible {
+		t.Fatal("canonical evidence was not visible", presence, err)
+	}
+	db, err := sql.Open("sqlite", store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var batch, legacy int
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM evidence_batch_lookup").Scan(&batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM observations").Scan(&legacy); err != nil {
+		t.Fatal(err)
+	}
+	if batch != 1 || legacy != 0 || snapshotter.calls != 1 {
+		t.Fatal("runtime bypassed canonical batch ingestion", batch, legacy, snapshotter.calls)
+	}
+}
+
+func TestRuntimeRequiresAtomicEvidence(t *testing.T) {
+	store, err := storage.Open(t.TempDir(), storage.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ingestor, err := storage.NewIngestor(store, 1, slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ingestor.Close(context.Background())
+	_, err = newRuntime(store, ingestor, slog.Default(), fakeInspector{}, &fakeSnapshotter{}, 10*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "requires atomic batch evidence") {
+		t.Fatal("runtime accepted a non-atomic evidence queue", err)
 	}
 }
 

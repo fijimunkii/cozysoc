@@ -173,16 +173,17 @@ atomic redacted save/retire audits and bounded reads on the existing read-only
 pool. Upgrades from schemas 1 and 2 preserve prior records and roll back the
 whole migration on failure. Saving settings grants no execution authority.
 
-Schema 4 installs the inactive Device Watch batch adapter tables, query indexes
+Schema 4 installs the Device Watch batch tables, query indexes
 and integrity triggers. The migration preserves all legacy evidence and settings,
 and rolls back both DDL and the version update on failure. The configured page
 quota is applied before migration so an upgrade cannot commit beyond it.
-Installation does not select the batch writer. The live controller serves Device
-Watch presence, detail and activity through the canonical mixed-format read view;
+The live controller selects the batch writer for new Device Watch neighbor
+evidence and serves presence, detail and activity through the canonical
+mixed-format read view;
 each request uses one fixed read-only SQLite snapshot and can see retained batch
 evidence alongside earlier rows. The controller also runs mixed-format retention
-over the installed schema. New Device Watch ingestion still uses the legacy
-writer until the remaining #150 activation and resource gates pass.
+over the installed schema. Other observation kinds keep their existing storage
+path. The unchanged full-controller #150 resource gate is still open.
 
 ## Mixed-format maintenance and reserved deletion boundary
 
@@ -190,7 +191,7 @@ The mixed-format adapter has an owned, quota-configured retention pass that
 commits legacy/batch expiry and its storage audit atomically. The live controller
 schedules this pass after acquiring its local socket. See the [batch retention
 contract](evidence-batch-codec.md#owned-mixed-format-retention-and-audit) for
-transaction ownership, count semantics, bounds and remaining activation gates.
+transaction ownership, count semantics and bounds.
 
 Caller-owned reserved primitives also delete a device and its links globally,
 or delete a scoped observation or claim across legacy and batch storage. Claim

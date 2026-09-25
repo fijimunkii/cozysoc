@@ -130,10 +130,15 @@ The loop:
 
 1. revalidates the enrolled interface and prefixes;
 2. reads the passive ARP/NDP snapshot;
-3. writes observations and coverage through the bounded #10 ingestion queue; and
-4. reconciles each persisted neighbor observation into temporal identity evidence.
+3. submits neighbor observations to the bounded canonical batch ingestor, which
+   commits each observation and its temporal identity decision atomically before
+   acknowledging it; and
+4. writes the collection's coverage sample through the same bounded queue.
 
-Startup reconciliation uses the same lifecycle driver as live enablement. A persisted enabled intent is never implemented through a separate manual runtime-start path.
+Startup reconciliation uses the same lifecycle driver as live enablement. The
+controller acquires its local socket before starting a persisted enabled intent,
+so a rejected duplicate does not start a second collector. A persisted intent is
+never implemented through a separate manual runtime-start path.
 
 The runtime is stoppable and controller shutdown waits for it before closing ingestion/storage. Startup or collection failure does not terminate the controller. The runtime records a coarse failure class (`scope-mismatch`, `source-unavailable`, and similar), while current coverage and operational evidence are independently re-evaluated into verification state. A current source gap or collection failure degrades Device Watch; a running sensor that stops succeeding becomes stale; a stopped configured runtime is reported disconnected.
 
