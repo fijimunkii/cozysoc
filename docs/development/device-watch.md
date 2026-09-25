@@ -201,7 +201,7 @@ cozysoc device-label --state-dir PATH DEVICE_ID "Living Room TV"
 
 An empty label clears the user label. Labels are user metadata only; they do not alter the underlying temporal identity claims or increase inference confidence.
 
-Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update. A guessed device ID from another scope therefore cannot be labeled through this method.
+Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update, including evidence held in canonical batches. The scope/evidence check and label update use one transaction. A guessed device ID from another scope therefore cannot be labeled through this method.
 
 Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event.
 
