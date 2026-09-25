@@ -84,11 +84,20 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
+  const pageHeading = useRef<HTMLHeadingElement>(null);
+  const previousPage = useRef<Page>(page);
   const refreshInFlight = useRef(false);
   const lastSuccessfulRead = useRef<number | null>(null);
   const defaultMutationClient = useMemo(() => createWebSetupClient(), []);
   const liveSetupClient = setupClient ?? defaultMutationClient;
   const liveDeviceLabelClient = deviceLabelClient ?? defaultMutationClient;
+
+  useEffect(() => {
+    if (previousPage.current !== page) {
+      previousPage.current = page;
+      pageHeading.current?.focus();
+    }
+  }, [page]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,7 +175,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         <ConnectionState view={view} retryLive={retryLive} useDemo={() => setView({ mode: "demo", data: demoData })} />
         <header className="app-header">
           <p className="eyebrow">{copy.eyebrow}</p>
-          <h1>{copy.title}</h1>
+          <h1 ref={pageHeading} tabIndex={-1}>{copy.title}</h1>
           <p className="lede">{copy.detail}</p>
         </header>
 

@@ -1,13 +1,19 @@
+import { useEffect, useRef } from "react";
+
 import type { DeviceDetail, DeviceIdentityEvidence } from "./detail";
 
 export function DeviceDetailPanel({ detail, onBack }: { detail: DeviceDetail; onBack: () => void }) {
   const label = detail.device.user_label ?? "Unlabeled device";
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => { heading.current?.focus(); }, []);
+
   return (
     <section className="device-detail" aria-labelledby="device-detail-title">
       <button type="button" className="quiet-button device-detail-back" onClick={onBack}>Back to devices</button>
       <div className="product-card device-detail-card">
         <header className="device-detail-header">
-          <div><p className="eyebrow">Device evidence</p><h2 id="device-detail-title">{label}</h2><code>{detail.device.id}</code></div>
+          <div><p className="eyebrow">Device evidence</p><h2 id="device-detail-title" ref={heading} tabIndex={-1}>{label}</h2><code>{detail.device.id}</code></div>
           <span className={`presence-pill presence-pill--${detail.device.state}`}>{detail.device.state === "visible" ? "Visible now" : "Uncertain"}</span>
         </header>
         <div className="device-detail-presence">

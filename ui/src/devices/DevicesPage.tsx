@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DeviceLabelClient } from "../setup/setup";
 import { DeviceLoadError } from "./devices";
@@ -10,6 +10,16 @@ import type { DeviceList, DevicePresence, DevicePresenceState } from "./devices"
 
 export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
   const [detailView, setDetailView] = useState<{ deviceID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string } | null>(null);
+  const listHeading = useRef<HTMLHeadingElement>(null);
+  const statusHeading = useRef<HTMLHeadingElement>(null);
+  const previousDetailState = useRef<"loading" | "ready" | "error" | null>(null);
+
+  useEffect(() => {
+    const state = detailView?.state ?? null;
+    if (state === "loading" || state === "error") statusHeading.current?.focus();
+    if (state === null && previousDetailState.current !== null) listHeading.current?.focus();
+    previousDetailState.current = state;
+  }, [detailView?.state]);
 
   async function openDetail(deviceID: string): Promise<void> {
     if (loadDetail === undefined) return;
@@ -23,13 +33,13 @@ export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { d
   }
 
   if (detailView?.state === "ready" && detailView.detail !== undefined) return <DeviceDetailPanel detail={detailView.detail} onBack={() => setDetailView(null)} />;
-  if (detailView?.state === "loading") return <section className="product-card empty-product-state"><h2>Reading device evidence</h2><p>Loading retained observations and identity associations from the local controller.</p></section>;
-  if (detailView?.state === "error") return <section className="product-card empty-product-state"><h2>Device evidence is unavailable</h2><p>{detailView.message}</p><div className="device-detail-error-actions"><button type="button" className="secondary-action" onClick={() => void openDetail(detailView.deviceID)}>Retry evidence</button><button type="button" className="quiet-button" onClick={() => setDetailView(null)}>Back to devices</button></div></section>;
+  if (detailView?.state === "loading") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Reading device evidence</h2><p>Loading retained observations and identity associations from the local controller.</p></section>;
+  if (detailView?.state === "error") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Device evidence is unavailable</h2><p>{detailView.message}</p><div className="device-detail-error-actions"><button type="button" className="secondary-action" onClick={() => void openDetail(detailView.deviceID)}>Retry evidence</button><button type="button" className="quiet-button" onClick={() => setDetailView(null)}>Back to devices</button></div></section>;
   if (!devices.configured) {
     return (
       <section className="product-card empty-product-state" aria-labelledby="devices-title">
         <p className="eyebrow">Devices</p>
-        <h2 id="devices-title">Device visibility is not configured</h2>
+        <h2 id="devices-title" ref={listHeading} tabIndex={-1}>Device visibility is not configured</h2>
         <p>Cozy SOC has not been authorized to observe a home network yet. It will not choose or probe a network on its own.</p>
         <p className="quiet-note">Use the guided setup on Overview to authorize a network and enable Device Watch separately.</p>
       </section>
@@ -52,7 +62,7 @@ export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { d
         <header className="section-header">
           <div>
             <p className="eyebrow">Devices</p>
-            <h2 id="devices-title">Visible network identities</h2>
+            <h2 id="devices-title" ref={listHeading} tabIndex={-1}>Visible network identities</h2>
             <p>Presence comes from positive Device Watch evidence. Missing evidence ages to uncertain; it is not treated as proof that a device went offline.</p>
           </div>
           <span className="as-of-label">Updated {formatTimestamp(devices.as_of)}</span>
