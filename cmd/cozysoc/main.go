@@ -252,7 +252,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("start Device Watch verification: %w", err)
 	}
 
-	apiHandler, err := newControllerAPIHandler(controller, store, deviceWatchControl)
+	canonicalEvidence, err := storage.NewCanonicalEvidenceView(store)
+	if err != nil {
+		return fmt.Errorf("initialize canonical evidence reads: %w", err)
+	}
+	apiHandler, err := newControllerAPIHandler(controller, canonicalEvidence, deviceWatchControl)
 	if err != nil {
 		return err
 	}

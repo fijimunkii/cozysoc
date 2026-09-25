@@ -1,10 +1,10 @@
 # Evidence batch storage codec
 
 Related: #150. `storage.EncodeEvidenceBatch` and `storage.DecodeEvidenceBatch`
-define a bounded format for retained evidence. They are not
-used by live persistence or history readers. Schema 4 installs the inactive
-adapter tables transactionally; no runtime flag or storage-policy change is
-introduced. The [standalone prototype](device-watch-persistent-batch-prototype.md)
+define a bounded format for retained evidence. New live Device Watch writes do
+not yet use the codec, but the controller's canonical read view can serve
+retained batch evidence through one fixed snapshot. Schema 4 installs the
+adapter tables transactionally. The [standalone prototype](device-watch-persistent-batch-prototype.md)
 remains separate evidence; its 22.42 MiB result does not measure this codec with
 production expiry metadata or establish the controller's budget.
 
@@ -147,8 +147,8 @@ lookups return `sql.ErrNoRows`; corrupt evidence returns no partial record.
 Regression tests cover replay, ID conflicts, source and scope separation, exact
 expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
-ownership. These primitives do not yet implement full identity foreign keys,
-live history-reader wiring or runtime activation. The queue owner below supplies a
+ownership. These primitives do not yet implement full identity foreign keys or
+runtime batch ingestion. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
 the unchanged full controller workload, including all database pages and
@@ -371,9 +371,9 @@ metadata, duplicate selected link IDs, equal-time ordering, bounded work and the
 device routing index. The real queue/collector fixture also verifies four original
 collections and eight claim/link detail rows for each of 100 devices.
 The index changes the reserved schema; previous footprint
-measurements retain their exact source and do not measure this index. Live device
-history reader wiring and global identity gates remain
-open, as does the unchanged full-controller storage measurement.
+measurements retain their exact source and do not measure this index. Global
+identity and live batch-ingestion gates remain open, as does the unchanged
+full-controller storage measurement.
 
 ## Mixed device lists
 
@@ -405,9 +405,8 @@ selected corruption, exhausted work budgets, indexed query plans, page-boundary
 selection and staged
 snapshot rollback. The real 100-device/four-collection queue fixture checks
 pagination with no duplicate or missing devices and exact last-seen times. These
-checks do not activate live readers or establish the full controller budget;
-referential integrity and runtime reader wiring remain
-required.
+checks do not establish the full controller budget; referential integrity and
+runtime batch-ingestion wiring remain required.
 
 
 ## Mixed device activity
@@ -446,9 +445,9 @@ latest activity. Activity, list and detail projections return UTC timestamps lik
 the legacy SQL readers; a regression verifies stored original timestamp offsets
 remain unchanged.
 
-This reader adds no schema or index and does not activate live batch history.
-Live reader wiring, full mixed-format uniqueness and runtime wiring remain
-required. Earlier
+This reader adds no schema or index. The live controller serves batch history
+through the canonical read view; full mixed-format uniqueness and batch-ingestion
+wiring remain required. Earlier
 daily footprint evidence retains its exact measured source; the unchanged full
 controller workload must measure the integrated result against 30 MiB/day.
 
@@ -479,8 +478,8 @@ limits and cursors. They also cover selected corruption, work exhaustion, older
 valid evidence below a newer invalid batch, staged state, cancellation and closed
 transactions. The real 100-device collector fixture verifies paginated scope
 membership and its disappearance after the collection validity interval ends.
-Full mixed-format referential integrity, runtime reader wiring and the complete
-controller resource
+Full mixed-format referential integrity, runtime batch-ingestion wiring and the
+complete controller resource
 measurement remain required.
 
 
@@ -527,8 +526,8 @@ cursors, expiry and pruning. Other tests cover selected corruption, duplicates,
 index plans, work and projection budgets, transactional bound updates, cancellation
 and snapshot isolation. The real queue/collector fixture verifies pagination of
 400 original batch observations together with its existing legacy observation.
-Live reader wiring, full mixed-format uniqueness, runtime wiring and the
-unchanged full controller workload against
+Full mixed-format uniqueness, runtime batch-ingestion wiring and the unchanged
+full controller workload against
 30 MiB/day remain required.
 
 
