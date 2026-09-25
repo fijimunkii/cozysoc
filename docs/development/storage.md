@@ -177,10 +177,12 @@ Schema 4 installs the inactive Device Watch batch adapter tables, query indexes
 and integrity triggers. The migration preserves all legacy evidence and settings,
 and rolls back both DDL and the version update on failure. The configured page
 quota is applied before migration so an upgrade cannot commit beyond it.
-Installation does not select the batch writer or mixed readers. The live
-controller does run mixed-format retention over the installed schema, including
-the currently empty batch tables. Batch ingestion and reading remain gated by
-the rest of #150.
+Installation does not select the batch writer. The live controller serves Device
+Watch presence, detail and activity through the canonical mixed-format read view;
+each request uses one fixed read-only SQLite snapshot and can see retained batch
+evidence alongside earlier rows. The controller also runs mixed-format retention
+over the installed schema. New Device Watch ingestion still uses the legacy
+writer until the remaining #150 activation and resource gates pass.
 
 ## Mixed-format maintenance and reserved deletion boundary
 

@@ -271,6 +271,33 @@ func runBatchAdapterWorkload(t *testing.T, rounds int) batchWorkloadReport {
 			t.Logf("batch adapter: %d/%d collections", i+1, rounds)
 		}
 	}
+	if rounds == 3 {
+		view, err := storage.NewCanonicalEvidenceView(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		asOf := source.snapshot.CapturedAt
+		page, err := view.ListDeviceEvidence(ctx, storage.DeviceEvidenceQuery{ScopeID: "scope.storage-lab", AsOf: asOf, Limit: 200})
+		if err != nil || len(page.Devices) != 100 || page.NextID != "" {
+			t.Fatal("canonical view omitted batch device evidence", len(page.Devices), page.NextID, err)
+		}
+		members, err := view.ListDevicesForScope(ctx, storage.DeviceQuery{ScopeID: "scope.storage-lab", AsOf: asOf, Limit: 200})
+		if err != nil || len(members.Devices) != 100 || members.NextID != "" {
+			t.Fatal("canonical view omitted batch scope membership", len(members.Devices), members.NextID, err)
+		}
+		detail, err := view.GetDeviceEvidenceDetail(ctx, storage.DeviceEvidenceDetailQuery{ScopeID: "scope.storage-lab", DeviceID: page.Devices[0].Device.ID, AsOf: asOf})
+		if err != nil || len(detail.Evidence) != 8 || detail.Truncated {
+			t.Fatal("canonical view omitted batch detail", len(detail.Evidence), detail.Truncated, err)
+		}
+		activity, err := view.ListDeviceActivity(ctx, storage.DeviceActivityQuery{ScopeID: "scope.storage-lab", AsOf: asOf})
+		if err != nil || len(activity.Items) == 0 || activity.Items[0].Source.ObservationID == "" {
+			t.Fatal("canonical view omitted batch activity", len(activity.Items), err)
+		}
+		observations, err := view.ListObservations(ctx, storage.ObservationQuery{ScopeID: "scope.storage-lab", Since: start.Add(-time.Minute), Until: asOf, Limit: 200})
+		if err != nil || len(observations.Observations) != 200 || observations.Next == nil {
+			t.Fatal("canonical view omitted batch observations", len(observations.Observations), err)
+		}
+	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
