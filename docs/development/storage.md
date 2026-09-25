@@ -137,7 +137,15 @@ Database quota and host-volume capacity can therefore disagree legitimately. A d
 
 On unsupported platforms filesystem capacity is reported as unsupported/unavailable and does not by itself degrade storage verification. On a platform where capacity introspection is expected but cannot currently be read, the filesystem state is `unavailable` and coverage degrades as `filesystem-unknown` rather than guessing current or full.
 
-Retention deletion is bounded per call. When rows expire, the controller writes a `retention-expired` storage event with per-table counts rather than allowing old evidence to disappear with no operational trace.
+The live controller runs mixed-format retention once after acquiring its local
+socket and every 15 minutes thereafter. Each pass is bounded to 10,000 rows per
+legacy table and 100 batch records. At database-quota pressure or host-volume
+pressure/full, a cycle repeats bounded passes while expired evidence is found,
+up to 64 passes or five minutes total. It never shortens a retention deadline to
+relieve pressure. Each successful deletion commits a `retention-expired` storage
+event with counts atomically; a no-op pass writes no event. Pruning can make
+database pages reusable without reducing the database file size or immediately
+restoring free space to the host volume.
 
 ## Privacy
 
@@ -169,15 +177,16 @@ Schema 4 installs the inactive Device Watch batch adapter tables, query indexes
 and integrity triggers. The migration preserves all legacy evidence and settings,
 and rolls back both DDL and the version update on failure. The configured page
 quota is applied before migration so an upgrade cannot commit beyond it.
-Installation does not select the batch writer, mixed readers or batch maintenance;
-live storage behavior remains legacy until the remaining #150 activation and
-resource gates pass.
+Installation does not select the batch writer or mixed readers. The live
+controller does run mixed-format retention over the installed schema, including
+the currently empty batch tables. Batch ingestion and reading remain gated by
+the rest of #150.
 
-## Reserved batch maintenance and deletion boundary
+## Mixed-format maintenance and reserved deletion boundary
 
-The reserved mixed-format adapter has an owned, quota-configured retention pass
-that commits legacy/batch expiry and its storage audit atomically. It is not
-scheduled or called by the live controller. See the [batch retention
+The mixed-format adapter has an owned, quota-configured retention pass that
+commits legacy/batch expiry and its storage audit atomically. The live controller
+schedules this pass after acquiring its local socket. See the [batch retention
 contract](evidence-batch-codec.md#owned-mixed-format-retention-and-audit) for
 transaction ownership, count semantics, bounds and remaining activation gates.
 
