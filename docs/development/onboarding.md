@@ -47,10 +47,12 @@ The Overview setup card represents these states explicitly:
 
 Failed mutations never optimistically patch live state. The app reloads coverage, devices, and network authorization from the controller after a successful mutation. If a mutation fails, copy states that no additional change is assumed and preserves the distinction between authorization and monitoring.
 
+Opening enrollment or disable confirmation moves keyboard focus to its heading; Back restores focus to the action that opened it. “Not now” and Resume move focus to the paused or resumed heading. After a successful enrollment, enable, or disable action changes the setup step on the next controller read, focus moves to the new step heading. Initial render and routine evidence refreshes do not move focus.
+
 ## Demo boundary
 
 Synthetic demo mode never renders live setup controls. Demo data remains labeled synthetic and cannot trigger network enrollment or Device Watch mutations.
 
 ## Test boundary
 
-Component tests cover explicit network choice, review-before-enrollment, separate enablement, prerequisite failure, coverage verification and review navigation, confirmation-before-disable, pause/resume, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.
+Component tests cover explicit network choice, review-before-enrollment, separate enablement, focus through confirmation, pause/resume, and successful step changes without refresh focus theft, prerequisite failure, coverage verification and review navigation, confirmation-before-disable, and setup-only network-read failure. The web mutation security/process tests from #92 remain the authority for origin/CSRF/session enforcement and the no-CI-network-enrollment guarantee.

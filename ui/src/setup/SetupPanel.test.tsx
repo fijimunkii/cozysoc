@@ -129,7 +129,11 @@ describe("SetupPanel", () => {
     expect(review.hasAttribute("disabled")).toBe(false);
     fireEvent.click(review);
     expect(screen.getByRole("heading", { name: "Authorize en0?" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Authorize en0?" }));
     expect(screen.getByText(/does not start monitoring yet/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Review selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize this network" }));
     await waitFor(() => expect(setup.enrollNetwork).toHaveBeenCalledWith("en0"));
@@ -145,6 +149,48 @@ describe("SetupPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enable Device Watch" }));
     await waitFor(() => expect(setup.enableDeviceWatch).toHaveBeenCalledTimes(1));
     expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves focus to the next setup step after a successful change without stealing it on ordinary refresh", async () => {
+    const setup = client();
+    const changed = vi.fn();
+    const reviewCoverage = vi.fn();
+    const { rerender } = render(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(document.activeElement).not.toBe(screen.getByRole("heading", { name: "Choose the home network to authorize" }));
+
+    fireEvent.click(screen.getByRole("radio", { name: /en0/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize this network" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    rerender(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Enable Device Watch when you are ready" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable Device Watch" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(2));
+    rerender(<SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Device Watch is reporting current evidence" }));
+
+    const pause = screen.getByRole("button", { name: "Pause Device Watch" });
+    pause.focus();
+    rerender(<SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(document.activeElement).toBe(pause);
+
+    fireEvent.click(pause);
+    fireEvent.click(screen.getByRole("button", { name: "Disable Device Watch" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(3));
+    rerender(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Enable Device Watch when you are ready" }));
+  });
+
+  it("does not move focus when a setup step changes outside a user mutation", () => {
+    const setup = client();
+    const changed = vi.fn();
+    const reviewCoverage = vi.fn();
+    const { rerender } = render(<><button type="button">Outside setup</button><SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} /></>);
+    const outside = screen.getByRole("button", { name: "Outside setup" });
+    outside.focus();
+    rerender(<><button type="button">Outside setup</button><SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} /></>);
+    expect(document.activeElement).toBe(outside);
   });
 
   it("explains prerequisite failure without implying monitoring started", async () => {
@@ -168,6 +214,10 @@ describe("SetupPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Pause Device Watch" }));
     expect(screen.getByText(/keeps the network authorization/i)).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Disable Device Watch?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause Device Watch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause Device Watch" }));
     fireEvent.click(screen.getByRole("button", { name: "Disable Device Watch" }));
     await waitFor(() => expect(setup.disableDeviceWatch).toHaveBeenCalledTimes(1));
     expect(changed).toHaveBeenCalledTimes(1);
@@ -177,8 +227,10 @@ describe("SetupPanel", () => {
     render(<SetupPanel data={data()} client={client()} onChanged={() => undefined} onReviewCoverage={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     expect(screen.getByRole("heading", { name: "Continue when you are ready" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Continue when you are ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Resume setup" }));
     expect(screen.getByRole("heading", { name: "Choose the home network to authorize" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Choose the home network to authorize" }));
   });
 
   it("keeps evidence usable when setup-specific network enumeration fails", () => {
