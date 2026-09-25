@@ -270,12 +270,15 @@ func TestEvidenceBatchStagerRequiresReservedSchemaEvenForLegacyReplay(t *testing
 	if _, err := s.InsertObservation(context.Background(), *r.Observation); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec("DROP TABLE evidence_batch_lookup"); err != nil {
+		t.Fatal(err)
+	}
 	stager, _ := NewEvidenceBatchStager(DefaultLimits(), func(context.Context, *MixedIdentitySnapshot, domain.Observation) (EvidenceBatchPlan, error) {
-		t.Fatal("missing schema reached planner")
+		t.Fatal("incomplete schema reached planner")
 		return EvidenceBatchPlan{}, nil
 	})
 	if _, ok, err := stageFixture(t, db, stager, *r.Observation); err == nil || ok {
-		t.Fatal("missing schema silently fell back", ok, err)
+		t.Fatal("incomplete schema silently fell back", ok, err)
 	}
 }
 

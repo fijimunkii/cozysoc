@@ -220,8 +220,11 @@ func TestMixedRetentionBoundsSchemaAndCancellation(t *testing.T) {
 		t.Fatal(result, err)
 	}
 	missing := openTestStore(t)
+	if _, err := missing.conn.ExecContext(context.Background(), "DROP TABLE evidence_batch_identity_routes"); err != nil {
+		t.Fatal(err)
+	}
 	if result, err := missing.PruneEvidenceBatchExpired(context.Background(), at, 1, 1); err == nil || result != nil {
-		t.Fatal("missing schema accepted", result, err)
+		t.Fatal("incomplete schema accepted", result, err)
 	}
 	if err := missing.conn.PingContext(context.Background()); err != nil {
 		t.Fatal(err)

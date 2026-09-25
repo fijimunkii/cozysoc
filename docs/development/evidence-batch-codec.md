@@ -2,8 +2,9 @@
 
 Related: #150. `storage.EncodeEvidenceBatch` and `storage.DecodeEvidenceBatch`
 define a bounded format for retained evidence. They are not
-used by live persistence or history readers. No database migration, runtime
-flag or storage-policy change is introduced. The [standalone prototype](device-watch-persistent-batch-prototype.md)
+used by live persistence or history readers. Schema 4 installs the inactive
+adapter tables transactionally; no runtime flag or storage-policy change is
+introduced. The [standalone prototype](device-watch-persistent-batch-prototype.md)
 remains separate evidence; its 22.42 MiB result does not measure this codec with
 production expiry metadata or establish the controller's budget.
 
@@ -111,8 +112,8 @@ recovery/replay with noncanonical claim IDs.
 ## SQL transaction primitives
 
 `evidence_batch_sql.go` supplies internal append and scoped point-read primitives
-using this codec. Its schema is reserved and is **not installed by `Store.Open`**;
-no live writer or reader uses it. It accepts an exclusively owned SQL transaction,
+using this codec. `Store.Open` installs its empty schema at version 4, but no live
+writer or reader selects it. It accepts an exclusively owned SQL transaction,
 so the integration can commit evidence, indexes and related changes together.
 The transaction owner must roll back any error and acknowledge only after a
 successful commit. It must use a dedicated connection, never the shared pinned
@@ -148,7 +149,7 @@ expiry boundaries, independently expired claims, reopen, count/byte rollover,
 corrupt payload/index rejection, injected rollback and separate transaction
 ownership. These primitives do not yet implement full identity foreign keys,
 live history-reader wiring, retention-driven quota recovery,
-schema migration or rollback compatibility. The queue owner below supplies a
+or runtime activation. The queue owner below supplies a
 private configured connection and legacy replay dispatch. Live activation still
 requires the remaining contracts to be implemented and tested. Re-measure
 the unchanged full controller workload, including all database pages and
@@ -216,9 +217,9 @@ Appending and pruning validate existing routing and bounds before mutation.
 Pruning regroups records if independent claim expiry changes their surviving keys,
 rebuilds observation slots and bounds in the same transaction, and removes unused
 dictionaries and routes. It does not retain expired lookup values in empty groups.
-The schema remains reserved: live migration, ingestion, history/detail/activity
-queries, complete foreign-key behavior, quota/lifecycle integration and rollback
-compatibility are still required before activation.
+Schema 4 installs these objects empty, while live ingestion,
+history/detail/activity queries, complete mixed-format foreign-key behavior and
+quota/lifecycle scheduling remain gated before activation.
 
 Regression coverage includes unchanged evidence under interleaved grouping,
 normalized routing, exact-time gaps, independent expiry, mixed-format ambiguity and
@@ -232,7 +233,7 @@ failure without a partial identity decision.
 trusted controller planner adapter `devicewatch.PlanBatchEvidence`. `Stage` uses
 an exclusively owned caller transaction: it validates sensor/scope authority and
 checks legacy and batch source-key replay and observation-ID conflicts before
-invoking the planner. A missing reserved schema is an integration error.
+invoking the planner. An incomplete schema is an integration error.
 
 Batch replay returns an empty record and `false` without invoking the planner,
 reading the clock, assigning new expiry or rewriting data. Expired but unpruned
@@ -448,7 +449,7 @@ remain unchanged.
 
 This reader adds no schema or index and does not activate live batch history.
 Live reader wiring, full mixed-format uniqueness and deletion, retention and
-quota lifecycle, migration/rollback and runtime wiring remain required. Earlier
+quota lifecycle and runtime wiring remain required. Earlier
 daily footprint evidence retains its exact measured source; the unchanged full
 controller workload must measure the integrated result against 30 MiB/day.
 
@@ -470,8 +471,8 @@ and stops scanning a device after an actual valid claim/link match. Sorted devic
 IDs are deduplicated across formats, with the exclusive cursor and one extra
 device preserving pagination. The same 1,024-candidate budget bounds a whole
 page; corruption, query failure and exhausted work return no partial result.
-The caller owns the transaction and fixed retention clock. No new index, schema
-migration or live runtime wiring is added.
+The caller owns the transaction and fixed retention clock. This reader adds no
+further index or live runtime wiring.
 
 Tests compare legacy and mixed/all-batch results across both validity ends, future
 link starts, unbounded intervals, gaps, retirement, retention, observation pruning,
@@ -479,8 +480,8 @@ limits and cursors. They also cover selected corruption, work exhaustion, older
 valid evidence below a newer invalid batch, staged state, cancellation and closed
 transactions. The real 100-device collector fixture verifies paginated scope
 membership and its disappearance after the collection validity interval ends.
-Full mixed-format referential integrity and lifecycle, migration/rollback,
-runtime reader wiring and the complete controller resource
+Full mixed-format referential integrity and lifecycle, runtime reader wiring and
+the complete controller resource
 measurement remain required.
 
 
@@ -503,8 +504,8 @@ payloads and lookup changes in the same transaction. Pruning recomputes bounds
 from surviving observations, including zero bounds when only claims remain.
 Existing persisted bounds must validate before append or pruning can rewrite a
 batch. These fields and this index are not included in earlier exact-source
-footprint measurements. The schema is still reserved and not installed by live
-migration.
+footprint measurements. Migration 4 installs the schema, but live runtime paths
+do not select these tables or this index.
 
 History candidates use ingestion bounds only for selection. Every selected batch
 passes codec, source, routing, lookup, independent expiry and original-time-bound
@@ -528,7 +529,7 @@ index plans, work and projection budgets, transactional bound updates, cancellat
 and snapshot isolation. The real queue/collector fixture verifies pagination of
 400 original batch observations together with its existing legacy observation.
 Live reader wiring, full mixed-format uniqueness/deletion, retention and quota
-lifecycle, migration/rollback and the unchanged full controller workload against
+lifecycle, runtime wiring and the unchanged full controller workload against
 30 MiB/day remain required.
 
 
@@ -556,7 +557,7 @@ These checks enforce incoming-batch conflicts with existing legacy rows. They do
 not establish global uniqueness between arbitrary batch records, guard later
 legacy writers, or implement explicit claim deletion across formats. Device
 deletion uses the transaction primitive below. Global uniqueness, retention/quota
-lifecycle, migration/rollback, runtime activation and full-controller resource
+lifecycle, runtime activation and full-controller resource
 verification remain required.
 
 
@@ -592,7 +593,7 @@ cover indexed selection, foreign-key prerequisites, cancellation, closed
 transactions and visibility before owner commit.
 
 Explicit claim deletion, global cross-batch/later-legacy-writer
-uniqueness, lifecycle/quota integration, migration/rollback and full-controller
+uniqueness, lifecycle/quota integration, runtime wiring and full-controller
 resource verification remain required.
 
 
@@ -625,8 +626,33 @@ including expired originals, other records, scope isolation, empty batches,
 lookup remapping and reopen. They cover corrupt payload/source/bounds/slots,
 duplicate cross-format IDs, a late lookup-insertion failure with rollback,
 foreign-key prerequisites, cancellation and owner-only commit. Explicit claim
-deletion, global uniqueness, lifecycle/quota integration, migration/rollback and
+deletion, global uniqueness, lifecycle/quota integration, runtime wiring and
 the unchanged full controller resource measurement remain required.
+
+## Inactive schema migration
+
+Storage schema 4 installs the adapter's five tables, seven explicit indexes and
+three integrity triggers in the same transaction as the schema-version update.
+It does not copy, rewrite or delete legacy observations, claims, links, devices
+or settings. The controller continues to use the legacy writer, readers and
+maintenance after migration; mixed-format components remain internal until the
+remaining activation gates pass.
+
+Upgrades from schema 3 preserve legacy evidence and make the private batch owner
+available against the empty adapter tables. A late conflicting DDL object rolls
+back every earlier schema-4 object and leaves the schema version and legacy rows
+unchanged. Removing that conflict permits a clean retry. Fresh databases and
+upgrades from schemas 1 and 2 reach the same schema through the existing single
+migration transaction. `Open` applies the configured SQLite page quota before
+migration, so allocation exhaustion also rolls back schema 4 and remains
+retryable with adequate capacity. A newer unsupported schema remains rejected.
+
+The migration installs the exact schema measured by adapter work, including the
+later identity and observation-query indexes; it introduces no additional
+identity-ID index. Historical daily-growth measurements remain exact-source
+evidence and do not include every later adapter change. Runtime activation and
+the unchanged full-controller workload are still required before claiming the
+30 MiB/day target.
 
 ## Owned mixed-format retention and audit
 
@@ -634,7 +660,7 @@ the unchanged full controller resource measurement remain required.
 separate pinned writer. The connection uses the same foreign keys, FULL
 synchronous writes, DELETE journal, disabled trusted schema, busy timeout and
 configured page quota as batch ingestion. The two paths share connection setup;
-neither creates a missing database or installs the reserved schema. Each
+neither creates a missing database, and both require installed schema 4. Each
 maintenance call closes its private writer and leaves the parent Store open.
 
 One transaction prunes the bounded legacy tables, prunes and validates up to
@@ -659,5 +685,5 @@ legacy/batch rollback after audit or rewrite failure, real SQLite quota failure
 and recovery, and a held-reader commit failure followed by successful retry.
 The existing live `Store.PruneExpired` behavior is unchanged. Scheduling, proactive
 pressure policy, global identity constraints, explicit claim deletion,
-migration/rollback and full-controller measurement remain activation gates; this
-owner is not wired into live maintenance and adds no new index or schema.
+runtime wiring and full-controller measurement remain activation gates; this
+owner is not wired into live maintenance.

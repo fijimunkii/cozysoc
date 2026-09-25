@@ -165,10 +165,18 @@ atomic redacted save/retire audits and bounded reads on the existing read-only
 pool. Upgrades from schemas 1 and 2 preserve prior records and roll back the
 whole migration on failure. Saving settings grants no execution authority.
 
+Schema 4 installs the inactive Device Watch batch adapter tables, query indexes
+and integrity triggers. The migration preserves all legacy evidence and settings,
+and rolls back both DDL and the version update on failure. The configured page
+quota is applied before migration so an upgrade cannot commit beyond it.
+Installation does not select the batch writer, mixed readers or batch maintenance;
+live storage behavior remains legacy until the remaining #150 activation and
+resource gates pass.
+
 ## Reserved batch maintenance boundary
 
 The reserved mixed-format adapter has an owned, quota-configured retention pass
 that commits legacy/batch expiry and its storage audit atomically. It is not
-installed or scheduled by the live controller. See the [batch retention
+scheduled or called by the live controller. See the [batch retention
 contract](evidence-batch-codec.md#owned-mixed-format-retention-and-audit) for
 transaction ownership, count semantics, bounds and remaining activation gates.

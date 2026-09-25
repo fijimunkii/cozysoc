@@ -377,7 +377,7 @@ func TestHTTPSMigrationPreservesExistingV2ResolverSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if version, err := s.SchemaVersion(ctx); err != nil || version != 3 {
+	if version, err := s.SchemaVersion(ctx); err != nil || version != schemaVersion {
 		t.Fatalf("schema %d: %v", version, err)
 	}
 	retained, err := s.ActiveResolverConfiguration(ctx, old.Selection.ID)
