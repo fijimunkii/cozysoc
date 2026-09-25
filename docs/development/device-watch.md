@@ -120,6 +120,8 @@ It invokes only two fixed, read-only system utilities without a shell:
 
 Command output is capped at 1 MiB, individual parsed lines are bounded, and a snapshot may contain at most 4096 neighbors. Incomplete entries and entries without a valid unicast link-layer address are ignored because they do not establish a visible peer.
 
+macOS may omit a leading zero in an ARP or NDP link-layer octet (for example `0:2b`). The parser accepts one or two hexadecimal digits per octet in exactly six colon-separated octets and normalizes the address before recording evidence.
+
 One source may be unavailable while the other remains usable; coverage evidence records source availability independently. A current gap in either expected source degrades Device Watch verification. If neither source is available, Device Watch records an `unavailable` coverage sample and emits no device-arrival/departure inference.
 
 ## Controller runtime
