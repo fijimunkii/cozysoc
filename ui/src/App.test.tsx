@@ -34,6 +34,41 @@ const liveData: AppData = {
 };
 
 describe("App product navigation", () => {
+  it("moves keyboard focus to the selected section without stealing it on a live refresh", async () => {
+    const updated = { ...liveData, devices: parseDeviceList({
+      configured: true,
+      scope_id: "scope.home",
+      as_of: "2026-09-10T01:01:00Z",
+      devices: [...liveData.devices.devices, { id: "device.two", first_seen: "2026-09-10T01:01:00Z", last_seen: "2026-09-10T01:01:00Z", state: "visible" }],
+      truncated: false,
+    }) };
+    const loadData = vi.fn().mockResolvedValueOnce(liveData).mockResolvedValue(updated);
+    render(<App loadData={loadData} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(document.activeElement).not.toBe(heading);
+
+    const devices = screen.getByRole("button", { name: "Devices" });
+    devices.focus();
+    fireEvent.click(devices);
+    expect(heading.textContent).toBe("What Cozy SOC has actually seen");
+    expect(document.activeElement).toBe(heading);
+
+    fireEvent.click(screen.getByRole("button", { name: "Tools" }));
+    expect(heading.textContent).toBe("What Cozy SOC can run");
+    expect(document.activeElement).toBe(heading);
+    fireEvent.click(screen.getByRole("button", { name: "View devices" }));
+    expect(heading.textContent).toBe("What Cozy SOC has actually seen");
+    expect(document.activeElement).toBe(heading);
+
+    const refresh = screen.getByRole("button", { name: "Refresh evidence" });
+    refresh.focus();
+    fireEvent.click(refresh);
+    expect(await screen.findByText("device.two")).toBeTruthy();
+    expect(loadData).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(refresh);
+  });
+
   it("refreshes live evidence on a bounded visible-tab interval without resetting navigation", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     try {
