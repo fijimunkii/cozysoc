@@ -173,10 +173,19 @@ Installation does not select the batch writer, mixed readers or batch maintenanc
 live storage behavior remains legacy until the remaining #150 activation and
 resource gates pass.
 
-## Reserved batch maintenance boundary
+## Reserved batch maintenance and deletion boundary
 
 The reserved mixed-format adapter has an owned, quota-configured retention pass
 that commits legacy/batch expiry and its storage audit atomically. It is not
 scheduled or called by the live controller. See the [batch retention
 contract](evidence-batch-codec.md#owned-mixed-format-retention-and-audit) for
 transaction ownership, count semantics, bounds and remaining activation gates.
+
+Caller-owned reserved primitives also delete a device and its links globally,
+or delete a scoped observation or claim across legacy and batch storage. Claim
+deletion removes every current same-scope ID match and dependent link, including
+duplicates that the pending global uniqueness contract does not yet prevent.
+These operations validate selected batch evidence and derived indexes, rebuild
+them transactionally and require owner rollback on any error. They are not wired
+to a live controller or UI action. See the [mixed deletion
+contracts](evidence-batch-codec.md#transactional-mixed-device-deletion).

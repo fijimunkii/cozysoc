@@ -317,7 +317,7 @@ representation, with replay/conflict checks across both formats and a checkpoint
 in the same transaction. Changing the kind on a retry cannot create duplicate
 evidence or bypass legacy Device Watch repair. Other ingestion kinds retain their
 existing SQL behavior on the private writer. This does not add automatic batch
-pruning or resolve the remaining mixed-format uniqueness/deletion contracts.
+pruning or resolve the remaining mixed-format uniqueness contracts.
 
 Queue capacity, input copying, submission backpressure, receipt waiting and
 processing deadlines use the existing ingestor. Close rejects new submissions,
@@ -448,8 +448,8 @@ the legacy SQL readers; a regression verifies stored original timestamp offsets
 remain unchanged.
 
 This reader adds no schema or index and does not activate live batch history.
-Live reader wiring, full mixed-format uniqueness and deletion, retention and
-quota lifecycle and runtime wiring remain required. Earlier
+Live reader wiring, full mixed-format uniqueness, retention and quota lifecycle
+and runtime wiring remain required. Earlier
 daily footprint evidence retains its exact measured source; the unchanged full
 controller workload must measure the integrated result against 30 MiB/day.
 
@@ -528,7 +528,7 @@ cursors, expiry and pruning. Other tests cover selected corruption, duplicates,
 index plans, work and projection budgets, transactional bound updates, cancellation
 and snapshot isolation. The real queue/collector fixture verifies pagination of
 400 original batch observations together with its existing legacy observation.
-Live reader wiring, full mixed-format uniqueness/deletion, retention and quota
+Live reader wiring, full mixed-format uniqueness, retention and quota
 lifecycle, runtime wiring and the unchanged full controller workload against
 30 MiB/day remain required.
 
@@ -554,10 +554,10 @@ by reads and pruning. Retention parity uses separate legacy and batch databases;
 reader corruption fixtures explicitly introduce legacy conflicts after append.
 
 These checks enforce incoming-batch conflicts with existing legacy rows. They do
-not establish global uniqueness between arbitrary batch records, guard later
-legacy writers, or implement explicit claim deletion across formats. Device
-deletion uses the transaction primitive below. Global uniqueness, retention/quota
-lifecycle, runtime activation and full-controller resource
+not establish global uniqueness between arbitrary batch records or guard later
+legacy writers. The scoped deletion primitive below removes all current matches
+without claiming that future writers are constrained. Global uniqueness,
+retention/quota lifecycle, runtime activation and full-controller resource
 verification remain required.
 
 
@@ -592,9 +592,8 @@ and exhausted work budgets verify rollback after earlier rewrites. Other checks
 cover indexed selection, foreign-key prerequisites, cancellation, closed
 transactions and visibility before owner commit.
 
-Explicit claim deletion, global cross-batch/later-legacy-writer
-uniqueness, lifecycle/quota integration, runtime wiring and full-controller
-resource verification remain required.
+Global cross-batch/later-legacy-writer uniqueness, lifecycle/quota integration,
+runtime wiring and full-controller resource verification remain required.
 
 
 ## Transactional scoped observation deletion
@@ -625,9 +624,50 @@ Tests compare legacy reference clearing and exact retained batch evidence,
 including expired originals, other records, scope isolation, empty batches,
 lookup remapping and reopen. They cover corrupt payload/source/bounds/slots,
 duplicate cross-format IDs, a late lookup-insertion failure with rollback,
-foreign-key prerequisites, cancellation and owner-only commit. Explicit claim
-deletion, global uniqueness, lifecycle/quota integration, runtime wiring and
-the unchanged full controller resource measurement remain required.
+foreign-key prerequisites, cancellation and owner-only commit. Global uniqueness,
+lifecycle/quota integration, runtime wiring and the unchanged full controller
+resource measurement remain required.
+
+## Transactional scoped claim deletion
+
+`DeleteEvidenceBatchClaim` removes every claim with one ID inside an explicit
+scope, together with its dependent links, from legacy and batch storage in the
+caller's exclusively owned transaction. Original observations and unrelated
+claims, links and devices remain exact. Expiry does not prevent explicit
+deletion. Missing or out-of-scope claims return not found without mutation, and
+the caller must roll back any error and commit before acknowledging success.
+
+Legacy deletion uses the existing claim foreign-key cascade. Batch claims have
+no separate ID index, so the primitive walks pre-existing batches in global
+primary-key order with a 65,536-row work budget and one metadata-row lookahead to
+detect exhaustion. This covers the nominal 30-day, 100-device reference volume
+of roughly 43,200 full batches while retaining a finite bound. It decodes only
+batches in the requested scope, while every other-scope row still consumes the
+budget. It freezes the original upper ID
+before rewriting so new partitions are not scanned twice. Every visited in-scope
+payload, lookup, routing dictionary and time bound validates before its result
+can commit. Exhausting the work budget, finding corruption or hitting a later
+SQL failure requires rollback of all earlier rewrites.
+
+The pending global uniqueness contract permits duplicate batch claim IDs and a
+later legacy writer can still introduce the same ID. Deletion therefore removes
+all current same-scope matches across both formats rather than leaving a
+duplicate behind. This cleanup behavior does not constrain later writes or merge
+claims. Scope isolation remains exact.
+
+The shared rewrite path removes dependent links, rebuilds routing groups, lookup
+slots and time bounds, and repartitions if materialized IDs exceed a codec bound.
+An observationless record is removed when its last claim is deleted. No new
+schema, index, UI action or live runtime wiring is introduced.
+
+Tests compare legacy cascading behavior and exact retained batch evidence,
+including expired claims, unrelated records and reopen. They cover same-scope
+duplicates across batches and a later legacy collision, scope isolation, empty
+record cleanup, a scan beyond 1,024 batches, work exhaustion, corruption after
+an earlier rewrite, late SQL
+failure, foreign-key prerequisites, cancellation and owner-only commit. Global
+uniqueness, lifecycle/quota integration, runtime wiring and the unchanged full
+controller resource measurement remain required.
 
 ## Inactive schema migration
 
@@ -684,6 +724,5 @@ expiry, no-op behavior, separate work limits, missing schema, cancellation,
 legacy/batch rollback after audit or rewrite failure, real SQLite quota failure
 and recovery, and a held-reader commit failure followed by successful retry.
 The existing live `Store.PruneExpired` behavior is unchanged. Scheduling, proactive
-pressure policy, global identity constraints, explicit claim deletion,
-runtime wiring and full-controller measurement remain activation gates; this
-owner is not wired into live maintenance.
+pressure policy, global identity constraints, runtime wiring and full-controller
+measurement remain activation gates; this owner is not wired into live maintenance.
