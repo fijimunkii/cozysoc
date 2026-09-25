@@ -57,6 +57,38 @@ function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: s
   };
 }
 
+function enabledDataWithCoverage(state: "missing" | "unverified" | "degraded"): AppData {
+  const current = data({ enabled: true });
+  if (state === "missing") {
+    return { ...current, coverage: { ...current.coverage, reports: [] } };
+  }
+  const report = current.coverage.reports[0]!;
+  const point = report.observation_points[0]!;
+  const waiting = state === "unverified";
+  const nextStep = waiting ? "Wait for the first collection." : "Review ingestion health.";
+  return {
+    ...current,
+    coverage: {
+      ...current.coverage,
+      reports: [{
+        ...report,
+        state,
+        reason: waiting ? "awaiting-evidence" : "ingestion-lag",
+        next_step: nextStep,
+        observation_points: [{
+          ...point,
+          state,
+          reason: waiting ? "awaiting-evidence" : "ingestion-lag",
+          next_step: nextStep,
+          scope: waiting ? { ...point.scope, verified: [], expected_unverified: point.scope.configured } : point.scope,
+          sources: waiting ? point.sources.map((source) => ({ ...source, state: "expected-unverified" as const, observed: false, next_step: nextStep })) : point.sources,
+          window: waiting ? { has_evidence: false } : point.window,
+        }],
+      }],
+    },
+  };
+}
+
 function control(active: boolean): DeviceWatchControlResult {
   return {
     scope_id: "scope.home",
@@ -88,7 +120,7 @@ describe("SetupPanel", () => {
   it("requires an explicit network choice and review before enrollment", async () => {
     const setup = client();
     const changed = vi.fn();
-    render(<SetupPanel data={data()} client={setup} onChanged={changed} />);
+    render(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={() => undefined} />);
 
     const review = screen.getByRole("button", { name: "Review selection" });
     expect(review.hasAttribute("disabled")).toBe(true);
@@ -107,7 +139,7 @@ describe("SetupPanel", () => {
   it("keeps network enrollment and Device Watch enablement as separate steps", async () => {
     const setup = client();
     const changed = vi.fn();
-    render(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} />);
+    render(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} onReviewCoverage={() => undefined} />);
 
     expect(screen.getByText(/authorized, but monitoring is still off/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Enable Device Watch" }));
@@ -121,7 +153,7 @@ describe("SetupPanel", () => {
         throw new SetupRequestError("precondition_failed", "required prerequisites are not satisfied", 412);
       }),
     });
-    render(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={() => undefined} />);
+    render(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={() => undefined} onReviewCoverage={() => undefined} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Enable Device Watch" }));
     const alert = await screen.findByRole("alert");
@@ -132,7 +164,7 @@ describe("SetupPanel", () => {
   it("requires confirmation before disabling and keeps network authorization explicit", async () => {
     const setup = client();
     const changed = vi.fn();
-    render(<SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} />);
+    render(<SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} onReviewCoverage={() => undefined} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Pause Device Watch" }));
     expect(screen.getByText(/keeps the network authorization/i)).toBeTruthy();
@@ -142,7 +174,7 @@ describe("SetupPanel", () => {
   });
 
   it("supports a session-only pause and resume path", () => {
-    render(<SetupPanel data={data()} client={client()} onChanged={() => undefined} />);
+    render(<SetupPanel data={data()} client={client()} onChanged={() => undefined} onReviewCoverage={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     expect(screen.getByRole("heading", { name: "Continue when you are ready" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Resume setup" }));
@@ -151,10 +183,37 @@ describe("SetupPanel", () => {
 
   it("keeps evidence usable when setup-specific network enumeration fails", () => {
     const changed = vi.fn();
-    render(<SetupPanel data={data({ networkError: "network list unavailable" })} client={client()} onChanged={changed} />);
+    render(<SetupPanel data={data({ networkError: "network list unavailable" })} client={client()} onChanged={changed} onReviewCoverage={() => undefined} />);
     expect(screen.getByRole("heading", { name: "Network setup information is unavailable" })).toBeTruthy();
     expect(screen.getByText(/existing device and coverage evidence remains available/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry setup information" }));
     expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes setup only with current limited coverage and opens its details", () => {
+    const reviewCoverage = vi.fn();
+    render(<SetupPanel data={data({ enabled: true })} client={client()} onChanged={() => undefined} onReviewCoverage={reviewCoverage} />);
+    expect(screen.getByText("Setup complete")).toBeTruthy();
+    expect(screen.getByText("Current limited coverage verified")).toBeTruthy();
+    expect(screen.getByText(/not complete network or traffic monitoring/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review coverage evidence" }));
+    expect(reviewCoverage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["missing", "unverified"] as const)("waits for evidence when coverage is %s", (state) => {
+    const changed = vi.fn();
+    render(<SetupPanel data={enabledDataWithCoverage(state)} client={client()} onChanged={changed} onReviewCoverage={() => undefined} />);
+    expect(screen.getByText("Step 3 of 3")).toBeTruthy();
+    expect(screen.getByText("Waiting for current coverage evidence")).toBeTruthy();
+    expect(screen.queryByText("Setup complete")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh evidence" }));
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps degraded coverage marked for review after Device Watch was enabled", () => {
+    render(<SetupPanel data={enabledDataWithCoverage("degraded")} client={client()} onChanged={() => undefined} onReviewCoverage={() => undefined} />);
+    expect(screen.getByText("Coverage needs review")).toBeTruthy();
+    expect(screen.getByText("Review ingestion health.")).toBeTruthy();
+    expect(screen.queryByText("Setup complete")).toBeNull();
   });
 });

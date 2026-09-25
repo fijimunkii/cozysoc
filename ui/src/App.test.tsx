@@ -152,7 +152,10 @@ describe("App product navigation", () => {
     render(<App loadData={async () => liveData} />);
     expect(await screen.findByRole("status", { name: "Live controller data" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Your home at a glance" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Monitoring is enabled for en0" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Device Watch is reporting current evidence" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review coverage evidence" }));
+    expect(screen.getByRole("heading", { name: "Know what is visible. Know what is not." })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.getByText("1 visible now")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBe("page");
 

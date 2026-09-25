@@ -185,7 +185,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
 
         {activeData && page === "overview" ? (
           <>
-            {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} /> : null}
+            {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} onReviewCoverage={() => setPage("coverage")} /> : null}
             <OverviewPage data={activeData} onNavigate={setPage} />
             <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
             <QualityDiagnosisPanel key={`diagnosis-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadQualityDiagnosis} />
