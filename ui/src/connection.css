@@ -35,6 +35,12 @@
   color: #754b28;
 }
 
+.connection-banner--stale {
+  border-color: #d4c59f;
+  background: #fff8e6;
+  color: #655023;
+}
+
 .connection-banner--demo {
   border-color: #d7c98f;
   background: #fff8d8;
