@@ -157,6 +157,10 @@ func nativeConsentSession(t *testing.T) {
 			t.Fatal("check enabled Device Watch")
 		}
 	}
+	assertNoDeviceWatchEvidence(t, ctx, state)
+	t.Run("devicewatch-native-discovery", func(t *testing.T) {
+		nativeDeviceWatchDiscovery(t, ctx, client)
+	})
 	t.Run("https-native-review", func(t *testing.T) {
 		raw, err := client.CallWithParams(ctx, api.MethodHTTPSSave, api.HTTPSSettingsParams{Endpoint: target + ":443", ServerName: "test.example", RequestTarget: "/check", Family: "ipv4", Method: "HEAD", ExpectedStatus: 204, DestinationPolicy: "exact-endpoint"})
 		if err != nil {
@@ -230,11 +234,15 @@ func nativeConsentSession(t *testing.T) {
 	if json.Unmarshal([]byte(rawAudit), &event) != nil || gatewayrun.ValidateEvent(event) != nil || event.Measurement == nil || event.Measurement.Replies != 3 || event.Outcome != "completed" || event.Target != target || event.Source != source {
 		t.Fatal("native result lost its durable terminal evidence")
 	}
-	for _, query := range []string{`SELECT count(*) FROM observations`, `SELECT count(*) FROM coverage_samples`} {
-		var count int
-		if err := db.QueryRowContext(ctx, query).Scan(&count); err != nil || count != 0 {
-			t.Fatal("gateway check created monitoring evidence", err)
-		}
+	var legacy, batches, coverage int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM observations`).Scan(&legacy); err != nil || legacy != 0 {
+		t.Fatal("native Device Watch bypassed batch storage", legacy, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM evidence_batch_lookup`).Scan(&batches); err != nil || batches < 1 {
+		t.Fatal("native Device Watch observation was not durable", batches, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM coverage_samples`).Scan(&coverage); err != nil || coverage < 1 {
+		t.Fatal("native Device Watch coverage was not durable", coverage, err)
 	}
 	var count int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind='gateway-run'`).Scan(&count); err != nil || count != 3 {

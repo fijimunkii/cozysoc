@@ -38,6 +38,16 @@ class EvidenceGateTests(unittest.TestCase):
             with self.subTest(action=action), self.assertRaises(ValueError):
                 self.check(without_https + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
 
+    def test_device_watch_native_discovery_is_required(self):
+        name = "TestMACOSGatewayLab/native-session/devicewatch-native-discovery"
+        self.assertIn(name, checker.EXPECTED)
+        without_discovery = [e for e in self.evidence() if e.get("Test") != name]
+        with self.assertRaises(ValueError):
+            self.check(without_discovery)
+        for action in ("skip", "fail"):
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                self.check(without_discovery + [dict(Package=checker.PACKAGE, Test=name, Action=action)])
+
     def test_dns_cases_are_required(self):
         for mode in ("dns-answer", "dns-nxdomain", "dns-silent", "dns-wrong-id", "dns-cancel", "dns-source-loss", "native-session/resolver-native-session", "native-session/https-native-review"):
             name = "TestMACOSGatewayLab/" + mode
