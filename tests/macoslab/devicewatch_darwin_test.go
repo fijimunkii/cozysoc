@@ -79,6 +79,25 @@ func nativeDeviceWatchDiscovery(t *testing.T, ctx context.Context, client *local
 			break
 		}
 		if time.Now().After(deadline) {
+			t.Logf("last activity: %s", raw)
+			if snapshot, readErr := client.Call(ctx, api.MethodDeviceWatchCoverage); readErr == nil {
+				var report api.DeviceWatchCoverage
+				if json.Unmarshal(snapshot, &report) == nil {
+					neighbors := -1
+					if report.NeighborsInScope != nil {
+						neighbors = *report.NeighborsInScope
+					}
+					t.Logf("coverage: state=%s reason=%s neighbors=%d operational=%+v", report.State, report.Reason, neighbors, report.Operational)
+				}
+			} else {
+				t.Logf("coverage read failed: %v", readErr)
+			}
+			if snapshot, readErr := client.Call(ctx, api.MethodDevicesList); readErr == nil {
+				t.Logf("device list: %s", snapshot)
+			} else {
+				t.Logf("device list read failed: %v", readErr)
+			}
+			t.Logf("isolated neighbor cache: %s", neighbor)
 			t.Fatal("native passive collection did not publish the isolated peer")
 		}
 		time.Sleep(100 * time.Millisecond)
