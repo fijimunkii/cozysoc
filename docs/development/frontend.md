@@ -148,7 +148,7 @@ This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 prove
 
 ## Next steps
 
-The Chromium setup journey checks keyboard focus through authorization and enablement, semantic labels and automated WCAG A/AA rules at choose/review/verified states, and 320-pixel reduced-motion layout at 200% root text size. A separate synthetic-demo journey scans the five primary sections for automated WCAG A/AA violations and verifies focus and 320-pixel reflow at 200% text size. The live device-evidence journey exercises failed-read, retry, current/historical evidence, expanded provenance, Back focus, and 320-pixel reflow. These browser tests use fixtures, so real controller authority remains covered by process E2E and human screen-reader/usability validation remains separate.
+The Chromium setup journey checks keyboard focus through authorization and enablement, semantic labels and automated WCAG A/AA rules at choose/review/verified states, and 320-pixel reduced-motion layout at 200% root text size. A separate synthetic-demo journey scans the five primary sections for automated WCAG A/AA violations and verifies focus and 320-pixel reflow at 200% text size. The live device-evidence journey exercises failed-read, retry, current/historical evidence, expanded provenance, Back focus, and 320-pixel reflow. A live observation-split journey checks reviewed claim values, cancel/confirm focus, scoped split and undo requests, CSRF headers, automated accessibility, and 320-pixel reflow at 200% text size. These browser tests use fixtures, so real controller authority remains covered by process E2E and human screen-reader/usability validation remains separate.
 
 Useful #13 follow-ons are:
 
@@ -176,6 +176,14 @@ original inferred authority or imply a stronger observation. The Devices page
 can review and confirm a merge of two listed identities, inspect the active
 scope's mappings, and undo a merge. The local web session, exact origin, and
 CSRF token authorize each change; the browser never supplies a scope ID.
+
+The Devices page can also review one retained neighbor observation inferred
+into the wrong Device, including its MAC/IP claim values, then separate it
+into a new or existing scoped Device. The active split remains inspectable and
+undoable even if its source disappears from the current list. The browser
+submits only the reviewed source, observation, and optional target IDs through
+typed session/CSRF-protected endpoints; the controller owns scope validation
+and the corrected evidence projection.
 
 Presence (`visible` / `uncertain`) and identity validity are intentionally separate. A retained MAC/IP association can be historical while the device remains listed, and a temporally current identity association is not itself proof of recent presence, trust, or safety. When a source observation has aged out before its longer-lived identity claim, the detail view says the raw source metadata expired instead of reconstructing it.
 
