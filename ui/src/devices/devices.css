@@ -42,6 +42,26 @@
 .device-label-form-actions { display: flex; gap: 8px; }
 .device-label-error { margin-top: 8px; color: #85483f; font-size: .78rem; line-height: 1.4; }
 
+.device-correction-card { overflow: hidden; }
+.device-correction-content { padding: 0 28px 26px; display: grid; justify-items: start; gap: 16px; }
+.device-correction-status { margin: 0; padding: 0 28px 26px; color: #62675e; }
+.device-correction-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: 100%; max-width: 750px; }
+.device-correction-fields label { display: grid; gap: 6px; font-size: .82rem; font-weight: 700; color: #565b52; }
+.device-correction-fields select { width: 100%; min-width: 0; padding: 10px; border: 1px solid #c9c7be; border-radius: 10px; background: #fff; color: #2b2f29; font: inherit; }
+.device-correction-fields select:focus-visible { outline: 3px solid rgba(61, 94, 69, .22); outline-offset: 2px; }
+.device-correction-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.device-correction-active { width: 100%; border-top: 1px solid #ebe8df; padding-top: 14px; }
+.device-correction-active h3 { margin: 0 0 10px; }
+.device-correction-active p { color: #62675e; }
+.device-correction-active ul { list-style: none; padding: 0; margin: 0; }
+.device-correction-active li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid #ebe8df; padding: 10px 0; }
+.device-correction-active code, .device-correction-review code { overflow-wrap: anywhere; }
+.device-correction-review { max-width: 750px; padding: 16px; border: 1px solid #d9ccb0; border-radius: 12px; background: #faf6ea; }
+.device-correction-review p { line-height: 1.5; }
+.device-correction-review div { display: flex; flex-wrap: wrap; gap: 8px; }
+.device-correction-error { color: #85483f; }
+@media (max-width: 720px) { .device-correction-fields { grid-template-columns: 1fr; } .device-correction-content { padding-left: 18px; padding-right: 18px; } }
+
 .device-detail { display: grid; gap: 14px; }
 .device-detail-back { justify-self: start; }
 .device-detail-card, .device-evidence-card { overflow: hidden; }

@@ -70,6 +70,9 @@ type webHandler struct {
 	gatewayReviewMu      sync.Mutex
 	gatewayReview        *webGatewayReviewState
 	labelDevice          deviceLabelMutator
+	loadDeviceMerges     deviceMergeLoader
+	mergeDevice          deviceMergeMutator
+	unmergeDevice        deviceUnmergeMutator
 	loadNetworks         networkLoader
 	enrollNetwork        networkEnrollMutator
 	enableDeviceWatch    deviceWatchMutator
@@ -177,6 +180,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return err
 	}
 	configureWebDeviceLabel(handler, dir)
+	configureWebDeviceIdentity(handler, dir)
 	configureWebLocalQuality(handler, dir)
 	configureWebGatewayHistory(handler, dir)
 	configureWebResolverHistory(handler, dir)
@@ -323,6 +327,12 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDeviceDetail(w, r)
 	case "/api/devices/label":
 		h.handleDeviceLabel(w, r)
+	case "/api/devices/merges":
+		h.handleDeviceMerges(w, r)
+	case "/api/devices/merge":
+		h.handleDeviceMerge(w, r)
+	case "/api/devices/unmerge":
+		h.handleDeviceUnmerge(w, r)
 	case "/api/network-quality/diagnosis":
 		h.handleQualityDiagnosis(w, r)
 	case "/api/network-quality/https-history":

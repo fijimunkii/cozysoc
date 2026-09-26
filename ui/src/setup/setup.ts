@@ -58,6 +58,29 @@ export interface DeviceLabelClient {
   labelDevice(deviceID: string, label: string): Promise<DeviceLabelResult>;
 }
 
+export interface DeviceMerge {
+  source_device_id: string;
+  target_device_id: string;
+  created_at: string;
+}
+
+export interface DeviceMergeList {
+  configured: boolean;
+  scope_id?: string;
+  merges: DeviceMerge[];
+}
+
+export interface DeviceCorrectionResult {
+  source_device_id: string;
+  target_device_id?: string;
+  changed: boolean;
+}
+
+export interface DeviceCorrectionClient {
+  mergeDevices(sourceID: string, targetID: string): Promise<DeviceCorrectionResult>;
+  unmergeDevice(sourceID: string): Promise<DeviceCorrectionResult>;
+}
+
 export class SetupRequestError extends Error {
   readonly code: string;
   readonly status: number;
@@ -100,7 +123,12 @@ export async function loadNetworksFromWeb(): Promise<NetworkList> {
   return parseNetworkList(await readJSON(response, "Live network response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient & GatewayCheckClient {
+export async function loadDeviceMergesFromWeb(): Promise<DeviceMergeList> {
+  const response = await request("/api/devices/merges", { method: "GET" });
+  return parseDeviceMergeList(await readJSON(response, "Device correction response"));
+}
+
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & GatewayCheckClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -157,6 +185,18 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Gatewa
       }
       return result;
     },
+    async mergeDevices(sourceID: string, targetID: string) {
+      if (!idPattern.test(sourceID) || !idPattern.test(targetID) || sourceID === targetID) throw new SetupRequestError("invalid_request", "Select two different devices from the current list.");
+      const result = parseDeviceCorrectionResult(await mutate("/api/devices/merge", { source_device_id: sourceID, target_device_id: targetID }));
+      if (result.source_device_id !== sourceID || result.target_device_id !== targetID) throw new SetupRequestError("invalid_response", "Device merge response did not match the reviewed devices.");
+      return result;
+    },
+    async unmergeDevice(sourceID: string) {
+      if (!idPattern.test(sourceID)) throw new SetupRequestError("invalid_request", "Device correction source is invalid.");
+      const result = parseDeviceCorrectionResult(await mutate("/api/devices/unmerge", { source_device_id: sourceID }));
+      if (result.source_device_id !== sourceID || result.target_device_id !== undefined) throw new SetupRequestError("invalid_response", "Device undo response did not match the reviewed correction.");
+      return result;
+    },
     async reviewGateway(target: string) {
       return parseGatewayCheckReview(await mutate("/api/network-quality/gateway/review", { target }));
     },
@@ -165,6 +205,32 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Gatewa
       return parseGatewayCheckResult(await mutate("/api/network-quality/gateway/run", { review_id: reviewID, approve }));
     },
   };
+}
+
+function parseDeviceCorrectionResult(input: unknown): DeviceCorrectionResult {
+  const value = objectValue(input, "device correction response");
+  if (typeof value.source_device_id !== "string" || !idPattern.test(value.source_device_id) || typeof value.changed !== "boolean") throw new SetupRequestError("invalid_response", "Device correction response is invalid.");
+  if (value.target_device_id !== undefined && (typeof value.target_device_id !== "string" || !idPattern.test(value.target_device_id) || value.target_device_id === value.source_device_id)) throw new SetupRequestError("invalid_response", "Device correction target is invalid.");
+  const result: DeviceCorrectionResult = { source_device_id: value.source_device_id, changed: value.changed };
+  if (typeof value.target_device_id === "string") result.target_device_id = value.target_device_id;
+  return result;
+}
+
+export function parseDeviceMergeList(input: unknown): DeviceMergeList {
+  const value = objectValue(input, "device corrections");
+  if (typeof value.configured !== "boolean" || !Array.isArray(value.merges) || value.merges.length > 64) throw new SetupRequestError("invalid_response", "Device correction list is invalid.");
+  const scopeID = value.scope_id;
+  if (value.configured ? typeof scopeID !== "string" || !idPattern.test(scopeID) : scopeID !== undefined || value.merges.length !== 0) throw new SetupRequestError("invalid_response", "Device correction scope is invalid.");
+  const merges: DeviceMerge[] = value.merges.map((item) => {
+    const entry = objectValue(item, "device correction");
+    if (typeof entry.source_device_id !== "string" || !idPattern.test(entry.source_device_id) || typeof entry.target_device_id !== "string" || !idPattern.test(entry.target_device_id) || entry.source_device_id === entry.target_device_id) throw new SetupRequestError("invalid_response", "Device correction mapping is invalid.");
+    return { source_device_id: entry.source_device_id, target_device_id: entry.target_device_id, created_at: timestampValue(entry.created_at, "device correction time") };
+  });
+  const sources = new Set(merges.map((item) => item.source_device_id));
+  if (sources.size !== merges.length || merges.some((item) => sources.has(item.target_device_id))) throw new SetupRequestError("invalid_response", "Device corrections contain conflicting mappings.");
+  const result: DeviceMergeList = { configured: value.configured, merges };
+  if (typeof scopeID === "string") result.scope_id = scopeID;
+  return result;
 }
 
 export function validateDeviceLabelInput(label: string): string | undefined {
