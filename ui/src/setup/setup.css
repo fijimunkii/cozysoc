@@ -15,10 +15,10 @@
 .network-choice--selected { border-color: #9fae9b; background: #f3f6f0; }
 .network-choice input { margin-top: 3px; }
 .network-choice-copy strong { display: block; color: #30342d; }
-.network-choice-copy span { display: block; margin-top: 3px; color: #777c72; font-size: .78rem; overflow-wrap: anywhere; }
+.network-choice-copy span { display: block; margin-top: 3px; color: #62685e; font-size: .78rem; overflow-wrap: anywhere; }
 .network-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0 0; }
 .network-detail div { padding: 13px 14px; border-radius: 12px; background: #f5f3ec; }
-.network-detail dt { color: #777c72; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+.network-detail dt { color: #62685e; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
 .network-detail dd { margin: 5px 0 0; color: #3c4139; overflow-wrap: anywhere; }
 .setup-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
 .setup-actions--split { justify-content: space-between; }

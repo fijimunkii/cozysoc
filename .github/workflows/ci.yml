@@ -64,19 +64,49 @@ jobs:
           COZYSOC_MACOS_LAB: '1'
         run: bash scripts/test-macos-network.sh
 
+  browser-accessibility:
+    name: Browser accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend and browser dependencies
+        working-directory: ui
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps --only-shell chromium
+
+      - name: Test rendered setup journey
+        working-directory: ui
+        run: npm run test:browser
+
   repository:
     name: Repository checks
-    needs: macos-network
+    needs: [macos-network, browser-accessibility]
     # Keep the established aggregate check red when a dependency fails or skips.
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Require all native macOS matrix jobs
+      - name: Require native macOS and browser checks
         env:
           NATIVE_RESULT: ${{ needs.macos-network.result }}
-        run: test "$NATIVE_RESULT" = success
+          BROWSER_RESULT: ${{ needs.browser-accessibility.result }}
+        run: |
+          test "$NATIVE_RESULT" = success
+          test "$BROWSER_RESULT" = success
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

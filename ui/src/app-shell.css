@@ -30,13 +30,13 @@
 .presence-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #c2b78f; }
 .presence-dot--visible { background: #6e9a72; }
 .overview-next-step { margin: 20px 28px 26px; padding: 15px 17px; border-radius: 14px; background: #f2f0e8; }
-.overview-next-step span { color: #71766d; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.overview-next-step span { color: #5e655b; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .overview-next-step p { margin: 6px 0 0; color: #4f544b; line-height: 1.55; }
 .overview-empty { padding: 4px 28px 28px; color: #62675e; }
 .empty-product-state { padding: 28px; }
 .empty-product-state h2 { margin: 5px 0 10px; font-size: 1.6rem; }
 @media (max-width: 900px) {
-  .product-shell { grid-template-columns: 1fr; }
+  .product-shell { grid-template-columns: minmax(0, 1fr); }
   .app-sidebar { position: static; height: auto; padding: 16px 18px 10px; border-right: 0; border-bottom: 1px solid #dedbd1; }
   .brand-lockup { padding: 2px 4px 12px; }
   .primary-nav { display: flex; overflow-x: auto; }
