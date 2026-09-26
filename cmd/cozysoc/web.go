@@ -48,6 +48,7 @@ type deviceActivityLoader func(context.Context) (api.DeviceActivityList, error)
 type statusLoader func(context.Context) (api.Status, error)
 type capabilityLoader func(context.Context) (api.CapabilityList, error)
 type storageOverviewLoader func(context.Context) (api.StorageOverview, error)
+type adguardStatusLoader func(context.Context) (api.AdGuardConnection, error)
 
 type webHandler struct {
 	expectedHost           string
@@ -59,6 +60,7 @@ type webHandler struct {
 	loadStatus             statusLoader
 	loadCapabilities       capabilityLoader
 	loadStorageOverview    storageOverviewLoader
+	loadAdGuardStatus      adguardStatusLoader
 	loadDiagnostics        func(context.Context) (api.DiagnosticPreview, error)
 	loadLocalQuality       func(context.Context) (api.LocalNetworkQuality, error)
 	loadGatewayHistory     func(context.Context) (api.GatewayHistory, error)
@@ -207,6 +209,11 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	handler.loadStorageOverview = func(requestCtx context.Context) (api.StorageOverview, error) {
 		return loadStorageOverviewFromController(requestCtx, dir)
+	}
+	handler.loadAdGuardStatus = func(requestCtx context.Context) (api.AdGuardConnection, error) {
+		requestCtx, cancel := context.WithTimeout(requestCtx, webRequestTimeout)
+		defer cancel()
+		return localapi.NewClient(dir).AdGuardStatus(requestCtx)
 	}
 	handler.loadDiagnostics = func(requestCtx context.Context) (api.DiagnosticPreview, error) {
 		return loadDiagnosticsFromController(requestCtx, dir)
@@ -372,6 +379,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleCapabilities(w, r)
 	case "/api/storage":
 		h.handleStorageOverview(w, r)
+	case "/api/adguard/status":
+		h.handleAdGuardStatus(w, r)
 	case "/api/diagnostics/preview":
 		h.handleDiagnosticsPreview(w, r)
 	case "/api/coverage":

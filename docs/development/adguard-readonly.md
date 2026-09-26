@@ -1,10 +1,11 @@
 # External AdGuard Home read boundary
 
 Related issue: #16. This candidate integration adds a controller-owned,
-read-only API client, native macOS connection commands, and a separately
-approved one-shot DNS observation command. It does not yet attribute queries to
-devices or expose DNS activity in the UI. Those remain necessary before the
-broader read-only integration can be claimed as supported.
+read-only API client, native macOS connection commands, a separately approved
+one-shot DNS observation command, and a local browser status view. Device detail
+can show retained DNS events with a unique, recent, time-valid Device Watch IP
+association, marked as inferred. These remain candidate behavior until the
+release gates are validated.
 
 The client targets the documented v0.107.79 `/control` API. It reads status,
 filtering state, query-log configuration and, when the service is running and
@@ -37,7 +38,13 @@ confirms removal of Cozy SOC's local connection and credential, without
 changing or stopping the external service. A failed Keychain deletion leaves
 disabled local intent for a safe retry. All native results and errors omit
 passwords and upstream response bodies. Browser routes do not expose these
-controls.
+controls. Authenticated `GET /api/adguard/status` is a separate, user-triggered
+status-only read. Its bounded browser projection omits the configured username,
+password, secret reference and query history. A deliberate admin link uses only
+the validated IP-literal origin and opens the external owner's page in a new tab
+without a referrer. A direct link is withheld when the resolver shares the
+web UI's hostname: browser cookies ignore ports, so that navigation could
+send Cozy SOC's HttpOnly session cookie to the other service.
 
 `cozysoc adguard-collect ENROLLED_SCOPE_ID` requires a separate, exact terminal
 approval for one read of at most the newest 100 query-log entries. The
@@ -67,8 +74,8 @@ index keys, native results, logs, or diagnostics. Retained events state
 `device-identity-unverified`; they do not create device identity claims or
 coverage samples. A matching prefix means only that the reported client IP
 belongs to the selected scope, not that the resolver observed all its clients.
-UI history, identity association and user-facing retention/deletion controls
-remain separate work under #16 and #30.
+Device detail shows only the bounded, inferred matches; user-facing
+retention/deletion controls remain separate work under #30.
 
 The source contract is the [AdGuard Home v0.107.79 OpenAPI definition](https://github.com/AdguardTeam/AdGuardHome/blob/v0.107.79/openapi/openapi.yaml).
 The API and connection paths are tested against local HTTP and in-memory
@@ -76,5 +83,5 @@ Keychain fixtures, including the canonical durable config manager. A live
 v0.107.79 instance and signed macOS Keychain runtime exercise remain release
 gates under #8 and #29. The one-shot collection path has local HTTP and store
 round-trip fixtures, including deduplication and scope exclusions. This is
-candidate support; device attribution, coverage verification, UI history and
-admin deep links remain later #16 slices.
+candidate support; live signed runtime, device-history validation, managed
+configuration and coverage verification remain later #16 gates.

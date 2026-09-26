@@ -1,6 +1,7 @@
 import type { ToolCapability, ToolsSnapshot } from "./tools";
 import type { StorageOverview } from "./storage";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { AdGuardStatusPanel } from "./AdGuardStatusPanel";
 import "./tools.css";
 
 export interface ToolsPageProps {
@@ -38,6 +39,7 @@ export function ToolsPage({ tools, storage, storageError, mode = "demo", onRetry
         </>}
       </section>
 
+      <AdGuardStatusPanel mode={mode} />
       <DiagnosticsPanel mode={mode} />
 
       {tools.capabilities.length === 0 ? (
