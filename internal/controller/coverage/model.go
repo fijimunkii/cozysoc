@@ -224,6 +224,16 @@ func validateObservationPoint(point ObservationPoint) error {
 	if err := validateWindow(point.Window); err != nil {
 		return err
 	}
+	if !point.Window.HasEvidence {
+		if len(point.Scope.Verified) != 0 || len(point.Directions) != 0 {
+			return fmt.Errorf("verified scope or observed directions require an evidence window")
+		}
+		for _, source := range point.Sources {
+			if source.State == SourceCurrent || source.Observed {
+				return fmt.Errorf("current or observed source requires an evidence window")
+			}
+		}
+	}
 	if err := validateCadence(point.Cadence); err != nil {
 		return err
 	}
@@ -301,6 +311,9 @@ func validateSources(sources []Source) error {
 			return fmt.Errorf("duplicate coverage source %q", source.ID)
 		}
 		seen[source.ID] = struct{}{}
+		if source.State == SourceCurrent && !source.Observed {
+			return fmt.Errorf("current coverage source %q must have observed evidence", source.ID)
+		}
 		if source.State != SourceCurrent {
 			if err := validateText("coverage source next step", source.NextStep, maxNextStepLength); err != nil {
 				return err

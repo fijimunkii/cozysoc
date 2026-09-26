@@ -243,6 +243,42 @@ func TestValidateReportRejectsConflatedOrImpossibleScope(t *testing.T) {
 		}
 	})
 
+	t.Run("verified scope requires evidence", func(t *testing.T) {
+		report := base
+		report.ObservationPoints = append([]ObservationPoint(nil), base.ObservationPoints...)
+		report.ObservationPoints[0].Scope.Verified = []Dimension{{Kind: DimensionNetwork, Value: "scope.home"}}
+		if err := ValidateReport(report); err == nil {
+			t.Fatal("accepted verified scope without an evidence window")
+		}
+	})
+
+	t.Run("observed direction requires evidence", func(t *testing.T) {
+		report := base
+		report.ObservationPoints = append([]ObservationPoint(nil), base.ObservationPoints...)
+		report.ObservationPoints[0].Directions = []Direction{DirectionIngress}
+		if err := ValidateReport(report); err == nil {
+			t.Fatal("accepted observed traffic direction without an evidence window")
+		}
+	})
+
+	t.Run("source cannot be current without an observation", func(t *testing.T) {
+		report := base
+		report.ObservationPoints = append([]ObservationPoint(nil), base.ObservationPoints...)
+		report.ObservationPoints[0].Sources = []Source{{ID: "arp-cache", Kind: "neighbor-cache", State: SourceCurrent, Expected: true}}
+		if err := ValidateReport(report); err == nil {
+			t.Fatal("accepted a current source that was never observed")
+		}
+	})
+
+	t.Run("observed source requires an evidence window", func(t *testing.T) {
+		report := base
+		report.ObservationPoints = append([]ObservationPoint(nil), base.ObservationPoints...)
+		report.ObservationPoints[0].Sources = []Source{{ID: "arp-cache", Kind: "neighbor-cache", State: SourceStale, Expected: true, Observed: true, NextStep: "Refresh neighbor evidence."}}
+		if err := ValidateReport(report); err == nil {
+			t.Fatal("accepted an observed source with no evidence window")
+		}
+	})
+
 	t.Run("unconfigured cannot carry points", func(t *testing.T) {
 		report := base
 		report.Configured = false
