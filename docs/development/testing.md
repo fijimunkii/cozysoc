@@ -9,14 +9,14 @@ The default GitHub Actions workflow runs native macOS jobs and Linux checks and 
 - repository hygiene and conventional-commit checks;
 - Go formatting, `go vet`, and package/unit/integration tests;
 - frontend type checking, component tests, and a production build;
-- Chromium browser setup and synthetic-demo navigation journeys with keyboard-focus, semantic-label/contrast, reduced-motion, narrow-viewport, and enlarged-text checks;
+- Chromium browser setup, synthetic-demo navigation, and live device-evidence journeys with keyboard-focus, semantic-label/contrast, reduced-motion, narrow-viewport, and enlarged-text checks;
 - a black-box controller process E2E suite;
 - macOS arm64 cgo-free cross-compilation for the controller and Darwin-specific packages; and
 - Foundation feasibility harness tests.
 
 The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the real `cozysoc` executable and runs the E2E package separately so the black-box step is visible as its own gate.
 
-The browser journeys use mocked typed API responses or the explicitly synthetic demo and a production Vite build. From `ui/`, run `npx playwright install --only-shell chromium` once, then `npm run test:browser`. They verify rendered setup/navigation behavior and automated WCAG A/AA checks, but do not validate a real controller session, screen-reader use, or a usability session; process E2E and user testing own those separate claims.
+The browser journeys use mocked typed API responses or the explicitly synthetic demo and a production Vite build. From `ui/`, run `npx playwright install --only-shell chromium` once, then `npm run test:browser`. They verify rendered setup/navigation/device-detail behavior and automated WCAG A/AA checks, but do not validate a real controller session, screen-reader use, or a usability session; process E2E and user testing own those separate claims.
 
 ## Controller process E2E boundary
 

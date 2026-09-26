@@ -141,11 +141,11 @@ This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 prove
 
 ## Next steps
 
-The Chromium setup journey checks keyboard focus through authorization and enablement, semantic labels and automated WCAG A/AA rules at choose/review/verified states, and 320-pixel reduced-motion layout at 200% root text size. A separate synthetic-demo journey scans the five primary sections for automated WCAG A/AA violations and verifies focus and 320-pixel reflow at 200% text size. These browser tests use fixtures, so real controller authority remains covered by process E2E and human screen-reader/usability validation remains separate.
+The Chromium setup journey checks keyboard focus through authorization and enablement, semantic labels and automated WCAG A/AA rules at choose/review/verified states, and 320-pixel reduced-motion layout at 200% root text size. A separate synthetic-demo journey scans the five primary sections for automated WCAG A/AA violations and verifies focus and 320-pixel reflow at 200% text size. The live device-evidence journey exercises failed-read, retry, current/historical evidence, expanded provenance, Back focus, and 320-pixel reflow. These browser tests use fixtures, so real controller authority remains covered by process E2E and human screen-reader/usability validation remains separate.
 
 Useful #13 follow-ons are:
 
-1. extend real-browser accessibility coverage to live device detail and error/recovery states, including human screen-reader and usability sessions;
+1. extend real-browser accessibility coverage to other live error/recovery states, including human screen-reader and usability sessions;
 2. add validated external deep-link handling only when a capability actually declares a safe destination/context contract; and
 3. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
 
