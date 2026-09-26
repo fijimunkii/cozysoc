@@ -33,6 +33,10 @@ func (h *opnsenseTestHandler) DisconnectOPNsense(context.Context) (api.OPNsenseC
 	h.calls++
 	return api.OPNsenseConnection{Connected: false}, h.err
 }
+func (h *opnsenseTestHandler) CollectOPNsense(_ context.Context, params api.OPNsenseCollectParams) (api.OPNsenseCollection, error) {
+	h.calls++
+	return api.OPNsenseCollection{ScopeID: params.ScopeID, Read: 2, Inserted: 1}, h.err
+}
 
 func TestOPNsenseNativeRoundTripAndSecretBoundary(t *testing.T) {
 	h := &opnsenseTestHandler{}
@@ -80,5 +84,28 @@ func TestOPNsenseNativeRequiresVerifiedPeerAndRedactsErrors(t *testing.T) {
 	_, err = NewClient(verified.stateDir).OPNsenseStatus(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "internal_error") || strings.Contains(err.Error(), "private") {
 		t.Fatalf("unsafe native error: %v", err)
+	}
+}
+
+func TestOPNsenseCollectionReview(t *testing.T) {
+	h := &opnsenseTestHandler{}
+	s := startMutationTestServer(t, h)
+	client := NewClient(s.stateDir)
+	params := api.OPNsenseCollectParams{ScopeID: "scope.home", Expected: api.OPNsenseCollectExpected{
+		Endpoint: "https://192.168.1.1", Interface: api.NetworkInterface{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}},
+	}}
+	result, err := client.CollectOPNsense(context.Background(), params)
+	if err != nil || result.Read != 2 || result.Inserted != 1 || h.calls != 1 {
+		t.Fatalf("collection %+v, %v", result, err)
+	}
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "192.168.1.10") || strings.Contains(string(encoded), "02:00:00") {
+		t.Fatalf("private neighbor appeared in result: %s", encoded)
+	}
+	for _, invalid := range []any{map[string]any{"scope_id": "scope.home"}, map[string]any{"scope_id": "scope.home", "expected": map[string]any{"endpoint": "https://192.168.1.1", "interface": map[string]any{"interface_name": "en0", "unknown": true}}}, []string{"scope.home"}} {
+		_, err := client.CallWithParams(context.Background(), api.MethodOPNsenseCollect, invalid)
+		if err == nil || !strings.Contains(err.Error(), "invalid_request") || h.calls != 1 {
+			t.Fatalf("invalid review reached handler: %v, calls %d", err, h.calls)
+		}
 	}
 }

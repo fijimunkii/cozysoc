@@ -38,6 +38,7 @@ const (
 	MethodOPNsenseConnect     = "opnsense.connect"
 	MethodOPNsenseStatus      = "opnsense.status"
 	MethodOPNsenseDisconnect  = "opnsense.disconnect"
+	MethodOPNsenseCollect     = "opnsense.collect"
 )
 
 type Request struct {

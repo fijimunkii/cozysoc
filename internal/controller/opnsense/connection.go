@@ -38,6 +38,7 @@ type lifecycleState interface {
 
 type serviceProbe interface {
 	Probe(context.Context) (Status, error)
+	ReadNeighbors(context.Context) (Snapshot, error)
 }
 
 type Connection struct {
@@ -172,33 +173,7 @@ func (c *Connections) undoConnect(configuration capability.Configuration, cleanu
 func (c *Connections) Current(ctx context.Context) (Connection, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	configured, ok := c.config.Capability(CapabilityID)
-	if !ok || configured.Desired != capability.DesiredEnabled {
-		return Connection{}, ErrNotConnected
-	}
-	endpoint, ref, err := parseConnectionConfiguration(configured)
-	if err != nil {
-		return Connection{}, err
-	}
-	secrets, err := c.secretStore()
-	if err != nil {
-		return Connection{}, err
-	}
-	protected, err := secrets.Get(ctx, ref)
-	if err != nil {
-		return Connection{}, err
-	}
-	if protected.Len() == 0 || protected.Len() > 64<<10 {
-		return Connection{}, ErrResponse
-	}
-	var credential protectedCredential
-	if err := json.Unmarshal(protected.Bytes(), &credential); err != nil {
-		return Connection{}, ErrResponse
-	}
-	if credential.Endpoint != endpoint {
-		return Connection{}, ErrResponse
-	}
-	client, err := c.probe(endpoint, credential.Key, secretstore.NewSecret([]byte(credential.Secret)), []byte(credential.TrustPEM))
+	client, endpoint, err := c.configuredClientLocked(ctx)
 	if err != nil {
 		return Connection{}, err
 	}
@@ -207,6 +182,57 @@ func (c *Connections) Current(ctx context.Context) (Connection, error) {
 		return Connection{}, err
 	}
 	return Connection{Endpoint: endpoint, Status: status}, nil
+}
+
+var ErrConnectionChanged = errors.New("approved OPNsense connection changed before read")
+
+// ReadSnapshotBound keeps the connection lock through one approved neighbor
+// read, so disconnect or endpoint changes cannot race the reviewed origin.
+func (c *Connections) ReadSnapshotBound(ctx context.Context, expectedEndpoint string) (Snapshot, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	client, endpoint, err := c.configuredClientLocked(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if expectedEndpoint == "" || endpoint != expectedEndpoint {
+		return Snapshot{}, ErrConnectionChanged
+	}
+	return client.ReadNeighbors(ctx)
+}
+
+func (c *Connections) configuredClientLocked(ctx context.Context) (serviceProbe, string, error) {
+	configured, ok := c.config.Capability(CapabilityID)
+	if !ok || configured.Desired != capability.DesiredEnabled {
+		return nil, "", ErrNotConnected
+	}
+	endpoint, ref, err := parseConnectionConfiguration(configured)
+	if err != nil {
+		return nil, "", err
+	}
+	secrets, err := c.secretStore()
+	if err != nil {
+		return nil, "", err
+	}
+	protected, err := secrets.Get(ctx, ref)
+	if err != nil {
+		return nil, "", err
+	}
+	if protected.Len() == 0 || protected.Len() > 64<<10 {
+		return nil, "", ErrResponse
+	}
+	var credential protectedCredential
+	if err := json.Unmarshal(protected.Bytes(), &credential); err != nil {
+		return nil, "", ErrResponse
+	}
+	if credential.Endpoint != endpoint {
+		return nil, "", ErrResponse
+	}
+	client, err := c.probe(endpoint, credential.Key, secretstore.NewSecret([]byte(credential.Secret)), []byte(credential.TrustPEM))
+	if err != nil {
+		return nil, "", err
+	}
+	return client, endpoint, nil
 }
 
 // Disconnect disables local intent before revoking the protected item. A

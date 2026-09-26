@@ -68,6 +68,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runOPNsenseStatusCommand(ctx, args[1:], stdout, stderr)
 	case "opnsense-disconnect":
 		return runOPNsenseDisconnectCommand(ctx, args[1:], stdout, stderr)
+	case "opnsense-collect":
+		return runOPNsenseCollectCommand(ctx, args[1:], stdout, stderr)
 	case "status":
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
@@ -153,6 +155,7 @@ Usage:
   cozysoc opnsense-connect [--state-dir PATH] --endpoint HTTPS_IP_ORIGIN [--trust-pem-file PATH] (interactive macOS only)
   cozysoc opnsense-status [--state-dir PATH]
   cozysoc opnsense-disconnect [--state-dir PATH] (interactive macOS only)
+  cozysoc opnsense-collect [--state-dir PATH] ENROLLED_SCOPE_ID (interactive macOS only)
   cozysoc status [--state-dir PATH]
   cozysoc health [--state-dir PATH]
   cozysoc capabilities [--state-dir PATH]
@@ -313,6 +316,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("initialize OPNsense connection: %w", err)
 	}
 	apiHandler.opnsenseConnections = opnsenseConnections
+	opnsenseCollector, err := opnsense.NewCollector(opnsenseConnections, store, ingestor, devicewatch.NewSystemInterfaceInspector())
+	if err != nil {
+		return fmt.Errorf("initialize OPNsense observation: %w", err)
+	}
+	apiHandler.opnsenseCollector = opnsenseCollector
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver

@@ -76,6 +76,10 @@ type opnsenseConnectionControl interface {
 	Disconnect(context.Context) error
 }
 
+type opnsenseCollectionControl interface {
+	CollectReviewed(context.Context, string, string, devicewatch.ScopeBinding) (opnsense.CollectionResult, error)
+}
+
 type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
@@ -95,6 +99,7 @@ type controllerAPIHandler struct {
 	adguardConnections     adguardConnectionControl
 	adguardCollector       adguardCollectionControl
 	opnsenseConnections    opnsenseConnectionControl
+	opnsenseCollector      opnsenseCollectionControl
 	now                    func() time.Time
 }
 

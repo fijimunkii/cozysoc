@@ -33,12 +33,12 @@
   },
   "health": {"process_required": false, "verification_signals": ["endpoint-authenticated", "version-supported"], "coverage_requires_verification": true},
   "data_handling": {
-    "activation": "Connection setup reads version state after deliberate approval; no background polling or external settings change.",
-    "sources": ["Approved external OPNsense system-information GET endpoint."],
-    "stored": ["External ownership, approved origin, protected credential reference and redacted control audit records."],
-    "excluded": ["API credentials or enrolled certificate in ordinary configuration and diagnostics, neighbor tables during setup, and all router configuration changes."]
+    "activation": "Connection setup reads version state after deliberate approval. A separate exact-scope foreground approval reads ARP/NDP tables once; no background polling or external settings change.",
+    "sources": ["Approved external OPNsense system-information GET endpoint. Separately approved bounded ARP/NDP GET endpoints for one enrolled network scope."],
+    "stored": ["External ownership, approved origin, protected credential reference and redacted control audit records. In-scope router-reported IP/MAC/interface evidence with ephemeral retention and content-free collection audits."],
+    "excluded": ["API credentials or enrolled certificate in ordinary configuration and diagnostics, neighbor tables during setup, out-of-scope neighbors, router hostnames, and all router configuration changes."]
   },
-  "outputs": [{"kind": "integration-status", "schema_version": 1}],
+  "outputs": [{"kind": "integration-status", "schema_version": 1}, {"kind": "router-neighbor-reported", "schema_version": 1}],
   "deep_links": [],
   "lifecycle": ["preflight", "connect", "verify", "disconnect"]
 }
