@@ -99,6 +99,12 @@ func loadDeviceSplits(ctx context.Context, tx *sql.Tx, scopeID string) (deviceSp
 			result.bySource[item.SourceDeviceID] = append(result.bySource[item.SourceDeviceID], item)
 			result.byTarget[item.TargetDeviceID] = append(result.byTarget[item.TargetDeviceID], item)
 		}
+		if len(result.linksByObservation[item.ObservationID]) >= 4 {
+			return result, ErrEvidenceBatchData
+		}
+		if prior := result.linksByObservation[item.ObservationID]; len(prior) != 0 && !prior[0].ObservedAt.Equal(observedAt) {
+			return result, ErrEvidenceBatchData
+		}
 		result.byLink[linkID] = item
 		result.linksByObservation[item.ObservationID] = append(result.linksByObservation[item.ObservationID], deviceSplitLinkRoute{LinkID: linkID, ObservedAt: observedAt})
 		key := splitClaimKey(kind, value)
@@ -106,6 +112,13 @@ func loadDeviceSplits(ctx context.Context, tx *sql.Tx, scopeID string) (deviceSp
 	}
 	if err := rows.Err(); err != nil {
 		return result, err
+	}
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM device_identity_splits WHERE scope_id=?`, scopeID).Scan(&count); err != nil {
+		return result, err
+	}
+	if count != len(result.byObservation) {
+		return result, ErrEvidenceBatchData
 	}
 	return result, nil
 }

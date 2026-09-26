@@ -27,6 +27,15 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 	if target, changed, err := s.SplitDeviceObservation(ctx, "scope.other", "device.source", second.Observation.ID, ""); target != "" || changed || !errors.Is(err, ErrDeviceNotInScope) {
 		t.Fatal("cross-scope split", target, changed, err)
 	}
+	if err := s.CreateDevice(ctx, domain.Device{ID: "device.other", CreatedAt: base}); err != nil {
+		t.Fatal(err)
+	}
+	if target, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.source", second.Observation.ID, "device.other"); target != "" || changed || !errors.Is(err, ErrDeviceNotInScope) {
+		t.Fatal("target without scope evidence", target, changed, err)
+	}
+	if _, err := s.conn.ExecContext(ctx, `DELETE FROM devices WHERE id='device.other'`); err != nil {
+		t.Fatal(err)
+	}
 	target, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.source", second.Observation.ID, "")
 	if err != nil || !changed || target == "" || target == "device.source" {
 		t.Fatal("split", target, changed, err)
@@ -66,6 +75,17 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 	if err != nil || targetDetail.Summary.Device.UserLabel != "Separate device" {
 		t.Fatal("split target label", targetDetail.Summary, err)
 	}
+	if merged, err := s.MergeDevices(ctx, "scope.fixture", "device.source", target); merged || !errors.Is(err, ErrDeviceMergeConflict) {
+		t.Fatal("merge crossed active split", merged, err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := DeleteEvidenceBatchDevice(ctx, tx, target); deleted || !errors.Is(err, ErrDeviceSplitConflict) {
+		t.Fatal("active split target deleted", deleted, err)
+	}
+	_ = tx.Rollback()
 	page, err := readMixedDevices(t, db, now, DeviceEvidenceQuery{ScopeID: "scope.fixture", AsOf: now, Limit: 10})
 	if err != nil || len(page.Devices) != 2 {
 		t.Fatal("corrected device list", page, err)
@@ -90,7 +110,7 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 			t.Fatal("activity kept false address transition", item)
 		}
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err = db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +122,20 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 	_ = tx.Rollback()
 	if candidateErr != nil || len(candidates) != 2 {
 		t.Fatal("split MAC should remain ambiguous", candidates, candidateErr)
+	}
+	if _, err := s.conn.ExecContext(ctx, `CREATE TRIGGER reject_unsplit_audit
+		BEFORE INSERT ON audit_events WHEN NEW.kind='device-identity'
+		BEGIN SELECT RAISE(ABORT, 'fixture audit failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := s.UndoDeviceSplitObservation(ctx, "scope.fixture", second.Observation.ID); changed || err == nil {
+		t.Fatal("failed undo audit removed mapping", changed, err)
+	}
+	if items, err := s.ListDeviceSplits(ctx, "scope.fixture"); err != nil || len(items) != 1 {
+		t.Fatal("failed undo escaped rollback", items, err)
+	}
+	if _, err := s.conn.ExecContext(ctx, `DROP TRIGGER reject_unsplit_audit`); err != nil {
+		t.Fatal(err)
 	}
 	if changed, err := s.UndoDeviceSplitObservation(ctx, "scope.fixture", second.Observation.ID); err != nil || !changed {
 		t.Fatal("undo split", changed, err)

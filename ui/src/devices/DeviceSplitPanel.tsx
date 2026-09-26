@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { SetupRequestError, type DeviceSplitClient, type DeviceSplitList } from "../setup/setup";
 import type { DeviceDetail, DeviceIdentityEvidence } from "./detail";
-import type { DevicePresence } from "./devices";
+import { DeviceLoadError, type DevicePresence } from "./devices";
 
 type Review = { action: "split"; sourceID: string; observationID: string; targetID: string; evidence: DeviceIdentityEvidence[] } | { action: "undo"; sourceID: string; observationID: string; targetID: string };
 type SplitsState = { status: "loading" | "ready" | "error"; list?: DeviceSplitList; message?: string };
@@ -112,6 +112,7 @@ export function DeviceSplitPanel({ scopeID, devices, client, loadSplits, loadDet
 }
 
 function splitError(cause: unknown): string {
+  if (cause instanceof DeviceLoadError) return cause.message;
   if (!(cause instanceof SetupRequestError)) return "Device splits could not be loaded or changed. Refresh and try again.";
   if (cause.code === "conflict") return "This split conflicts with a current identity correction. Refresh and review again.";
   if (cause.code === "not_found") return "This observation is no longer available in the authorized network. Refresh and review again.";
