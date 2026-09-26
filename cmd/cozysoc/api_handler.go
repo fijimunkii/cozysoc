@@ -27,7 +27,7 @@ var deviceIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
 type controllerStore interface {
 	devicewatch.DeviceEvidenceReader
 	devicewatch.CoverageSampleReader
-	GetDeviceEvidenceDetail(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error)
+	GetDeviceDetailSnapshot(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceDetailSnapshot, error)
 	ListDeviceActivity(context.Context, storage.DeviceActivityQuery) (storage.DeviceActivityPage, error)
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
 	MergeDevices(context.Context, string, string, string) (bool, error)
@@ -228,13 +228,14 @@ func (h *controllerAPIHandler) DeviceDetail(ctx context.Context, params api.Devi
 	if !configured || scopeID == "" {
 		return api.DeviceDetail{}, localapi.ErrReadTargetNotFound
 	}
-	detail, err := h.store.GetDeviceEvidenceDetail(ctx, storage.DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: params.DeviceID, AsOf: asOf, Limit: storage.MaxDeviceDetailEvidence})
+	snapshot, err := h.store.GetDeviceDetailSnapshot(ctx, storage.DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: params.DeviceID, AsOf: asOf, Limit: storage.MaxDeviceDetailEvidence})
 	if errors.Is(err, storage.ErrDeviceEvidenceNotFound) {
 		return api.DeviceDetail{}, localapi.ErrReadTargetNotFound
 	}
 	if err != nil {
 		return api.DeviceDetail{}, err
 	}
+	detail, dnsHistory := snapshot.Detail, snapshot.DNSHistory
 	presence := devicewatch.PresenceFromEvidence(detail.Summary, asOf)
 	result := api.DeviceDetail{
 		ScopeID: scopeID,
@@ -243,8 +244,13 @@ func (h *controllerAPIHandler) DeviceDetail(ctx context.Context, params api.Devi
 			ID: presence.ID, UserLabel: presence.UserLabel, FirstSeen: presence.FirstSeen,
 			LastSeen: presence.LastSeen, State: string(presence.State),
 		},
-		Evidence:  make([]api.DeviceIdentityEvidence, 0, len(detail.Evidence)),
-		Truncated: detail.Truncated,
+		Evidence:            make([]api.DeviceIdentityEvidence, 0, len(detail.Evidence)),
+		Truncated:           detail.Truncated,
+		DNSHistory:          make([]api.DeviceDNSHistoryItem, 0, len(dnsHistory.Items)),
+		DNSHistoryTruncated: dnsHistory.Truncated,
+	}
+	for _, item := range dnsHistory.Items {
+		result.DNSHistory = append(result.DNSHistory, api.DeviceDNSHistoryItem{ObservedAt: item.ObservedAt, ClientIP: item.ClientIP, Name: item.Name, QueryType: item.QueryType, Filtering: item.Filtering})
 	}
 	for _, evidence := range detail.Evidence {
 		current := (evidence.ClaimValidUntil == nil || evidence.ClaimValidUntil.After(asOf)) &&

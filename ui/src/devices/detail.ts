@@ -41,12 +41,23 @@ export interface DeviceDetail {
   device: DevicePresence;
   evidence: DeviceIdentityEvidence[];
   truncated: boolean;
+  dns_history: DeviceDNSHistoryItem[];
+  dns_history_truncated: boolean;
+}
+
+export interface DeviceDNSHistoryItem {
+  observed_at: string;
+  client_ip: string;
+  name: string;
+  query_type: string;
+  filtering: "blocked" | "not-blocked" | "unknown";
 }
 
 // Export only the validated detail projection. Unknown fields from a future or
 // malformed controller response must never become part of a local export.
 export function deviceEvidenceExportJSON(detail: DeviceDetail): string {
-  return JSON.stringify({ format: "cozysoc-device-evidence", version: 1, snapshot: parseDeviceDetail(detail) }, null, 2) + "\n";
+  const { scope_id, as_of, device, evidence, truncated } = parseDeviceDetail(detail);
+  return JSON.stringify({ format: "cozysoc-device-evidence", version: 1, snapshot: { scope_id, as_of, device, evidence, truncated } }, null, 2) + "\n";
 }
 
 export function parseDeviceDetail(input: unknown): DeviceDetail {
@@ -59,7 +70,23 @@ export function parseDeviceDetail(input: unknown): DeviceDetail {
   if (typeof value.truncated !== "boolean") throw new DeviceLoadError("device detail has an invalid truncated flag");
   const evidence = value.evidence.map((item) => parseEvidence(item, asOf));
   if (evidence.some((item) => item.original_device_id === device.id)) throw new DeviceLoadError("corrected identity evidence repeats the displayed device id");
-  return { scope_id: scopeID, as_of: asOf, device, evidence, truncated: value.truncated };
+  if (value.dns_history !== undefined && (!Array.isArray(value.dns_history) || value.dns_history.length > 100)) throw new DeviceLoadError("device detail has an invalid DNS history collection");
+  if (value.dns_history_truncated !== undefined && typeof value.dns_history_truncated !== "boolean") throw new DeviceLoadError("device detail has an invalid DNS history limit flag");
+  const dnsHistory = (value.dns_history ?? [] as unknown[]).map((item: unknown) => parseDNSHistoryItem(item, asOf));
+  return { scope_id: scopeID, as_of: asOf, device, evidence, truncated: value.truncated, dns_history: dnsHistory, dns_history_truncated: value.dns_history_truncated === true };
+}
+
+function parseDNSHistoryItem(input: unknown, asOf: string): DeviceDNSHistoryItem {
+  const value = objectValue(input, "DNS history item");
+  const observedAt = timestampValue(value.observed_at, "DNS history observed_at");
+  if (Date.parse(observedAt) > Date.parse(asOf)) throw new DeviceLoadError("DNS history is newer than device detail as_of");
+  const clientIP = boundedText(value.client_ip, "DNS history client_ip", 45);
+  if (!/^[0-9a-fA-F:.]+$/.test(clientIP)) throw new DeviceLoadError("DNS history client_ip is invalid");
+  const name = boundedText(value.name, "DNS history name", 253);
+  if (typeof value.query_type !== "string" || !/^[A-Za-z0-9._:-]{1,16}$/.test(value.query_type)) throw new DeviceLoadError("DNS history query_type is invalid");
+  const queryType = value.query_type;
+  if (value.filtering !== "blocked" && value.filtering !== "not-blocked" && value.filtering !== "unknown") throw new DeviceLoadError("DNS history filtering is invalid");
+  return { observed_at: observedAt, client_ip: clientIP, name, query_type: queryType, filtering: value.filtering };
 }
 
 export async function loadDeviceDetailFromWeb(deviceID: string): Promise<DeviceDetail> {

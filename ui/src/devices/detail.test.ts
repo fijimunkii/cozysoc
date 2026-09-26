@@ -32,8 +32,10 @@ describe("device detail contract", () => {
   });
 
   it("exports only the validated bounded snapshot, with its original read time", () => {
+    const privateDNS = { observed_at: "2026-09-10T12:59:00Z", client_ip: "192.168.1.20", name: "private.example", query_type: "A", filtering: "blocked" };
     const untrusted = {
       ...fixture,
+      dns_history: [privateDNS], dns_history_truncated: false,
       credential: "hidden root field",
       device: { ...fixture.device, credential: "hidden device field" },
       evidence: [{ ...fixture.evidence[0], credential: "hidden evidence field", source: { ...fixture.evidence[0]!.source, credential: "hidden source field" } }],
@@ -42,9 +44,18 @@ describe("device detail contract", () => {
     const json = deviceEvidenceExportJSON(untrusted as unknown as DeviceDetail);
     expect(json).not.toContain("credential");
     const exported = JSON.parse(json);
-    expect(exported).toEqual({ format: "cozysoc-device-evidence", version: 1, snapshot: detail });
+    expect(exported).toEqual({ format: "cozysoc-device-evidence", version: 1, snapshot: { scope_id: detail.scope_id, as_of: detail.as_of, device: detail.device, evidence: detail.evidence, truncated: detail.truncated } });
+    expect(json).not.toContain("private.example");
     expect(exported.snapshot.as_of).toBe("2026-09-10T13:00:00Z");
     expect(exported.snapshot.truncated).toBe(false);
+  });
+
+  it("validates bounded resolver history independently of identity export", () => {
+    const query = { observed_at: "2026-09-10T12:59:00Z", client_ip: "192.168.1.20", name: "private.example", query_type: "A", filtering: "blocked" };
+    expect(parseDeviceDetail({ ...fixture, dns_history: [query], dns_history_truncated: true }).dns_history[0]?.name).toBe("private.example");
+    expect(() => parseDeviceDetail({ ...fixture, dns_history: [{ ...query, observed_at: "2026-09-10T14:00:00Z" }] })).toThrow();
+    expect(() => parseDeviceDetail({ ...fixture, dns_history: [{ ...query, filtering: "safe" }] })).toThrow();
+    expect(() => parseDeviceDetail({ ...fixture, dns_history: Array.from({ length: 101 }, () => query) })).toThrow();
   });
 
   it("requests only the device id and maps scoped 404", async () => {

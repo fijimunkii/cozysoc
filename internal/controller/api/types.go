@@ -144,11 +144,21 @@ type DeviceIdentityEvidence struct {
 }
 
 type DeviceDetail struct {
-	ScopeID   string                   `json:"scope_id"`
-	AsOf      time.Time                `json:"as_of"`
-	Device    DevicePresence           `json:"device"`
-	Evidence  []DeviceIdentityEvidence `json:"evidence"`
-	Truncated bool                     `json:"truncated"`
+	ScopeID             string                   `json:"scope_id"`
+	AsOf                time.Time                `json:"as_of"`
+	Device              DevicePresence           `json:"device"`
+	Evidence            []DeviceIdentityEvidence `json:"evidence"`
+	Truncated           bool                     `json:"truncated"`
+	DNSHistory          []DeviceDNSHistoryItem   `json:"dns_history"`
+	DNSHistoryTruncated bool                     `json:"dns_history_truncated"`
+}
+
+type DeviceDNSHistoryItem struct {
+	ObservedAt time.Time `json:"observed_at"`
+	ClientIP   string    `json:"client_ip"`
+	Name       string    `json:"name"`
+	QueryType  string    `json:"query_type"`
+	Filtering  string    `json:"filtering"`
 }
 
 type DeviceActivityItem struct {

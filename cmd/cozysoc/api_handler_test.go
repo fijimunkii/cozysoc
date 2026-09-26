@@ -24,6 +24,8 @@ type fakeDeviceStore struct {
 	detail         storage.DeviceEvidenceDetail
 	detailErr      error
 	detailQuery    storage.DeviceEvidenceDetailQuery
+	dnsHistory     storage.DeviceDNSHistory
+	dnsHistoryErr  error
 	activity       storage.DeviceActivityPage
 	activityErr    error
 	activityQuery  storage.DeviceActivityQuery
@@ -61,6 +63,14 @@ func (f *fakeDeviceStore) ListDeviceEvidence(context.Context, storage.DeviceEvid
 func (f *fakeDeviceStore) GetDeviceEvidenceDetail(_ context.Context, query storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error) {
 	f.detailQuery = query
 	return f.detail, f.detailErr
+}
+
+func (f *fakeDeviceStore) GetDeviceDetailSnapshot(_ context.Context, query storage.DeviceEvidenceDetailQuery) (storage.DeviceDetailSnapshot, error) {
+	f.detailQuery = query
+	if f.detailErr != nil {
+		return storage.DeviceDetailSnapshot{}, f.detailErr
+	}
+	return storage.DeviceDetailSnapshot{Detail: f.detail, DNSHistory: f.dnsHistory}, f.dnsHistoryErr
 }
 
 func (f *fakeDeviceStore) ListDeviceActivity(_ context.Context, query storage.DeviceActivityQuery) (storage.DeviceActivityPage, error) {
@@ -207,7 +217,7 @@ func TestControllerAPIHandlerReturnsScopedDeviceDetailWithTemporalEvidence(t *te
 			{OriginalDeviceID: "device.earlier", Kind: domain.ClaimIPv4, Value: "192.168.1.20", ObservedAt: now.Add(-time.Minute), ClaimValidUntil: &currentValidUntil, ClaimConfidence: &confidence, LinkValidUntil: &currentValidUntil, LinkConfidence: &confidence, Authority: domain.LinkInferred, Reason: "device-watch:recent-mac-continuity:ip", SourceSensorID: "sensor.dw", Observation: &storage.DeviceEvidenceObservation{ID: "obs.one", SensorID: "sensor.dw", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: now.Add(-time.Minute), Attribution: "device-watch:arp-cache"}},
 			{Kind: domain.ClaimMAC, Value: "02:00:00:00:00:01", ObservedAt: now.Add(-10 * time.Minute), ClaimValidUntil: &oldValidUntil, LinkValidUntil: &oldValidUntil, Authority: domain.LinkInferred, Reason: "device-watch:new-mac-candidate:mac", SourceSensorID: "sensor.dw"},
 		},
-	}}
+	}, dnsHistory: storage.DeviceDNSHistory{Items: []storage.DeviceDNSHistoryItem{{ObservedAt: now.Add(-2 * time.Minute), ClientIP: "192.168.1.20", Name: "private.example", QueryType: "A", Filtering: "blocked"}}, Truncated: true}}
 	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
 	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
 	if err != nil {
@@ -224,6 +234,9 @@ func TestControllerAPIHandlerReturnsScopedDeviceDetailWithTemporalEvidence(t *te
 	}
 	if store.detailQuery.ScopeID != "scope.home" || store.detailQuery.DeviceID != "device.one" || store.detailQuery.Limit != storage.MaxDeviceDetailEvidence {
 		t.Fatalf("detail query escaped current scope: %+v", store.detailQuery)
+	}
+	if !store.detailQuery.AsOf.Equal(now) || len(detail.DNSHistory) != 1 || detail.DNSHistory[0].Name != "private.example" || !detail.DNSHistoryTruncated {
+		t.Fatalf("unexpected scoped DNS history: %+v, query %+v", detail.DNSHistory, store.detailQuery)
 	}
 	if detail.Evidence[0].Source == nil || detail.Evidence[0].Source.Attribution != "device-watch:arp-cache" {
 		t.Fatalf("missing source projection: %+v", detail.Evidence[0])
@@ -246,6 +259,11 @@ func TestControllerAPIHandlerDeviceDetailFailsClosed(t *testing.T) {
 	store.detailErr = storage.ErrDeviceEvidenceNotFound
 	if _, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "device.one"}); !errors.Is(err, localapi.ErrReadTargetNotFound) {
 		t.Fatalf("out-of-scope detail error = %v", err)
+	}
+	store.detailErr = nil
+	store.dnsHistoryErr = errors.New("private storage error")
+	if _, err := handler.DeviceDetail(context.Background(), api.DeviceDetailParams{DeviceID: "device.one"}); err == nil {
+		t.Fatal("DNS history read failure was hidden")
 	}
 	control.configured = false
 	control.scopeID = ""
