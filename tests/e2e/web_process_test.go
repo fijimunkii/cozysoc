@@ -301,10 +301,17 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	if err := json.Unmarshal(capabilitiesBody, &webCapabilities); err != nil {
 		t.Fatalf("decode web capabilities: %v: %s", err, capabilitiesBody)
 	}
-	if webCapabilities.CatalogSchemaVersion != capability.SchemaVersion || len(webCapabilities.Capabilities) != 1 {
+	if webCapabilities.CatalogSchemaVersion != capability.SchemaVersion || len(webCapabilities.Capabilities) != 2 {
 		t.Fatalf("unexpected web capability list: %+v", webCapabilities)
 	}
-	deviceWatch := webCapabilities.Capabilities[0]
+	byID := make(map[string]processWebCapability, len(webCapabilities.Capabilities))
+	for _, item := range webCapabilities.Capabilities {
+		byID[item.ID] = item
+	}
+	deviceWatch, ok := byID["device-watch"]
+	if !ok {
+		t.Fatal("Device Watch missing from catalog")
+	}
 	if deviceWatch.ID != "device-watch" || deviceWatch.DisplayName != "Device Watch" || deviceWatch.Ownership != "builtin" || deviceWatch.State.Desired != "disabled" || deviceWatch.State.Process != "not-applicable" || deviceWatch.Resources.Measurement != "unmeasured" || deviceWatch.DeepLinkCount != 0 {
 		t.Fatalf("unexpected Device Watch tool projection: %+v", deviceWatch)
 	}
@@ -313,6 +320,10 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	}
 	if !strings.Contains(deviceWatch.DataHandling.Activation, "separate Device Watch enablement") || len(deviceWatch.DataHandling.Sources) != 1 || len(deviceWatch.DataHandling.Stored) != 3 || len(deviceWatch.DataHandling.Excluded) != 2 {
 		t.Fatalf("unexpected Device Watch data handling projection: %+v", deviceWatch.DataHandling)
+	}
+	adguard, ok := byID["adguard-home"]
+	if !ok || adguard.Ownership != "external" || adguard.State.Verification != "unverified" || len(adguard.Targets) != 1 || adguard.Targets[0].Support != "candidate" || adguard.DeepLinkCount != 0 {
+		t.Fatalf("unexpected AdGuard Home candidate projection: %+v", adguard)
 	}
 
 	detailResponse, err := client.Get(rootURL + "api/devices/detail?device_id=device.missing")

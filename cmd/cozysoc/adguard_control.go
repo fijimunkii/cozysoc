@@ -1,0 +1,52 @@
+package main
+
+import (
+	"context"
+	"errors"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
+	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
+)
+
+func (h *controllerAPIHandler) ConnectAdGuard(ctx context.Context, params api.AdGuardConnectParams) (api.AdGuardConnection, error) {
+	if h.adguardConnections == nil {
+		return api.AdGuardConnection{}, errors.New("AdGuard Home connection is unavailable")
+	}
+	connection, err := h.adguardConnections.Connect(ctx, params.Endpoint, params.Username, secretstore.NewSecret([]byte(params.Password)))
+	if err != nil {
+		return api.AdGuardConnection{}, err
+	}
+	return adguardProjection(connection), nil
+}
+
+func (h *controllerAPIHandler) AdGuardStatus(ctx context.Context) (api.AdGuardConnection, error) {
+	if h.adguardConnections == nil {
+		return api.AdGuardConnection{}, errors.New("AdGuard Home connection is unavailable")
+	}
+	connection, err := h.adguardConnections.Current(ctx)
+	if errors.Is(err, adguard.ErrNotConnected) {
+		return api.AdGuardConnection{Connected: false}, nil
+	}
+	if err != nil {
+		return api.AdGuardConnection{}, err
+	}
+	return adguardProjection(connection), nil
+}
+
+func (h *controllerAPIHandler) DisconnectAdGuard(ctx context.Context) (api.AdGuardConnection, error) {
+	if h.adguardConnections == nil {
+		return api.AdGuardConnection{}, errors.New("AdGuard Home connection is unavailable")
+	}
+	if err := h.adguardConnections.Disconnect(ctx); err != nil {
+		return api.AdGuardConnection{}, err
+	}
+	return api.AdGuardConnection{Connected: false}, nil
+}
+
+func adguardProjection(connection adguard.Connection) api.AdGuardConnection {
+	status := connection.Status
+	return api.AdGuardConnection{Connected: true, Endpoint: connection.Endpoint, Username: connection.Username, Version: status.Version,
+		Running: status.Running, ProtectionEnabled: status.ProtectionEnabled, FilteringEnabled: status.FilteringEnabled,
+		QueryLogEnabled: status.QueryLogEnabled, AnonymizedClients: status.AnonymizedClients}
+}

@@ -34,7 +34,7 @@ Issue #15 must define the headless machine-bound backend and its key lifecycle b
 
 ## Current limitations and release evidence
 
-This package establishes the storage boundary but no integration stores credentials yet. Before the first credential-bearing capability ships:
+The candidate native AdGuard Home connection stores an opaque Keychain reference after an explicit status-only probe. Its fixture tests cover durable configuration, audit, redaction, and revocation paths. Before the first credential-bearing capability ships as supported:
 
 1. exercise native Keychain set/get/update/delete on a signed reference macOS build;
 2. verify secrets do not appear in process arguments, environment, logs, diagnostics, or config files;

@@ -16,12 +16,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 	"github.com/fijimunkii/cozysoc/internal/controller/config"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
@@ -51,6 +53,12 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runWeb(ctx, args[1:], stdout, stderr)
 	case "coverage":
 		return runCoverageCommand(ctx, args[1:], stdout, stderr)
+	case "adguard-connect":
+		return runAdGuardConnectCommand(ctx, args[1:], stdout, stderr)
+	case "adguard-status":
+		return runAdGuardStatusCommand(ctx, args[1:], stdout, stderr)
+	case "adguard-disconnect":
+		return runAdGuardDisconnectCommand(ctx, args[1:], stdout, stderr)
 	case "status":
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
@@ -129,6 +137,9 @@ Usage:
   cozysoc dev [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc web [--state-dir PATH] [--listen 127.0.0.1:PORT] [--ui-dir PATH]
   cozysoc coverage [--state-dir PATH]
+  cozysoc adguard-connect [--state-dir PATH] --endpoint IP_ORIGIN [--username USER] (interactive macOS only)
+  cozysoc adguard-status [--state-dir PATH]
+  cozysoc adguard-disconnect [--state-dir PATH] (interactive macOS only)
   cozysoc status [--state-dir PATH]
   cozysoc health [--state-dir PATH]
   cozysoc capabilities [--state-dir PATH]
@@ -274,6 +285,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return err
 	}
 	apiHandler.storageOverview = store
+	adguardConnections, err := adguard.NewConnections(configManager, store, lifecycle, secretstore.NewDesktop)
+	if err != nil {
+		return fmt.Errorf("initialize AdGuard Home connection: %w", err)
+	}
+	apiHandler.adguardConnections = adguardConnections
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver

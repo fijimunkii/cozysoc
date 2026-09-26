@@ -50,6 +50,10 @@ func (c *Client) CallWithParams(ctx context.Context, method string, params any) 
 }
 
 func (c *Client) call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+	return c.callWithTimeout(ctx, method, params, requestTimeout)
+}
+
+func (c *Client) callWithTimeout(ctx context.Context, method string, params json.RawMessage, timeout time.Duration) (json.RawMessage, error) {
 	secret, err := loadSessionSecret(c.stateDir)
 	if err != nil {
 		return nil, err
@@ -61,7 +65,7 @@ func (c *Client) call(ctx context.Context, method string, params json.RawMessage
 		return nil, fmt.Errorf("connect to controller: %w", err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(requestTimeout))
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	request := api.Request{
 		Version: api.Version,

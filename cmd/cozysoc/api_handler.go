@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
@@ -17,6 +18,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/httpsroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
+	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
@@ -56,6 +58,12 @@ type storageOverviewReader interface {
 
 type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
+type adguardConnectionControl interface {
+	Connect(context.Context, string, string, secretstore.Secret) (adguard.Connection, error)
+	Current(context.Context) (adguard.Connection, error)
+	Disconnect(context.Context) error
+}
+
 type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
@@ -72,6 +80,7 @@ type controllerAPIHandler struct {
 	gatewayRouteInspector  gatewayroute.Inspector
 	networkInspector       devicewatch.InterfaceInspector
 	listScopeCandidates    scopeCandidateLister
+	adguardConnections     adguardConnectionControl
 	now                    func() time.Time
 }
 

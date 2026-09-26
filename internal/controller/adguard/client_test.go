@@ -83,6 +83,36 @@ func TestDisabledQueryLogDoesNotFetchHistory(t *testing.T) {
 	}
 }
 
+func TestProbeDoesNotReadQueryHistory(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/control/status":
+			fmt.Fprint(w, `{"version":"v0.107.79","running":true,"protection_enabled":true}`)
+		case "/control/filtering/status":
+			fmt.Fprint(w, `{"enabled":true}`)
+		case "/control/querylog/config":
+			fmt.Fprint(w, `{"enabled":true,"anonymize_client_ip":false}`)
+		default:
+			t.Errorf("probe fetched private history: %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", secretstore.Secret{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.Probe(context.Background())
+	if err != nil || !status.Running || !status.QueryLogEnabled {
+		t.Fatalf("invalid probe: %+v, %v", status, err)
+	}
+	if strings.Join(paths, ",") != "/control/status,/control/filtering/status,/control/querylog/config" {
+		t.Fatalf("wrong probe paths: %v", paths)
+	}
+}
+
 func TestEndpointAndResponseBoundaries(t *testing.T) {
 	for _, endpoint := range []string{"http://example.test", "http://localhost:3000", "https://example.test", "file:///tmp/test", "https://user:pass@127.0.0.1", "https://127.0.0.1/path", "https://127.0.0.1/%2F", "https://127.0.0.1?", "https://127.0.0.1/?q=1", "https://127.0.0.1/#part", "https://127.0.0.1:0"} {
 		if _, err := NewClient(endpoint, "", secretstore.Secret{}); !errors.Is(err, ErrEndpoint) {
