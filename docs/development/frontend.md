@@ -133,6 +133,8 @@ Authenticated `GET /api/devices` is parameterless and read-only. It is backed by
 
 The Overview page summarizes only the current device-presence and shared-coverage evidence. Known limits remain explicit counts and next steps rather than a protection percentage. The Devices page does not invent `offline`; absence of recent positive evidence remains `uncertain` as defined by #11.
 
+When no network is authorized, Devices opens the guided setup on Overview directly. A configured scope with no retained device evidence offers a fresh read and a direct Coverage link, while explaining that silence is not an offline or safe verdict. Neither action starts an active network check.
+
 Synthetic demo data spans the same navigation but keeps the persistent synthetic-data banner on every section. Live and synthetic records are never mixed.
 
 ## Desktop shell boundary

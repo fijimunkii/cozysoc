@@ -21,6 +21,7 @@
 .presence-pill--uncertain { background: #f3eee0; color: #6b5e38; }
 .empty-list-state { padding: 28px; border-top: 1px solid #ebe8df; }
 .empty-list-state p, .empty-product-state p { color: #62675e; line-height: 1.6; }
+.device-empty-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .quiet-note { font-size: .88rem; }
 @media (max-width: 720px) {
   .device-summary-grid { grid-template-columns: 1fr; }

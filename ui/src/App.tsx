@@ -196,7 +196,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         ) : null}
         {activeData && page === "devices" ? (
           view.mode === "live"
-            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} loadDetail={loadDeviceDetailFromWeb} />
+            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} onNavigate={setPage} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
         ) : null}
         {activeData && page === "activity" ? (
