@@ -15,13 +15,14 @@ export interface CoveragePanelProps {
 
 export function CoveragePanel({ report }: CoveragePanelProps) {
   const state = coverageStatePresentation(report.state);
+  const domID = useId();
 
   return (
-    <section className="coverage-panel" aria-labelledby="coverage-title">
+    <section className="coverage-panel" aria-labelledby={`${domID}-title`}>
       <header className="coverage-header">
         <div>
           <p className="eyebrow">Coverage</p>
-          <h2 id="coverage-title">What Cozy SOC can see</h2>
+          <h2 id={`${domID}-title`}>What Cozy SOC can see</h2>
           <p className="coverage-intro">
             {coverageCapabilityTitle(report.capability_id)} is reported from current evidence. Known observation gaps stay visible even when a source is working.
           </p>
@@ -40,6 +41,7 @@ export function CoveragePanel({ report }: CoveragePanelProps) {
           {report.observation_points.map((point) => (
             <ObservationPointCard key={point.id} point={point} />
           ))}
+          {report.observation_points.length > 1 ? <NextStep text={report.next_step} label="Overall next step" ariaLabel="Overall next step" /> : null}
         </div>
       )}
     </section>
@@ -114,7 +116,7 @@ function ObservationPointCard({ point }: { point: CoverageObservationPoint }) {
         )}
       </section>
 
-      <details className="technical-details">
+      <details className="technical-details" open={point.sources.some((source) => source.state !== "current")}>
         <summary>Technical source status</summary>
         {point.sources.length === 0 ? (
           <p className="empty-copy">No source details were reported.</p>
@@ -122,11 +124,14 @@ function ObservationPointCard({ point }: { point: CoverageObservationPoint }) {
           <ul className="source-list">
             {point.sources.map((source) => (
               <li key={source.id}>
-                <div>
-                  <strong>{humanize(source.kind)}</strong>
-                  <span>{source.id}</span>
+                <div className="source-list__heading">
+                  <div>
+                    <strong>{humanize(source.kind)}</strong>
+                    <span>{source.id}</span>
+                  </div>
+                  <span>{sourceStateLabel(source.state)}</span>
                 </div>
-                <span>{sourceStateLabel(source.state)}</span>
+                {source.next_step ? <p className="source-next-step">Next step: {source.next_step}</p> : null}
               </li>
             ))}
           </ul>
@@ -161,10 +166,10 @@ function ScopeGroup({ title, dimensions, empty }: { title: string; dimensions: C
   );
 }
 
-function NextStep({ text }: { text: string }) {
+function NextStep({ text, label = "Next step", ariaLabel = "Recommended next step" }: { text: string; label?: string; ariaLabel?: string }) {
   return (
-    <aside className="next-step" aria-label="Recommended next step">
-      <span>Next step</span>
+    <aside className="next-step" aria-label={ariaLabel}>
+      <span>{label}</span>
       <p>{text}</p>
     </aside>
   );
