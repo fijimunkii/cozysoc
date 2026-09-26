@@ -6,6 +6,8 @@ This is **presence evidence, not whole-network traffic visibility**. A host neig
 
 ## Explicit network enrollment
 
+Changing an enrolled network requires disabling Device Watch and waiting for its runtime to stop, then retiring the current scope by its reviewed ID (`cozysoc network-retire SCOPE_ID` or the setup review). Retirement and its audit event commit together. It retains historical evidence and does not enable collection on any replacement network; the user must enroll and enable again explicitly. A stale scope ID cannot retire a newer enrollment.
+
 Device Watch never chooses a network on its own.
 
 The authenticated `networks.list` API (CLI: `cozysoc networks`) lists local interfaces that are currently eligible for enrollment. Candidate discovery reads only local interface/address metadata through Go's networking APIs. It does not ping, resolve names, scan ports, enumerate an IPv6 address space, or otherwise send network traffic.

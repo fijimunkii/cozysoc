@@ -182,6 +182,27 @@ func (c *deviceWatchControl) Disable(ctx context.Context) (api.DeviceWatchContro
 	return c.controlResult(scopeID, configChanged || lifecycleResult.Changed), nil
 }
 
+func (c *deviceWatchControl) RetireScope(ctx context.Context, expectedID string) (api.NetworkRetireResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if current, ok := c.configs.Capability(devicewatch.CapabilityID); ok && current.Desired != capability.DesiredDisabled {
+		return api.NetworkRetireResult{}, localapi.ErrMutationPrecondition
+	}
+	if c.activity.Active() {
+		return api.NetworkRetireResult{}, localapi.ErrMutationPrecondition
+	}
+	changed, err := c.store.RetireDeviceWatchScope(ctx, expectedID)
+	switch {
+	case errors.Is(err, storage.ErrDeviceWatchScopeChanged):
+		return api.NetworkRetireResult{}, localapi.ErrMutationConflict
+	case errors.Is(err, storage.ErrNetworkScopeNotFound):
+		return api.NetworkRetireResult{}, localapi.ErrMutationPrecondition
+	case err != nil:
+		return api.NetworkRetireResult{}, err
+	}
+	return api.NetworkRetireResult{ScopeID: expectedID, Changed: changed}, nil
+}
+
 func (c *deviceWatchControl) restorePreviousConfiguration(previous *capability.Configuration) error {
 	if previous == nil {
 		if _, _, err := c.configs.ReplaceCapability(devicewatch.CapabilityID, nil); err != nil {

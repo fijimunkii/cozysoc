@@ -141,6 +141,10 @@ func (f *fakeDeviceWatchAPIControl) Disable(context.Context) (api.DeviceWatchCon
 	return f.disableResult, f.disableErr
 }
 
+func (f *fakeDeviceWatchAPIControl) RetireScope(_ context.Context, scopeID string) (api.NetworkRetireResult, error) {
+	return api.NetworkRetireResult{ScopeID: scopeID, Changed: true}, nil
+}
+
 type handlerInspector struct {
 	states map[string]devicewatch.InterfaceState
 }

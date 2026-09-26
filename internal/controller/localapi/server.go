@@ -91,6 +91,10 @@ type NetworkEnrollHandler interface {
 	EnrollNetwork(context.Context, api.NetworkEnrollParams) (api.NetworkEnrollResult, error)
 }
 
+type NetworkRetireHandler interface {
+	RetireNetwork(context.Context, api.NetworkRetireParams) (api.NetworkRetireResult, error)
+}
+
 type DeviceWatchControlHandler interface {
 	EnableDeviceWatch(context.Context) (api.DeviceWatchControlResult, error)
 	DisableDeviceWatch(context.Context) (api.DeviceWatchControlResult, error)
@@ -696,6 +700,35 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = enrollResult
+	case api.MethodNetworkRetire:
+		retireHandler, ok := s.handler.(NetworkRetireHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		var params api.NetworkRetireParams
+		if err := decodeRequiredParams(request.Params, &params); err != nil || params.ScopeID == "" {
+			s.writeError(conn, request.ID, "invalid_request", "invalid network retirement parameters")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		retired, retireErr := retireHandler.RetireNetwork(requestCtx, params)
+		cancel()
+		if retireErr != nil {
+			switch {
+			case errors.Is(retireErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid network retirement parameters")
+			case errors.Is(retireErr, ErrMutationPrecondition):
+				s.writeError(conn, request.ID, "precondition_failed", "disable Device Watch before retiring the network")
+			case errors.Is(retireErr, ErrMutationConflict):
+				s.writeError(conn, request.ID, "conflict", "the enrolled network changed; review it again")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", api.MethodNetworkRetire)
+				s.writeError(conn, request.ID, "internal_error", "unable to retire network")
+			}
+			return
+		}
+		result = retired
 	case api.MethodDeviceWatchEnable, api.MethodDeviceWatchDisable:
 		if s.rejectUnexpectedParams(conn, request) {
 			return

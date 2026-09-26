@@ -12,6 +12,7 @@ import (
 
 type networkTestHandler struct {
 	enrollErr error
+	retireErr error
 }
 
 func (*networkTestHandler) Status() api.Status {
@@ -42,6 +43,31 @@ func (h *networkTestHandler) EnrollNetwork(_ context.Context, params api.Network
 		Interface:  api.NetworkInterface{InterfaceName: params.InterfaceName, InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}},
 		Changed:    true,
 	}, nil
+}
+
+func (h *networkTestHandler) RetireNetwork(_ context.Context, params api.NetworkRetireParams) (api.NetworkRetireResult, error) {
+	if h.retireErr != nil {
+		return api.NetworkRetireResult{}, h.retireErr
+	}
+	return api.NetworkRetireResult{ScopeID: params.ScopeID, Changed: true}, nil
+}
+
+func TestNetworkRetireRequiresExactReviewedID(t *testing.T) {
+	server := startMutationTestServer(t, &networkTestHandler{})
+	client := NewClient(server.stateDir)
+	for _, params := range []any{map[string]any{}, map[string]any{"scope_id": "scope.one", "extra": true}} {
+		if _, err := client.CallWithParams(context.Background(), api.MethodNetworkRetire, params); err == nil || !strings.Contains(err.Error(), "invalid_request") {
+			t.Fatalf("invalid params error=%v", err)
+		}
+	}
+	result, err := client.CallWithParams(context.Background(), api.MethodNetworkRetire, api.NetworkRetireParams{ScopeID: "scope.one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retired api.NetworkRetireResult
+	if err := json.Unmarshal(result, &retired); err != nil || !retired.Changed || retired.ScopeID != "scope.one" {
+		t.Fatalf("retired=%+v err=%v", retired, err)
+	}
 }
 
 func TestNetworksListAndEnrollRoundTrip(t *testing.T) {

@@ -21,6 +21,7 @@ const (
 
 type networkLoader func(context.Context) (api.NetworkList, error)
 type networkEnrollMutator func(context.Context, api.NetworkEnrollParams) (api.NetworkEnrollResult, error)
+type networkRetireMutator func(context.Context, api.NetworkRetireParams) (api.NetworkRetireResult, error)
 type deviceWatchMutator func(context.Context) (api.DeviceWatchControlResult, error)
 
 type webSessionInfo struct {
@@ -38,6 +39,9 @@ func configureWebMutationBridge(handler *webHandler, stateDir string) error {
 	}
 	handler.enrollNetwork = func(ctx context.Context, params api.NetworkEnrollParams) (api.NetworkEnrollResult, error) {
 		return enrollNetworkWithController(ctx, stateDir, params)
+	}
+	handler.retireNetwork = func(ctx context.Context, params api.NetworkRetireParams) (api.NetworkRetireResult, error) {
+		return retireNetworkWithController(ctx, stateDir, params)
 	}
 	handler.enableDeviceWatch = func(ctx context.Context) (api.DeviceWatchControlResult, error) {
 		return controlDeviceWatchWithController(ctx, stateDir, api.MethodDeviceWatchEnable)
@@ -74,6 +78,20 @@ func enrollNetworkWithController(ctx context.Context, stateDir string, params ap
 		return api.NetworkEnrollResult{}, fmt.Errorf("decode controller network enrollment: %w", err)
 	}
 	return enrolled, nil
+}
+
+func retireNetworkWithController(ctx context.Context, stateDir string, params api.NetworkRetireParams) (api.NetworkRetireResult, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, webRequestTimeout)
+	defer cancel()
+	result, err := localapi.NewClient(stateDir).CallWithParams(requestCtx, api.MethodNetworkRetire, params)
+	if err != nil {
+		return api.NetworkRetireResult{}, fmt.Errorf("retire controller network: %w", err)
+	}
+	var retired api.NetworkRetireResult
+	if err := json.Unmarshal(result, &retired); err != nil {
+		return api.NetworkRetireResult{}, fmt.Errorf("decode controller network retirement: %w", err)
+	}
+	return retired, nil
 }
 
 func controlDeviceWatchWithController(ctx context.Context, stateDir, method string) (api.DeviceWatchControlResult, error) {
@@ -195,6 +213,46 @@ func (h *webHandler) handleNetworkEnroll(w http.ResponseWriter, r *http.Request)
 	result, err := h.enrollNetwork(ctx, params)
 	if err != nil {
 		writeMutationControllerError(w, err, "network enrollment could not be completed")
+		return
+	}
+	writeWebJSON(w, http.StatusOK, result)
+}
+
+func (h *webHandler) handleNetworkRetire(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.authorizeMutation(w, r) {
+		return
+	}
+	if r.URL.RawQuery != "" {
+		writeWebError(w, http.StatusBadRequest, "query_not_allowed", "network retirement does not accept query parameters")
+		return
+	}
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		writeWebError(w, http.StatusUnsupportedMediaType, "content_type_required", "network retirement requires JSON")
+		return
+	}
+	limited := http.MaxBytesReader(w, r.Body, maxWebMutationBodyBytes)
+	defer limited.Close()
+	decoder := json.NewDecoder(limited)
+	decoder.DisallowUnknownFields()
+	var params api.NetworkRetireParams
+	if err := decoder.Decode(&params); err != nil || params.ScopeID == "" {
+		writeWebError(w, http.StatusBadRequest, "invalid_request", "network retirement request is invalid")
+		return
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		writeWebError(w, http.StatusBadRequest, "invalid_request", "network retirement request is invalid")
+		return
+	}
+	if h.retireNetwork == nil {
+		writeWebError(w, http.StatusServiceUnavailable, "mutation_unavailable", "network retirement is unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), webRequestTimeout)
+	defer cancel()
+	result, err := h.retireNetwork(ctx, params)
+	if err != nil {
+		writeMutationControllerError(w, err, "network retirement could not be completed")
 		return
 	}
 	writeWebJSON(w, http.StatusOK, result)

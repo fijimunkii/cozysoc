@@ -156,6 +156,42 @@ func TestWebNetworkEnrollRequiresSessionOriginAndCSRF(t *testing.T) {
 	}
 }
 
+func TestWebNetworkRetireRequiresSessionAndReviewedScope(t *testing.T) {
+	handler := newMutationTestHandler(t)
+	calls := 0
+	handler.retireNetwork = func(_ context.Context, params api.NetworkRetireParams) (api.NetworkRetireResult, error) {
+		calls++
+		return api.NetworkRetireResult{ScopeID: params.ScopeID, Changed: true}, nil
+	}
+	const target = "http://127.0.0.1:43821/api/networks/retire"
+	request := func(body string) *http.Request {
+		r := authenticatedRequest(http.MethodPost, target, strings.NewReader(body))
+		r.Header.Set("Origin", "http://127.0.0.1:43821")
+		r.Header.Set(webCSRFHeader, testCSRFToken)
+		r.Header.Set("Content-Type", "application/json")
+		return r
+	}
+	for _, body := range []string{`{}`, `{"scope_id":"scope.home","extra":true}`, `{"scope_id":"scope.home"}{}`} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request(body))
+		if response.Code != http.StatusBadRequest || calls != 0 {
+			t.Fatalf("invalid body %q: status=%d calls=%d", body, response.Code, calls)
+		}
+	}
+	noCSRF := request(`{"scope_id":"scope.home"}`)
+	noCSRF.Header.Del(webCSRFHeader)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, noCSRF)
+	if response.Code != http.StatusForbidden || calls != 0 {
+		t.Fatalf("missing CSRF status=%d calls=%d", response.Code, calls)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request(`{"scope_id":"scope.home"}`))
+	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(response.Body.String(), `"scope_id":"scope.home"`) {
+		t.Fatalf("retirement status=%d calls=%d body=%s", response.Code, calls, response.Body.String())
+	}
+}
+
 func TestWebDeviceWatchMutationsAreTypedAndBodyless(t *testing.T) {
 	handler := newMutationTestHandler(t)
 	enableCalls := 0

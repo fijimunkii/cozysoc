@@ -6,7 +6,7 @@ import type { NetworkInterface, SetupClient } from "./setup";
 import { SetupRequestError } from "./setup";
 import "./setup.css";
 
-type SetupAction = "enroll" | "enable" | "disable";
+type SetupAction = "enroll" | "retire" | "enable" | "disable";
 
 export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data: AppData; client: SetupClient; onChanged: () => void; onReviewCoverage: () => void }) {
   const [dismissed, setDismissed] = useState(false);
@@ -14,6 +14,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const [reviewedNetwork, setReviewedNetwork] = useState<NetworkInterface | null>(null);
   const [reviewInvalidated, setReviewInvalidated] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
+  const [reviewedRetirement, setReviewedRetirement] = useState<string | null>(null);
   const [pending, setPending] = useState<SetupAction | null>(null);
   const [error, setError] = useState<{ action: SetupAction; message: string } | null>(null);
 
@@ -27,9 +28,11 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const pauseHeading = useRef<HTMLHeadingElement>(null);
   const enrollmentReviewHeading = useRef<HTMLHeadingElement>(null);
   const disableReviewHeading = useRef<HTMLHeadingElement>(null);
+  const retirementReviewHeading = useRef<HTMLHeadingElement>(null);
   const reviewSelectionButton = useRef<HTMLButtonElement>(null);
   const pauseDeviceWatchButton = useRef<HTMLButtonElement>(null);
-  const panel = dismissed ? "paused" : data.network_error !== undefined || data.devices === null ? "stage" : reviewedNetwork !== null && enrolled === undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
+  const reviewRetirementButton = useRef<HTMLButtonElement>(null);
+  const panel = dismissed ? "paused" : data.network_error !== undefined || data.devices === null ? "stage" : reviewedNetwork !== null && enrolled === undefined ? "enrollment-review" : reviewedRetirement !== null && !enabled ? "retirement-review" : confirmingDisable && enabled ? "disable-review" : "stage";
   const previousPanel = useRef(panel);
   const previousRead = useRef(data);
   const previousStage = useRef(stage);
@@ -56,9 +59,11 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
     if (panel === "paused") pauseHeading.current?.focus();
     else if (panel === "enrollment-review") enrollmentReviewHeading.current?.focus();
     else if (panel === "disable-review") disableReviewHeading.current?.focus();
+    else if (panel === "retirement-review") retirementReviewHeading.current?.focus();
     else if (previousPanel.current === "paused") heading.current?.focus();
     else if (previousPanel.current === "enrollment-review") reviewSelectionButton.current?.focus();
     else if (previousPanel.current === "disable-review") pauseDeviceWatchButton.current?.focus();
+    else if (previousPanel.current === "retirement-review") reviewRetirementButton.current?.focus();
     previousPanel.current = panel;
   }, [panel]);
 
@@ -190,12 +195,33 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
         <div className="setup-body">
           <NetworkDetail network={enrolled.interface} />
           {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
-          <div className="setup-actions setup-actions--split">
-            <button type="button" className="quiet-button" onClick={() => setDismissed(true)}>Not now</button>
-            <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enable", () => client.enableDeviceWatch(), setPending, setError, onMutationChanged)}>
-              {pending === "enable" ? "Enabling…" : "Enable Device Watch"}
-            </button>
-          </div>
+          {reviewedRetirement !== null ? (
+            <div className="setup-confirmation setup-confirmation--inline">
+              <h3 ref={retirementReviewHeading} tabIndex={-1}>Retire this network authorization?</h3>
+              <p>This withdraws Device Watch authorization for {enrolled.interface.interface_name}. Historical evidence remains on this machine. To observe another network, review and authorize it, then enable Device Watch separately.</p>
+              {reviewedRetirement !== enrolled.scope_id ? <p role="alert">The enrolled network changed. Refresh and review it again.</p> : null}
+              <div className="setup-actions">
+                <button type="button" className="secondary-action" disabled={pending !== null} onClick={() => setReviewedRetirement(null)}>Back</button>
+                <button type="button" className="danger-action" disabled={pending !== null || reviewedRetirement !== enrolled.scope_id} onClick={() => {
+                  if (reviewedRetirement !== enrolled.scope_id) return;
+                  void run("retire", () => client.retireNetwork(reviewedRetirement), setPending, setError, () => {
+                    setReviewedRetirement(null);
+                    onMutationChanged();
+                  }, (error) => {
+                    if (error instanceof SetupRequestError && error.code === "conflict") onChanged();
+                  });
+                }}>{pending === "retire" ? "Retiring…" : "Retire this authorization"}</button>
+              </div>
+            </div>
+          ) : (
+            <div className="setup-actions setup-actions--split">
+              <button type="button" className="quiet-button" onClick={() => setDismissed(true)}>Not now</button>
+              <button ref={reviewRetirementButton} type="button" className="secondary-action" disabled={pending !== null} onClick={() => setReviewedRetirement(enrolled.scope_id)}>Change home network</button>
+              <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enable", () => client.enableDeviceWatch(), setPending, setError, onMutationChanged)}>
+                {pending === "enable" ? "Enabling…" : "Enable Device Watch"}
+              </button>
+            </div>
+          )}
         </div>
       </section>
     );
@@ -302,6 +328,7 @@ function setupErrorMessage(action: SetupAction, error: unknown): string {
   if (error.code === "precondition_failed") {
     if (action === "enroll") return "That interface or its local scope changed before enrollment. Refresh evidence, then review the current network again. No authorization was recorded.";
     if (action === "enable") return "Device Watch could not be enabled because a prerequisite is not satisfied. The network remains authorized, but monitoring was not enabled.";
+    if (action === "retire") return "Device Watch must be disabled and stopped before retiring network authorization. Review current state and try again.";
     return "Device Watch could not be disabled because a prerequisite is not satisfied. Its previous state remains in effect.";
   }
   if (error.code === "conflict") return "The requested change conflicts with current controller state. Refresh this page to review the current authorization and monitoring state.";

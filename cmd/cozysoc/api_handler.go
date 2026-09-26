@@ -42,6 +42,7 @@ type deviceWatchAPIControl interface {
 	Current() (string, bool, error)
 	Enable(context.Context) (api.DeviceWatchControlResult, error)
 	Disable(context.Context) (api.DeviceWatchControlResult, error)
+	RetireScope(context.Context, string) (api.NetworkRetireResult, error)
 }
 
 type deviceWatchOperationalControl interface {
@@ -575,6 +576,13 @@ func (h *controllerAPIHandler) EnrollNetwork(ctx context.Context, params api.Net
 		Interface:  networkInterface(binding),
 		Changed:    changed,
 	}, nil
+}
+
+func (h *controllerAPIHandler) RetireNetwork(ctx context.Context, params api.NetworkRetireParams) (api.NetworkRetireResult, error) {
+	if !deviceIDPattern.MatchString(params.ScopeID) {
+		return api.NetworkRetireResult{}, localapi.ErrInvalidMutation
+	}
+	return h.deviceWatch.RetireScope(ctx, params.ScopeID)
 }
 
 func networkInterface(binding devicewatch.ScopeBinding) api.NetworkInterface {

@@ -1,6 +1,6 @@
 # v0.1 network onboarding and Device Watch setup
 
-Issue #13 owns the first user-facing setup journey. This slice consumes the guarded browser mutation boundary established under #8 and #92; it does not add new controller authority or new browser endpoints.
+Issue #13 owns the first user-facing setup journey. The guarded browser mutation boundary established under #8 and #92 carries the typed setup operations.
 
 ## Consent model
 
@@ -20,7 +20,7 @@ Network authorization and Device Watch enablement are separate decisions.
 5. Device Watch remains disabled until the user separately chooses **Enable Device Watch**.
 6. Enablement still passes through the controller lifecycle preflight; a browser button is not permission to bypass platform/scope/current-interface checks.
 7. The user verifies Device Watch coverage after enablement. Only a current `active-limited` report completes this setup step; it establishes limited passive neighbor evidence, not whole-network or traffic visibility.
-8. Disabling Device Watch preserves the enrolled network authorization. There is no hidden unenroll operation in this flow.
+8. Disabling Device Watch preserves the enrolled network authorization. To change networks, the user must stop Device Watch, review the current authorization, and explicitly retire it. Retirement does not delete historical evidence or authorize a replacement. A new network requires fresh enrollment and separate enablement.
 
 The UI explains that network authorization and resulting device evidence stay on this machine by default; setup needs no account or router change. It intentionally does not describe enrollment as monitoring or enabled intent as proof that current evidence is healthy. Coverage remains the authority for verified observation state and gaps.
 
@@ -30,16 +30,18 @@ The React app creates one setup client for the lifetime of the mounted `App` com
 
 Each mutation uses the existing same-origin HttpOnly session cookie plus `X-Cozy-CSRF`. The browser supplies the request Origin; frontend code does not attempt to synthesize or override it.
 
-The frontend accepts only the existing allowlisted routes:
+The frontend accepts only these allowlisted routes:
 
 - `POST /api/networks/enroll`
+- `POST /api/networks/retire`
 - `POST /api/device-watch/enable`
 - `POST /api/device-watch/disable`
 
 It validates bounded network and Device Watch response shapes before using them.
 The browser enrollment request carries only the validated reviewed interface,
-index and prefixes; a controller precondition failure requires a fresh read and
-review rather than an optimistic UI update.
+index and prefixes. Retirement carries the reviewed scope ID and checks that
+it still matches the active scope. A controller precondition or conflict
+requires a fresh read and review rather than an optimistic UI update.
 
 ## Setup states
 
@@ -54,10 +56,11 @@ The Overview setup card represents these states explicitly:
 - **Coverage needs review** — degraded, stale, disconnected, unavailable, or permission-required coverage never appears complete; the report's next step and Coverage view guide recovery.
 - **Setup paused** — session-only “Not now” state with an explicit Resume action.
 - **Disable confirmation** — pausing monitoring requires a second confirmation and explicitly says network authorization remains.
+- **Retirement confirmation** — after monitoring stops, changing networks requires a second review of the enrolled interface and an explicit withdrawal. Historical evidence stays local; setup returns to network choice after a successful controller read.
 
 Failed mutations never optimistically patch live state. The app reloads coverage, devices, and network authorization from the controller after a successful mutation. If a mutation fails, copy states that no additional change is assumed and preserves the distinction between authorization and monitoring.
 
-Opening enrollment or disable confirmation moves keyboard focus to its heading; Back restores focus to the action that opened it. “Not now” and Resume move focus to the paused or resumed heading. After a successful enrollment, enable, or disable action changes the setup step on the next controller read, focus moves to the new step heading. Initial render and routine evidence refreshes do not move focus.
+Opening enrollment, retirement, or disable confirmation moves keyboard focus to its heading; Back restores focus to the action that opened it. “Not now” and Resume move focus to the paused or resumed heading. After a successful enrollment, retirement, enable, or disable action changes the setup step on the next controller read, focus moves to the new step heading. Initial render and routine evidence refreshes do not move focus.
 
 ## Demo boundary
 
