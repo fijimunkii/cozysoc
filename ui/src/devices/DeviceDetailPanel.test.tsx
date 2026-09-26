@@ -35,6 +35,15 @@ describe("DeviceDetailPanel", () => {
     expect(screen.getByText(/not proof the device is offline/)).toBeTruthy();
   });
 
+  it("renders private resolver history as an inferred association", () => {
+    const withDNS = detail("visible");
+    withDNS.dns_history = [{ observed_at: "2026-09-10T12:59:00Z", client_ip: "192.168.1.20", name: "private.example", query_type: "A", filtering: "blocked" }];
+    render(<DeviceDetailPanel detail={withDNS} onBack={() => undefined} />);
+    expect(screen.getByText("private.example")).toBeTruthy();
+    expect(screen.getByText(/association is inferred/)).toBeTruthy();
+    expect(screen.getByText("Filtered by AdGuard Home")).toBeTruthy();
+  });
+
   it("discloses a user merge while preserving the original inferred authority", () => {
     const corrected = detail("visible");
     corrected.evidence[0] = { ...corrected.evidence[0]!, original_device_id: "device.earlier" };

@@ -47,6 +47,13 @@ export function DeviceDetailPanel({ detail, onBack }: { detail: DeviceDetail; on
         )}
       </div>
 
+      <div className="product-card device-evidence-card">
+        <header className="section-header"><div><p className="eyebrow">Resolver history</p><h3>Recent DNS observations</h3><p>These AdGuard Home queries had a client IP matching recent, time-valid identity evidence for this device. The association is inferred; shared addresses, alternate DNS, and missing observations can make it incomplete. This is not network coverage or a safety assessment.</p></div></header>
+        {detail.dns_history_truncated ? <div className="inline-notice" role="status">Only the 100 most recently retained resolver observations in this scope were checked.</div> : null}
+        {detail.truncated ? <div className="inline-notice" role="status">Identity evidence was limited, so DNS observations were not associated with this device.</div> : null}
+        {detail.dns_history.length === 0 ? <div className="empty-list-state"><strong>No associated retained DNS observations</strong><p>This does not mean the device made no DNS requests. Collection is one-shot, scoped, and retained for 24 hours.</p></div> : <ul className="device-evidence-list">{detail.dns_history.map((item, index) => <li key={`${item.observed_at}-${item.client_ip}-${index}`}><div className="evidence-heading"><div><h4><code>{item.name}</code></h4><code>{item.query_type} · {item.client_ip}</code></div><time dateTime={item.observed_at}>{formatTimestamp(item.observed_at)}</time></div><p>{item.filtering === "blocked" ? "Filtered by AdGuard Home" : item.filtering === "not-blocked" ? "Not filtered by AdGuard Home" : "Filtering result unknown"}</p></li>)}</ul>}
+      </div>
+
       <div className="product-card device-evidence-export">
         <h3>Save this evidence snapshot</h3>
         <p>This is the evidence shown for one device at the recorded read time, limited to the most recent 100 identity records. It can include your device label, addresses and source identifiers. Cozy SOC does not upload it; choose a safe place to save it. It is not a backup or complete history.</p>
