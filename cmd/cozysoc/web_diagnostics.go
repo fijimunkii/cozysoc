@@ -25,18 +25,20 @@ func loadDiagnosticsFromController(ctx context.Context, stateDir string) (api.Di
 }
 
 func validDiagnosticPreview(preview api.DiagnosticPreview) bool {
-	if preview.SchemaVersion != 2 || preview.GeneratedAt.IsZero() ||
+	if preview.SchemaVersion != 3 || preview.GeneratedAt.IsZero() ||
 		!diagnosticBuildVersion.MatchString(preview.Controller.BuildVersion) ||
 		preview.Controller.ConfigSchemaVersion < 1 ||
 		preview.Controller.HealthState != diagnosticControllerState(preview.Controller.HealthState) ||
-		len(preview.Modules) > 1 || len(preview.Coverage) != 1 || !validDiagnosticStorage(preview.Storage) {
+		len(preview.Modules) > 3 || len(preview.Coverage) != 1 || !validDiagnosticStorage(preview.Storage) {
 		return false
 	}
+	seen := map[string]bool{}
 	for _, module := range preview.Modules {
-		if module.ID != "device-watch" || module.BuildVersion != preview.Controller.BuildVersion ||
+		if !validDiagnosticModuleID(module.ID) || seen[module.ID] || module.AdapterBuildVersion != preview.Controller.BuildVersion ||
 			module.Desired != diagnosticDesired(module.Desired) || module.Verification != diagnosticVerification(module.Verification) {
 			return false
 		}
+		seen[module.ID] = true
 	}
 	coverage := preview.Coverage[0]
 	if coverage.CapabilityID != "device-watch" || coverage.State != diagnosticCoverageState(coverage.State) {
@@ -44,6 +46,15 @@ func validDiagnosticPreview(preview api.DiagnosticPreview) bool {
 	}
 	switch coverage.FailureCategory {
 	case "none", "not-configured", "read-failed", "sensor", "ingestion", "storage", "evidence", "source", "unknown":
+		return true
+	default:
+		return false
+	}
+}
+
+func validDiagnosticModuleID(id string) bool {
+	switch id {
+	case "device-watch", "adguard-home", "opnsense":
 		return true
 	default:
 		return false

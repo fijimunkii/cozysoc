@@ -35,6 +35,8 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   await expect(page.getByRole("button", { name: "Save preview as JSON" })).toBeVisible();
   expect(previewReads).toBe(1);
   await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"failure_category": "sensor"');
+  await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"id": "adguard-home"');
+  await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"id": "opnsense"');
   await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"quota_state": "pressure"');
   await expect(page.getByLabel("Diagnostic bundle preview")).not.toContainText("private");
   const downloadReady = page.waitForEvent("download");
@@ -44,6 +46,7 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   const saved = await readFile(await download.path(), "utf8");
   expect(saved).toContain('"failure_category": "sensor"');
   expect(saved).toContain('"volume_state": "current"');
+  expect(saved).toContain('"adapter_build_version": "dev"');
   expect(saved).not.toContain("private");
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   const widths = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));

@@ -6,6 +6,9 @@ const VERIFICATION_STATES = new Set(["unverified", "verifying", "verified", "deg
 const DESIRED_STATES = new Set(["enabled", "disabled", "unknown"]);
 const QUOTA_STATES = new Set(["current", "pressure", "at-quota", "unknown"]);
 const VOLUME_STATES = new Set(["current", "pressure", "full", "unavailable", "unsupported", "unknown"]);
+const MODULE_IDS = new Set(["device-watch", "adguard-home", "opnsense"]);
+
+type DiagnosticModuleID = "device-watch" | "adguard-home" | "opnsense";
 
 export interface DiagnosticStorage {
   read_state: "current" | "unavailable";
@@ -14,10 +17,10 @@ export interface DiagnosticStorage {
 }
 
 export interface DiagnosticPreview {
-  schema_version: 2;
+  schema_version: 3;
   generated_at: string;
   controller: { build_version: string; config_schema_version: number; health_state: "ok" | "degraded" | "unknown"; gap_count: number };
-  modules: { id: "device-watch"; build_version: string; desired: string; verification: string }[];
+  modules: { id: DiagnosticModuleID; adapter_build_version: string; desired: string; verification: string }[];
   coverage: { capability_id: "device-watch"; state: string; failure_category: string }[];
   storage: DiagnosticStorage;
 }
@@ -30,7 +33,7 @@ export async function loadDiagnosticPreview(signal: AbortSignal): Promise<Diagno
 
 export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {
   const value = object(raw);
-  if (value.schema_version !== 2) throw new Error("Unsupported diagnostic version.");
+  if (value.schema_version !== 3) throw new Error("Unsupported diagnostic version.");
   const generatedAt = value.generated_at;
   if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) throw new Error("Diagnostic time is invalid.");
   const controller = object(value.controller);
@@ -40,11 +43,14 @@ export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {
   const gapCount = boundedInt(controller.gap_count, 0, Number.MAX_SAFE_INTEGER);
   const healthState = allowed(controller.health_state, new Set(["ok", "degraded", "unknown"]));
   const rawModules = value.modules;
-  if (!Array.isArray(rawModules) || rawModules.length > 1) throw new Error("Diagnostic module list is invalid.");
+  if (!Array.isArray(rawModules) || rawModules.length > 3) throw new Error("Diagnostic module list is invalid.");
+  const seenModules = new Set<string>();
   const modules = rawModules.map((rawModule) => {
     const module = object(rawModule);
-    if (module.id !== "device-watch" || module.build_version !== buildVersion) throw new Error("Diagnostic module is invalid.");
-    return { id: "device-watch" as const, build_version: buildVersion, desired: allowed(module.desired, DESIRED_STATES), verification: allowed(module.verification, VERIFICATION_STATES) };
+    const id = allowed(module.id, MODULE_IDS) as DiagnosticModuleID;
+    if (seenModules.has(id) || module.adapter_build_version !== buildVersion) throw new Error("Diagnostic module is invalid.");
+    seenModules.add(id);
+    return { id, adapter_build_version: buildVersion, desired: allowed(module.desired, DESIRED_STATES), verification: allowed(module.verification, VERIFICATION_STATES) };
   });
   const rawCoverage = value.coverage;
   if (!Array.isArray(rawCoverage) || rawCoverage.length !== 1) throw new Error("Diagnostic coverage is invalid.");
@@ -63,7 +69,7 @@ export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {
     quota_state: quotaState as DiagnosticStorage["quota_state"],
     volume_state: volumeState as DiagnosticStorage["volume_state"],
   };
-  return { schema_version: 2, generated_at: generatedAt, controller: { build_version: buildVersion, config_schema_version: configSchema, health_state: healthState as DiagnosticPreview["controller"]["health_state"], gap_count: gapCount }, modules, coverage, storage };
+  return { schema_version: 3, generated_at: generatedAt, controller: { build_version: buildVersion, config_schema_version: configSchema, health_state: healthState as DiagnosticPreview["controller"]["health_state"], gap_count: gapCount }, modules, coverage, storage };
 }
 
 function object(value: unknown): Record<string, unknown> {

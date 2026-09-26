@@ -21,7 +21,7 @@ func (h *controllerAPIHandler) DiagnosticsPreview(ctx context.Context) (api.Diag
 		build = status.ControllerVersion
 	}
 	preview := api.DiagnosticPreview{
-		SchemaVersion: 2,
+		SchemaVersion: 3,
 		GeneratedAt:   h.now().UTC(),
 		Controller: api.DiagnosticController{
 			BuildVersion: build, ConfigSchemaVersion: status.ConfigSchemaVersion,
@@ -31,18 +31,21 @@ func (h *controllerAPIHandler) DiagnosticsPreview(ctx context.Context) (api.Diag
 		Coverage: []api.DiagnosticCoverage{},
 		Storage:  api.DiagnosticStorage{ReadState: "unavailable", QuotaState: "unknown", VolumeState: "unknown"},
 	}
-	for _, instance := range h.controller.Capabilities().Capabilities {
-		// The current support schema knows only the first-party Device Watch
-		// module. A future integration must add an explicit projection here.
-		if instance.Manifest.ID != "device-watch" {
-			continue
+	// Only curated adapter IDs and bounded states enter a support snapshot.
+	// The version is this controller's adapter build, never the remote service.
+	instances := h.controller.Capabilities().Capabilities
+	for _, id := range []string{"device-watch", "adguard-home", "opnsense"} {
+		for _, instance := range instances {
+			if instance.Manifest.ID != id {
+				continue
+			}
+			preview.Modules = append(preview.Modules, api.DiagnosticModule{
+				ID: id, AdapterBuildVersion: build,
+				Desired:      diagnosticDesired(string(instance.State.Desired)),
+				Verification: diagnosticVerification(string(instance.State.Verification)),
+			})
+			break
 		}
-		preview.Modules = append(preview.Modules, api.DiagnosticModule{
-			ID: "device-watch", BuildVersion: build,
-			Desired:      diagnosticDesired(string(instance.State.Desired)),
-			Verification: diagnosticVerification(string(instance.State.Verification)),
-		})
-		break
 	}
 	coverage := api.DiagnosticCoverage{CapabilityID: "device-watch", State: "unavailable", FailureCategory: "read-failed"}
 	current, err := h.DeviceWatchCoverage(ctx)
