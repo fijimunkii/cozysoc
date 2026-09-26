@@ -68,5 +68,6 @@ describe("DevicesPage labels", () => {
     expect(screen.getByText(`<img src=x onerror="alert(1)">`)).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
     expect(screen.queryByRole("button", { name: /Rename|Name|Clear label/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Group duplicate devices" })).toBeNull();
   });
 });

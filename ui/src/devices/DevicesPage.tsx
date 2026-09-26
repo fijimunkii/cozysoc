@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { DeviceLabelClient } from "../setup/setup";
+import type { DeviceCorrectionClient, DeviceLabelClient, DeviceMergeList } from "../setup/setup";
 import { DeviceLoadError } from "./devices";
+import { DeviceCorrectionPanel } from "./DeviceCorrectionPanel";
 import { DeviceDetailPanel } from "./DeviceDetailPanel";
 import type { DeviceDetail } from "./detail";
 import { SetupRequestError, validateDeviceLabelInput } from "../setup/setup";
@@ -10,7 +11,7 @@ import type { DeviceList, DevicePresence, DevicePresenceState } from "./devices"
 
 type DetailView = { deviceID: string; scopeID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string };
 
-export function DevicesPage({ devices, labelClient, onChanged, onNavigate, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; onNavigate?: (page: "overview" | "coverage") => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
+export function DevicesPage({ devices, labelClient, correctionClient, loadMerges, onChanged, onNavigate, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; correctionClient?: DeviceCorrectionClient; loadMerges?: () => Promise<DeviceMergeList>; onChanged?: () => void; onNavigate?: (page: "overview" | "coverage") => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
   const [detailView, setDetailView] = useState<DetailView | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const statusHeading = useRef<HTMLHeadingElement>(null);
@@ -106,6 +107,7 @@ export function DevicesPage({ devices, labelClient, onChanged, onNavigate, loadD
           </div>
         )}
       </div>
+      {correctionClient !== undefined && loadMerges !== undefined && onChanged !== undefined && devices.scope_id !== undefined ? <DeviceCorrectionPanel key={devices.scope_id} scopeID={devices.scope_id} devices={devices.devices} client={correctionClient} loadMerges={loadMerges} onChanged={onChanged} /> : null}
     </section>
   );
 }

@@ -172,8 +172,10 @@ Live device rows can open a read-only evidence detail view through `GET /api/dev
 
 When a native user correction groups two Device records, detail keeps the
 original source Device ID beside affected evidence. It does not change the
-original inferred authority or imply a stronger observation. Merge and undo
-controls are currently native CLI operations, not browser mutations.
+original inferred authority or imply a stronger observation. The Devices page
+can review and confirm a merge of two listed identities, inspect the active
+scope's mappings, and undo a merge. The local web session, exact origin, and
+CSRF token authorize each change; the browser never supplies a scope ID.
 
 Presence (`visible` / `uncertain`) and identity validity are intentionally separate. A retained MAC/IP association can be historical while the device remains listed, and a temporally current identity association is not itself proof of recent presence, trust, or safety. When a source observation has aged out before its longer-lived identity claim, the detail view says the raw source metadata expired instead of reconstructing it.
 

@@ -209,8 +209,8 @@ The mutation does not grant network, generic capability-lifecycle, process, file
 
 ## User identity merges
 
-The authenticated native API and CLI permit an explicit merge of two retained
-Device records in the current enrolled Device Watch scope:
+The authenticated native API, CLI, and local browser permit an explicit merge
+of two retained Device records in the current enrolled Device Watch scope:
 
 ```text
 cozysoc device-merge --state-dir PATH SOURCE_DEVICE_ID TARGET_DEVICE_ID
@@ -234,10 +234,11 @@ cycles, cross-scope targets and more than 64 active source mappings per scope.
 An identical merge and a repeated undo are no-ops. Each real transition and its
 `device-identity` audit event commit together; a failed audit rolls back the
 projection. The bounded active mapping remains inspectable through
-`device-merges` after the source disappears from the list. The CLI does not
-probe, alter network configuration, or increase identity confidence. Browser
-detail shows corrected evidence provenance, while browser mutation controls are
-not yet exposed.
+`device-merges` and the browser after the source disappears from the list.
+Browser changes require the same local session, origin, and CSRF checks as
+other mutations, plus a separate review of both Device IDs before merge or
+undo. Neither surface probes, alters network configuration, or increases
+identity confidence. Browser detail shows corrected evidence provenance.
 
 ## Limitations and validation requirements
 
