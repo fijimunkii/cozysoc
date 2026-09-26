@@ -14,6 +14,13 @@ network-changing operation, or supported-router claim. An owned 26.7.4 lab
 must verify response schema, TLS enrollment, effective privileges, failures,
 and recovery before the adapter can be listed as supported.
 
+The Tools page can also read the newest 100 retained neighbor observations for
+the active enrolled scope. This local, authenticated read makes the captured
+address, MAC, interface, address family, time and evidence ID inspectable; it
+does not send another router request. A truncated view says so. The rows stay
+separate from Device Watch identity and presence and expire under the ephemeral
+retention class. A missing or empty view never establishes absence of devices.
+
 The native connection accepts only a private IP-literal HTTPS origin. Setup
 asks for foreground approval before reading the API key and secret with terminal
 echo disabled. A self-signed router needs an explicitly supplied regular PEM

@@ -3,6 +3,7 @@ import type { StorageOverview } from "./storage";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { AdGuardStatusPanel } from "./AdGuardStatusPanel";
 import { OPNsenseStatusPanel } from "./OPNsenseStatusPanel";
+import { OPNsenseNeighborHistoryPanel } from "./OPNsenseNeighborHistoryPanel";
 import "./tools.css";
 
 export interface ToolsPageProps {
@@ -42,6 +43,7 @@ export function ToolsPage({ tools, storage, storageError, mode = "demo", onRetry
 
       <AdGuardStatusPanel mode={mode} />
       <OPNsenseStatusPanel mode={mode} />
+      <OPNsenseNeighborHistoryPanel mode={mode} />
       <DiagnosticsPanel mode={mode} />
 
       {tools.capabilities.length === 0 ? (

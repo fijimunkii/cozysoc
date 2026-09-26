@@ -19,7 +19,7 @@ func TestOPNsenseNeighborsUsesActiveScopeWithoutClaimingPresence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := &fakeDeviceStore{activeScopes: []domain.NetworkScope{{ID: "scope.home"}}, observations: storage.ObservationPage{Observations: observations}}
+	store := &fakeDeviceStore{activeScopes: []domain.NetworkScope{{ID: "scope.home"}}, obsPage: storage.ObservationPage{Observations: observations}}
 	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, &fakeDeviceWatchAPIControl{})
 	if err != nil {
 		t.Fatal(err)
@@ -27,9 +27,9 @@ func TestOPNsenseNeighborsUsesActiveScopeWithoutClaimingPresence(t *testing.T) {
 	handler.now = func() time.Time { return at.Add(time.Minute) }
 	got, err := handler.OPNsenseNeighbors(context.Background())
 	if err != nil || !got.ScopeEnrolled || got.ScopeID != "scope.home" || len(got.Reports) != 1 ||
-		got.Reports[0].Address != "192.168.1.8" || store.observationQuery.ScopeID != "scope.home" ||
-		store.observationQuery.Kind != opnsense.NeighborObservationKind {
-		t.Fatalf("router evidence was misprojected: %+v query=%+v err=%v", got, store.observationQuery, err)
+		got.Reports[0].Address != "192.168.1.8" || store.obsQuery.ScopeID != "scope.home" ||
+		store.obsQuery.Kind != opnsense.NeighborObservationKind {
+		t.Fatalf("router evidence was misprojected: %+v query=%+v err=%v", got, store.obsQuery, err)
 	}
 	store.activeScopes = nil
 	got, err = handler.OPNsenseNeighbors(context.Background())
