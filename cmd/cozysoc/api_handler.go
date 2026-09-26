@@ -42,6 +42,11 @@ type deviceWatchOperationalControl interface {
 	OperationalHealth(context.Context, time.Time) (devicewatch.OperationalHealth, error)
 }
 
+type storageOverviewReader interface {
+	Health(context.Context) (storage.Health, error)
+	RetentionDurations() map[domain.RetentionClass]time.Duration
+}
+
 type scopeCandidateLister func(context.Context, devicewatch.InterfaceInspector) ([]devicewatch.ScopeBinding, bool, error)
 
 type controllerAPIHandler struct {
@@ -55,6 +60,7 @@ type controllerAPIHandler struct {
 	resolverChecksEnabled  bool
 	gatewayChecksEnabled   bool // Immutable after server startup; experimental native opt-in only.
 	store                  controllerStore
+	storageOverview        storageOverviewReader
 	deviceWatch            deviceWatchAPIControl
 	gatewayRouteInspector  gatewayroute.Inspector
 	networkInspector       devicewatch.InterfaceInspector
@@ -88,6 +94,32 @@ func (h *controllerAPIHandler) Status() api.Status {
 
 func (h *controllerAPIHandler) Health() api.Health {
 	return h.controller.Health()
+}
+
+func (h *controllerAPIHandler) StorageOverview(ctx context.Context) (api.StorageOverview, error) {
+	if h.storageOverview == nil {
+		return api.StorageOverview{}, fmt.Errorf("storage overview is unavailable")
+	}
+	health, err := h.storageOverview.Health(ctx)
+	if err != nil {
+		return api.StorageOverview{}, err
+	}
+	durations := h.storageOverview.RetentionDurations()
+	retention := make([]api.StorageRetention, 0, 4)
+	for _, class := range []domain.RetentionClass{domain.RetentionEphemeral, domain.RetentionShort, domain.RetentionStandard, domain.RetentionAudit} {
+		duration := durations[class]
+		if duration <= 0 {
+			return api.StorageOverview{}, fmt.Errorf("storage retention policy is incomplete")
+		}
+		retention = append(retention, api.StorageRetention{Class: string(class), DurationSeconds: int64(duration.Seconds())})
+	}
+	return api.StorageOverview{
+		AsOf: h.now().UTC(), QuotaState: string(health.QuotaState), DatabaseBytes: health.DatabaseBytes,
+		UsedBytes: health.UsedBytes, ReusableBytes: health.ReusableBytes, MaxBytes: health.MaxBytes,
+		FilesystemState: string(health.FilesystemState), FilesystemSupported: health.FilesystemSupported,
+		FilesystemTotalBytes: health.FilesystemTotalBytes, FilesystemAvailableBytes: health.FilesystemAvailableBytes,
+		Retention: retention,
+	}, nil
 }
 
 func (h *controllerAPIHandler) Capabilities() api.CapabilityList {

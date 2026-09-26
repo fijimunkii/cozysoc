@@ -142,6 +142,16 @@ func (s *Store) Path() string {
 	return s.path
 }
 
+// RetentionDurations returns the active, controller-owned expiry policy without
+// giving callers access to the mutable limits map.
+func (s *Store) RetentionDurations() map[domain.RetentionClass]time.Duration {
+	result := make(map[domain.RetentionClass]time.Duration, len(s.limits.Retention))
+	for class, duration := range s.limits.Retention {
+		result[class] = duration
+	}
+	return result
+}
+
 func (s *Store) SQLiteVersion(ctx context.Context) (string, error) {
 	var version string
 	if err := s.conn.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&version); err != nil {

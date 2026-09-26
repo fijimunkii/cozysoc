@@ -47,6 +47,7 @@ type deviceDetailLoader func(context.Context, string) (api.DeviceDetail, error)
 type deviceActivityLoader func(context.Context) (api.DeviceActivityList, error)
 type statusLoader func(context.Context) (api.Status, error)
 type capabilityLoader func(context.Context) (api.CapabilityList, error)
+type storageOverviewLoader func(context.Context) (api.StorageOverview, error)
 
 type webHandler struct {
 	expectedHost         string
@@ -57,6 +58,7 @@ type webHandler struct {
 	loadDeviceActivity   deviceActivityLoader
 	loadStatus           statusLoader
 	loadCapabilities     capabilityLoader
+	loadStorageOverview  storageOverviewLoader
 	loadLocalQuality     func(context.Context) (api.LocalNetworkQuality, error)
 	loadGatewayHistory   func(context.Context) (api.GatewayHistory, error)
 	loadHTTPSHistory     func(context.Context) (api.HTTPSHistory, error)
@@ -159,6 +161,9 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	handler.loadCapabilities = func(requestCtx context.Context) (api.CapabilityList, error) {
 		return loadCapabilitiesFromController(requestCtx, dir)
+	}
+	handler.loadStorageOverview = func(requestCtx context.Context) (api.StorageOverview, error) {
+		return loadStorageOverviewFromController(requestCtx, dir)
 	}
 	if err := configureWebMutationBridge(handler, dir); err != nil {
 		return err
@@ -295,6 +300,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleStatus(w, r)
 	case "/api/capabilities":
 		h.handleCapabilities(w, r)
+	case "/api/storage":
+		h.handleStorageOverview(w, r)
 	case "/api/coverage":
 		h.handleCoverage(w, r)
 	case "/api/devices":

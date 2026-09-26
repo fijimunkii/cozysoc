@@ -62,6 +62,33 @@ func TestWebStatusIsAuthenticatedReadOnlyAndMinimized(t *testing.T) {
 	}
 }
 
+func TestWebStorageOverviewIsAuthenticatedAndReadOnly(t *testing.T) {
+	const host = "127.0.0.1:43821"
+	handler := newWebHandler(host, testUIDir(t), testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) { return testCoverageEnvelope(), nil })
+	calls := 0
+	handler.loadStorageOverview = func(context.Context) (api.StorageOverview, error) {
+		calls++
+		return api.StorageOverview{AsOf: time.Unix(1_800_000_000, 0).UTC(), QuotaState: "current", DatabaseBytes: 20, UsedBytes: 15, ReusableBytes: 5, MaxBytes: 100, FilesystemState: "unavailable", Retention: []api.StorageRetention{{Class: "short", DurationSeconds: 86400}}}, nil
+	}
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "http://"+host+"/api/storage", nil),
+		authenticatedRequest(http.MethodPost, "http://"+host+"/api/storage", nil),
+		authenticatedRequest(http.MethodGet, "http://"+host+"/api/storage?path=private", nil),
+		authenticatedRequest(http.MethodGet, "http://"+host+"/api/storage", strings.NewReader("body")),
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code < 400 { t.Fatalf("unsafe storage read succeeded: %d", response.Code) }
+	}
+	if calls != 0 { t.Fatalf("rejected storage requests reached loader %d times", calls) }
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/storage", nil))
+	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(response.Body.String(), `"used_bytes":15`) { t.Fatalf("storage response = %d %s", response.Code, response.Body.String()) }
+	for _, forbidden := range []string{"private", "path", testBootstrapToken, testSessionToken} {
+		if strings.Contains(response.Body.String(), forbidden) { t.Fatalf("storage response leaked %s", forbidden) }
+	}
+}
+
 func TestWebCapabilitiesProjectsOnlyToolPresentationFields(t *testing.T) {
 	const host = "127.0.0.1:43821"
 	calls := 0

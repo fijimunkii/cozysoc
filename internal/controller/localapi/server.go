@@ -40,6 +40,10 @@ type Handler interface {
 	Capabilities() api.CapabilityList
 }
 
+type StorageOverviewHandler interface {
+	StorageOverview(context.Context) (api.StorageOverview, error)
+}
+
 type DeviceHandler interface {
 	Devices(context.Context) (api.DeviceList, error)
 }
@@ -285,6 +289,24 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = s.handler.Health()
+	case api.MethodStorageOverview:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		storageHandler, ok := s.handler.(StorageOverviewHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		overview, overviewErr := storageHandler.StorageOverview(requestCtx)
+		cancel()
+		if overviewErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodStorageOverview)
+			s.writeError(conn, request.ID, "internal_error", "unable to load storage overview")
+			return
+		}
+		result = overview
 	case api.MethodCapabilitiesList:
 		if s.rejectUnexpectedParams(conn, request) {
 			return

@@ -249,6 +249,7 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 	if err != nil {
 		return err
 	}
+	apiHandler.storageOverview = store
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver
