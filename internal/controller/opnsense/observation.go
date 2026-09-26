@@ -38,12 +38,22 @@ func BuildObservations(snapshot Snapshot, scopeID, sensorID string, prefixes []n
 	result := make([]domain.Observation, 0, len(snapshot.Neighbors))
 	seen := make(map[string]bool, len(snapshot.Neighbors))
 	var stats ObservationStats
+	var ipv4Read, ipv6Read int
 	for _, neighbor := range snapshot.Neighbors {
 		ip := neighbor.IP
 		mac, err := net.ParseMAC(neighbor.MAC)
 		if !ip.IsValid() || ip.IsUnspecified() || ip.IsMulticast() || ip.Is4In6() || ip.Zone() != "" ||
 			(neighbor.Family == "ipv4") != ip.Is4() || (neighbor.Family != "ipv4" && neighbor.Family != "ipv6") ||
-			err != nil || len(mac) != 6 || mac[0]&1 != 0 || !interfaceName.MatchString(neighbor.Interface) {
+			err != nil || len(mac) != 6 || mac[0]&1 != 0 || (mac[0]|mac[1]|mac[2]|mac[3]|mac[4]|mac[5]) == 0 ||
+			!interfaceName.MatchString(neighbor.Interface) {
+			return nil, ObservationStats{}, ErrResponse
+		}
+		if neighbor.Family == "ipv4" {
+			ipv4Read++
+		} else {
+			ipv6Read++
+		}
+		if ipv4Read > MaxNeighbors || ipv6Read > MaxNeighbors || ipv4Read > snapshot.IPv4Total || ipv6Read > snapshot.IPv6Total {
 			return nil, ObservationStats{}, ErrResponse
 		}
 		inScope := false

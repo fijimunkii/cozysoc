@@ -36,6 +36,7 @@ func TestRouterNeighborProjectionRejectsMalformedTypedInput(t *testing.T) {
 	now := time.Now().UTC()
 	for _, neighbor := range []Neighbor{
 		{IP: netip.MustParseAddr("192.168.1.10"), MAC: "ff:ff:ff:ff:ff:ff", Interface: "igb0", Family: "ipv4"},
+		{IP: netip.MustParseAddr("192.168.1.10"), MAC: "00:00:00:00:00:00", Interface: "igb0", Family: "ipv4"},
 		{IP: netip.MustParseAddr("192.168.1.10"), MAC: "02:00:00:00:00:10", Interface: "bad\nname", Family: "ipv4"},
 		{IP: netip.MustParseAddr("fd00:1::10"), MAC: "02:00:00:00:00:10", Interface: "igb0", Family: "ipv4"},
 	} {
