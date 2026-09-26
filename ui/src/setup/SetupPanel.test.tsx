@@ -7,10 +7,11 @@ import { parseCoverageBundle } from "../coverage/bundle";
 import { parseDeviceList } from "../devices/devices";
 import { demoCoverageRaw } from "../demo/coverage";
 import { SetupPanel } from "./SetupPanel";
-import type { DeviceWatchControlResult, SetupClient } from "./setup";
+import type { DeviceWatchControlResult, NetworkInterface, SetupClient } from "./setup";
 import { parseNetworkList, SetupRequestError } from "./setup";
 
-const candidate = { interface_name: "en0", interface_index: 4, prefixes: ["192.168.1.0/24"] };
+const candidate: NetworkInterface = { interface_name: "en0", interface_index: 4, prefixes: ["192.168.1.0/24"] };
+const otherCandidate: NetworkInterface = { interface_name: "en1", interface_index: 5, prefixes: ["10.0.0.0/24"] };
 const unconfiguredCoverage = {
   capability_id: "device-watch",
   configured: false,
@@ -20,7 +21,7 @@ const unconfiguredCoverage = {
   next_step: "Authorize a home network and enable Device Watch when ready.",
 };
 
-function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: string } = {}): AppData {
+function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: string; candidates?: NetworkInterface[] } = {}): AppData {
   const enabled = options.enabled ?? false;
   const enrolled = options.enrolled ?? enabled;
   return {
@@ -43,7 +44,7 @@ function data(options: { enrolled?: boolean; enabled?: boolean; networkError?: s
       truncated: false,
     }),
     networks: parseNetworkList({
-      candidates: [candidate, { interface_name: "en1", interface_index: 5, prefixes: ["10.0.0.0/24"] }],
+      candidates: options.candidates ?? [candidate, otherCandidate],
       candidates_truncated: false,
       ...(enrolled ? {
         enrolled: {
@@ -136,7 +137,50 @@ describe("SetupPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Authorize this network" }));
-    await waitFor(() => expect(setup.enrollNetwork).toHaveBeenCalledWith("en0"));
+    await waitFor(() => expect(setup.enrollNetwork).toHaveBeenCalledWith(candidate));
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { change: "prefixes change", candidates: [{ ...candidate, prefixes: ["192.168.0.0/16"] }, otherCandidate] },
+    { change: "the interface index changes", candidates: [{ ...candidate, interface_index: 9 }, otherCandidate] },
+    { change: "the candidate disappears", candidates: [otherCandidate] },
+  ])("invalidates the frozen authorization review when $change", ({ candidates }) => {
+    const setup = client();
+    const changed = vi.fn();
+    const reviewCoverage = vi.fn();
+    const { rerender } = render(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    fireEvent.click(screen.getByRole("radio", { name: /en0/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
+
+    rerender(<SetupPanel data={data({ candidates })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(screen.getByText("192.168.1.0/24")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toMatch(/review the current network/i);
+    const authorize = screen.getByRole("button", { name: "Authorize this network" });
+    expect(authorize.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(authorize);
+    expect(setup.enrollNetwork).not.toHaveBeenCalled();
+
+    rerender(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(screen.getByRole("button", { name: "Authorize this network" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("requires a fresh review of changed local prefixes before enrollment", async () => {
+    const setup = client();
+    const changed = vi.fn();
+    const reviewCoverage = vi.fn();
+    const updated = data({ candidates: [{ ...candidate, prefixes: ["192.168.0.0/16"] }, otherCandidate] });
+    const { rerender } = render(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    fireEvent.click(screen.getByRole("radio", { name: /en0/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
+    rerender(<SetupPanel data={updated} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByText("192.168.0.0/16")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
+    expect(screen.getByText("192.168.0.0/16")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Authorize this network" }));
+    await waitFor(() => expect(setup.enrollNetwork).toHaveBeenCalledWith({ ...candidate, prefixes: ["192.168.0.0/16"] }));
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
@@ -205,6 +249,23 @@ describe("SetupPanel", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/network remains authorized/i);
     expect(alert.textContent).toMatch(/monitoring was not enabled/i);
+  });
+
+  it("explains a changed controller binding without claiming enrollment succeeded", async () => {
+    const setup = client({
+      enrollNetwork: vi.fn(async () => {
+        throw new SetupRequestError("precondition_failed", "reviewed binding changed", 412);
+      }),
+    });
+    const changed = vi.fn();
+    render(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={() => undefined} />);
+    fireEvent.click(screen.getByRole("radio", { name: /en0/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize this network" }));
+    const failure = await screen.findByText(/local scope changed before enrollment/i);
+    expect(failure.textContent).toMatch(/no authorization was recorded/i);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Authorize this network" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("requires confirmation before disabling and keeps network authorization explicit", async () => {

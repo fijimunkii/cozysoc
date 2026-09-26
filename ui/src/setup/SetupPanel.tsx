@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { AppData } from "../app-data";
 import { coverageStatePresentation } from "../coverage/presentation";
-import type { SetupClient } from "./setup";
+import type { NetworkInterface, SetupClient } from "./setup";
 import { SetupRequestError } from "./setup";
 import "./setup.css";
 
@@ -11,7 +11,8 @@ type SetupAction = "enroll" | "enable" | "disable";
 export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data: AppData; client: SetupClient; onChanged: () => void; onReviewCoverage: () => void }) {
   const [dismissed, setDismissed] = useState(false);
   const [selected, setSelected] = useState("");
-  const [confirmingEnrollment, setConfirmingEnrollment] = useState(false);
+  const [reviewedNetwork, setReviewedNetwork] = useState<NetworkInterface | null>(null);
+  const [reviewInvalidated, setReviewInvalidated] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
   const [pending, setPending] = useState<SetupAction | null>(null);
   const [error, setError] = useState<{ action: SetupAction; message: string } | null>(null);
@@ -19,6 +20,8 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const enrolled = data.networks.enrolled;
   const enabled = enrolled !== undefined && data.devices.configured;
   const selectedNetwork = data.networks.candidates.find((candidate) => candidate.interface_name === selected);
+  const reviewMatches = reviewedNetwork !== null && selectedNetwork !== undefined && sameNetwork(reviewedNetwork, selectedNetwork);
+  const canAuthorize = reviewMatches && !reviewInvalidated && data.network_error === undefined;
   const stage = data.network_error !== undefined ? "unavailable" : enrolled === undefined ? "choose" : enabled ? "verify" : "enable";
   const heading = useRef<HTMLHeadingElement>(null);
   const pauseHeading = useRef<HTMLHeadingElement>(null);
@@ -26,7 +29,7 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const disableReviewHeading = useRef<HTMLHeadingElement>(null);
   const reviewSelectionButton = useRef<HTMLButtonElement>(null);
   const pauseDeviceWatchButton = useRef<HTMLButtonElement>(null);
-  const panel = dismissed ? "paused" : confirmingEnrollment && enrolled === undefined && selectedNetwork !== undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
+  const panel = dismissed ? "paused" : data.network_error !== undefined ? "stage" : reviewedNetwork !== null && enrolled === undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
   const previousPanel = useRef(panel);
   const previousRead = useRef(data);
   const previousStage = useRef(stage);
@@ -39,6 +42,14 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
     previousRead.current = data;
     previousStage.current = stage;
   }, [data, stage]);
+
+  useEffect(() => {
+    if (reviewedNetwork !== null && (data.network_error !== undefined || !reviewMatches)) setReviewInvalidated(true);
+  }, [data.network_error, reviewedNetwork, reviewMatches]);
+
+  useEffect(() => {
+    if (enrolled !== undefined && reviewedNetwork !== null) setReviewedNetwork(null);
+  }, [enrolled, reviewedNetwork]);
 
   useEffect(() => {
     if (previousPanel.current === panel) return;
@@ -100,15 +111,24 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
 
         {error ? <SetupErrorView error={error} onDismiss={() => setError(null)} /> : null}
 
-        {confirmingEnrollment && selectedNetwork ? (
+        {reviewedNetwork ? (
           <div className="setup-confirmation">
             <p className="setup-kicker">Review authorization</p>
-            <h3 ref={enrollmentReviewHeading} tabIndex={-1}>Authorize {selectedNetwork.interface_name}?</h3>
+            <h3 ref={enrollmentReviewHeading} tabIndex={-1}>Authorize {reviewedNetwork.interface_name}?</h3>
             <p>This authorizes Device Watch to use this interface and its currently observed local prefixes as the home-network scope. It does not start monitoring yet.</p>
-            <NetworkDetail network={selectedNetwork} />
+            <NetworkDetail network={reviewedNetwork} />
+            {!canAuthorize ? <p role="alert">The interface or local prefixes changed since this review. Go Back and review the current network before authorizing.</p> : null}
             <div className="setup-actions">
-              <button type="button" className="secondary-action" disabled={pending !== null} onClick={() => setConfirmingEnrollment(false)}>Back</button>
-              <button type="button" className="primary-action" disabled={pending !== null} onClick={() => void run("enroll", () => client.enrollNetwork(selectedNetwork.interface_name), setPending, setError, onMutationChanged)}>
+              <button type="button" className="secondary-action" disabled={pending !== null} onClick={() => setReviewedNetwork(null)}>Back</button>
+              <button type="button" className="primary-action" disabled={pending !== null || !canAuthorize} onClick={() => {
+                if (!canAuthorize) return;
+                void run("enroll", () => client.enrollNetwork(reviewedNetwork), setPending, setError, onMutationChanged, (error) => {
+                  if (error instanceof SetupRequestError && error.code === "precondition_failed") {
+                    setReviewInvalidated(true);
+                    onChanged();
+                  }
+                });
+              }}>
                 {pending === "enroll" ? "Authorizing…" : "Authorize this network"}
               </button>
             </div>
@@ -144,7 +164,11 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
             {data.networks.candidates_truncated ? <p className="setup-note" role="status">Only the first bounded set of eligible interfaces is shown.</p> : null}
             <div className="setup-actions setup-actions--split">
               <button type="button" className="quiet-button" onClick={() => setDismissed(true)}>Not now</button>
-              <button ref={reviewSelectionButton} type="button" className="primary-action" disabled={selectedNetwork === undefined || pending !== null} onClick={() => setConfirmingEnrollment(true)}>Review selection</button>
+              <button ref={reviewSelectionButton} type="button" className="primary-action" disabled={selectedNetwork === undefined || pending !== null} onClick={() => {
+                if (selectedNetwork === undefined) return;
+                setReviewedNetwork({ ...selectedNetwork, prefixes: [...selectedNetwork.prefixes] });
+                setReviewInvalidated(false);
+              }}>Review selection</button>
             </div>
           </div>
         )}
@@ -227,6 +251,13 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   );
 }
 
+function sameNetwork(left: NetworkInterface, right: NetworkInterface): boolean {
+  return left.interface_name === right.interface_name
+    && left.interface_index === right.interface_index
+    && left.prefixes.length === right.prefixes.length
+    && left.prefixes.every((prefix) => right.prefixes.includes(prefix));
+}
+
 function NetworkDetail({ network }: { network: AppData["networks"]["candidates"][number] }) {
   return (
     <dl className="network-detail">
@@ -251,6 +282,7 @@ async function run<T>(
   setPending: (value: SetupAction | null) => void,
   setError: (value: { action: SetupAction; message: string } | null) => void,
   onChanged: () => void,
+  onFailure?: (error: unknown) => void,
 ): Promise<void> {
   setPending(action);
   setError(null);
@@ -259,6 +291,7 @@ async function run<T>(
     onChanged();
   } catch (error: unknown) {
     setError({ action, message: setupErrorMessage(action, error) });
+    onFailure?.(error);
   } finally {
     setPending(null);
   }
@@ -267,7 +300,7 @@ async function run<T>(
 function setupErrorMessage(action: SetupAction, error: unknown): string {
   if (!(error instanceof SetupRequestError)) return "The local setup operation failed. No additional change is assumed.";
   if (error.code === "precondition_failed") {
-    if (action === "enroll") return "That interface is no longer eligible for enrollment. Refresh the network list and choose again.";
+    if (action === "enroll") return "That interface or its local scope changed before enrollment. Refresh evidence, then review the current network again. No authorization was recorded.";
     if (action === "enable") return "Device Watch could not be enabled because a prerequisite is not satisfied. The network remains authorized, but monitoring was not enabled.";
     return "Device Watch could not be disabled because a prerequisite is not satisfied. Its previous state remains in effect.";
   }

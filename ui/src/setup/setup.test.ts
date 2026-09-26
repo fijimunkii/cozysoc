@@ -75,7 +75,7 @@ describe("createWebSetupClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const client = createWebSetupClient();
-    await client.enrollNetwork("en0");
+    await client.enrollNetwork(networkResponse.candidates[0]!);
     await client.enableDeviceWatch();
 
     expect(calls.filter((call) => call.path === "/api/session")).toHaveLength(1);
@@ -85,7 +85,7 @@ describe("createWebSetupClient", () => {
       expect(new Headers(call.init?.headers).get("X-Cozy-CSRF")).toBe("ccccccccccccccccccccccccccccccccccccccccccc");
       expect(call.init?.credentials).toBe("same-origin");
     }
-    expect(JSON.parse(String(mutations[0]?.init?.body))).toEqual({ interface_name: "en0" });
+    expect(JSON.parse(String(mutations[0]?.init?.body))).toEqual({ interface_name: "en0", expected: networkResponse.candidates[0] });
   });
 
   it("preserves typed browser mutation errors", async () => {

@@ -41,7 +41,7 @@ export interface DeviceWatchControlResult {
 }
 
 export interface SetupClient {
-  enrollNetwork(interfaceName: string): Promise<NetworkEnrollResult>;
+  enrollNetwork(reviewed: NetworkInterface): Promise<NetworkEnrollResult>;
   enableDeviceWatch(): Promise<DeviceWatchControlResult>;
   disableDeviceWatch(): Promise<DeviceWatchControlResult>;
 }
@@ -128,11 +128,14 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient {
   }
 
   return {
-    async enrollNetwork(interfaceName: string) {
-      if (!validInterfaceName(interfaceName)) {
-        throw new SetupRequestError("invalid_request", "Choose a valid local network interface.");
+    async enrollNetwork(reviewed: NetworkInterface) {
+      let expected: NetworkInterface;
+      try {
+        expected = parseNetworkInterface(reviewed);
+      } catch {
+        throw new SetupRequestError("invalid_request", "Review a valid local network interface before authorizing it.");
       }
-      return parseNetworkEnrollResult(await mutate("/api/networks/enroll", { interface_name: interfaceName }));
+      return parseNetworkEnrollResult(await mutate("/api/networks/enroll", { interface_name: expected.interface_name, expected }));
     },
     async enableDeviceWatch() {
       return parseDeviceWatchControl(await mutate("/api/device-watch/enable"));

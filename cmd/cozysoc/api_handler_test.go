@@ -380,6 +380,56 @@ func TestControllerAPIHandlerEnrollsCurrentInterfaceAndFailsClosed(t *testing.T)
 	}
 }
 
+func TestControllerAPIHandlerRejectsChangedReviewedNetworkBeforeEnrollment(t *testing.T) {
+	state := devicewatch.InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast,
+		Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.42/24")}}
+	store := &fakeDeviceStore{enrollScope: domain.NetworkScope{ID: "scope.generated", Kind: "lan", EnrolledAt: time.Unix(1_800_000_000, 0).UTC()}, enrollChanged: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, &fakeDeviceWatchAPIControl{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.networkInspector = handlerInspector{states: map[string]devicewatch.InterfaceState{"en0": state}}
+	reviewed := &api.NetworkInterface{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
+	if _, err := handler.EnrollNetwork(context.Background(), api.NetworkEnrollParams{InterfaceName: "en0", Expected: reviewed}); err != nil {
+		t.Fatalf("unchanged reviewed binding: %v", err)
+	}
+
+	for name, params := range map[string]api.NetworkEnrollParams{
+		"interface index": {InterfaceName: "en0", Expected: &api.NetworkInterface{InterfaceName: "en0", InterfaceIndex: 8, Prefixes: []string{"192.168.1.0/24"}}},
+		"prefixes":        {InterfaceName: "en0", Expected: &api.NetworkInterface{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.0.0/16"}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store.enrollMetadata = nil
+			if _, err := handler.EnrollNetwork(context.Background(), params); !errors.Is(err, localapi.ErrMutationPrecondition) {
+				t.Fatalf("changed reviewed binding error = %v", err)
+			}
+			if store.enrollMetadata != nil {
+				t.Fatal("changed reviewed binding reached storage")
+			}
+		})
+	}
+	store.enrollMetadata = nil
+	handler.networkInspector = handlerInspector{states: map[string]devicewatch.InterfaceState{"en0": {
+		Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast,
+		Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.2.42/24")},
+	}}}
+	if _, err := handler.EnrollNetwork(context.Background(), api.NetworkEnrollParams{InterfaceName: "en0", Expected: reviewed}); !errors.Is(err, localapi.ErrMutationPrecondition) {
+		t.Fatalf("changed OS binding error = %v", err)
+	}
+	if store.enrollMetadata != nil {
+		t.Fatal("changed OS binding reached storage")
+	}
+	store.enrollMetadata = nil
+	if _, err := handler.EnrollNetwork(context.Background(), api.NetworkEnrollParams{InterfaceName: "en0", Expected: &api.NetworkInterface{
+		InterfaceName: "en1", InterfaceIndex: 7, Prefixes: []string{"192.168.2.0/24"},
+	}}); !errors.Is(err, localapi.ErrInvalidMutation) {
+		t.Fatalf("mismatched reviewed interface error = %v", err)
+	}
+	if store.enrollMetadata != nil {
+		t.Fatal("invalid reviewed binding reached storage")
+	}
+}
+
 func stringPtr(value string) *string {
 	return &value
 }

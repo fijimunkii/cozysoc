@@ -98,7 +98,7 @@ func TestWebNetworkEnrollRequiresSessionOriginAndCSRF(t *testing.T) {
 
 	makeRequest := func(authenticated bool, origin, csrf string) *http.Request {
 		var request *http.Request
-		body := strings.NewReader(`{"interface_name":"en0"}`)
+		body := strings.NewReader(`{"interface_name":"en0","expected":{"interface_name":"en0","interface_index":4,"prefixes":["192.0.2.0/24"]}}`)
 		if authenticated {
 			request = authenticatedRequest(http.MethodPost, target, body)
 		} else {
@@ -139,10 +139,19 @@ func TestWebNetworkEnrollRequiresSessionOriginAndCSRF(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("rejected enrollment reached controller %d times", calls)
 	}
+	missingReview := authenticatedRequest(http.MethodPost, target, strings.NewReader(`{"interface_name":"en0"}`))
+	missingReview.Header.Set("Content-Type", "application/json")
+	missingReview.Header.Set("Origin", "http://127.0.0.1:43821")
+	missingReview.Header.Set(webCSRFHeader, testCSRFToken)
+	missingResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingResponse, missingReview)
+	if missingResponse.Code != http.StatusBadRequest || calls != 0 {
+		t.Fatalf("unreviewed enrollment status=%d calls=%d", missingResponse.Code, calls)
+	}
 
 	valid := httptest.NewRecorder()
 	handler.ServeHTTP(valid, makeRequest(true, "http://127.0.0.1:43821", testCSRFToken))
-	if valid.Code != http.StatusOK || calls != 1 || got.InterfaceName != "en0" {
+	if valid.Code != http.StatusOK || calls != 1 || got.InterfaceName != "en0" || got.Expected == nil || got.Expected.InterfaceIndex != 4 {
 		t.Fatalf("valid enrollment response: status=%d calls=%d params=%+v body=%s", valid.Code, calls, got, valid.Body.String())
 	}
 }

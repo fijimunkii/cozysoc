@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -379,6 +380,17 @@ func (h *controllerAPIHandler) EnrollNetwork(ctx context.Context, params api.Net
 			return api.NetworkEnrollResult{}, err
 		}
 		return api.NetworkEnrollResult{}, localapi.ErrMutationPrecondition
+	}
+	if params.Expected != nil {
+		expected := devicewatch.ScopeBinding{InterfaceName: params.Expected.InterfaceName, InterfaceIndex: params.Expected.InterfaceIndex, Prefixes: params.Expected.Prefixes}
+		if expected.InterfaceName != params.InterfaceName || devicewatch.ValidateScopeBinding(expected) != nil {
+			return api.NetworkEnrollResult{}, localapi.ErrInvalidMutation
+		}
+		prefixes := slices.Clone(expected.Prefixes)
+		slices.Sort(prefixes)
+		if binding.InterfaceName != expected.InterfaceName || binding.InterfaceIndex != expected.InterfaceIndex || !slices.Equal(binding.Prefixes, prefixes) {
+			return api.NetworkEnrollResult{}, localapi.ErrMutationPrecondition
+		}
 	}
 	metadata, err := devicewatch.EncodeScopeMetadata(binding)
 	if err != nil {
