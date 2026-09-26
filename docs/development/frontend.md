@@ -169,6 +169,7 @@ Live device rows can open a read-only evidence detail view through `GET /api/dev
 
 Presence (`visible` / `uncertain`) and identity validity are intentionally separate. A retained MAC/IP association can be historical while the device remains listed, and a temporally current identity association is not itself proof of recent presence, trust, or safety. When a source observation has aged out before its longer-lived identity claim, the detail view says the raw source metadata expired instead of reconstructing it.
 
+Device detail reports the controller's original read time. Its presence and identity labels apply to that read, even when the live list refreshes while the detail remains open; reopening the device requests newer evidence.
 
 ## Tools and capability presentation
 
