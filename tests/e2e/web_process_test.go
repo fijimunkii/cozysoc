@@ -301,7 +301,11 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	if err := json.Unmarshal(capabilitiesBody, &webCapabilities); err != nil {
 		t.Fatalf("decode web capabilities: %v: %s", err, capabilitiesBody)
 	}
-	if webCapabilities.CatalogSchemaVersion != capability.SchemaVersion || len(webCapabilities.Capabilities) != 2 {
+	registry, err := capability.Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if webCapabilities.CatalogSchemaVersion != capability.SchemaVersion || len(webCapabilities.Capabilities) != len(registry.List()) {
 		t.Fatalf("unexpected web capability list: %+v", webCapabilities)
 	}
 	byID := make(map[string]processWebCapability, len(webCapabilities.Capabilities))
@@ -324,6 +328,10 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	adguard, ok := byID["adguard-home"]
 	if !ok || adguard.Ownership != "external" || adguard.State.Verification != "unverified" || len(adguard.Targets) != 1 || adguard.Targets[0].Support != "candidate" || adguard.DeepLinkCount != 0 {
 		t.Fatalf("unexpected AdGuard Home candidate projection: %+v", adguard)
+	}
+	opnsense, ok := byID["opnsense"]
+	if !ok || opnsense.Ownership != "external" || opnsense.State.Verification != "unverified" || len(opnsense.Targets) != 1 || opnsense.Targets[0].Support != "candidate" || opnsense.DeepLinkCount != 0 {
+		t.Fatalf("unexpected OPNsense candidate projection: %+v", opnsense)
 	}
 
 	detailResponse, err := client.Get(rootURL + "api/devices/detail?device_id=device.missing")
