@@ -6,6 +6,7 @@ import (
 
 	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
 
@@ -55,7 +56,15 @@ func (h *controllerAPIHandler) CollectAdGuard(ctx context.Context, params api.Ad
 	if h.adguardCollector == nil {
 		return api.AdGuardCollection{}, errors.New("AdGuard Home collection is unavailable")
 	}
-	result, err := h.adguardCollector.Collect(ctx, params.ScopeID)
+	var result adguard.CollectionResult
+	var err error
+	if params.Expected == nil {
+		result, err = h.adguardCollector.Collect(ctx, params.ScopeID)
+	} else {
+		binding := devicewatch.ScopeBinding{InterfaceName: params.Expected.Interface.InterfaceName,
+			InterfaceIndex: params.Expected.Interface.InterfaceIndex, Prefixes: params.Expected.Interface.Prefixes}
+		result, err = h.adguardCollector.CollectReviewed(ctx, params.ScopeID, params.Expected.Endpoint, binding)
+	}
 	if err != nil {
 		return api.AdGuardCollection{}, err
 	}

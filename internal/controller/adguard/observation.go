@@ -12,6 +12,7 @@ import (
 )
 
 const QueryObservationKind = "dns-query-observed"
+const QueryAgeWindow = 24 * time.Hour
 
 var ErrObservationScope = errors.New("AdGuard Home observation scope is invalid")
 
@@ -28,7 +29,7 @@ type ObservationStats struct {
 // The caller is responsible for verifying that scopeID and prefixes belong to
 // a currently enrolled network before reading private query history.
 func BuildObservations(snapshot Snapshot, scopeID, sensorID string, prefixes []netip.Prefix, now time.Time) ([]domain.Observation, ObservationStats, error) {
-	if scopeID == "" || sensorID == "" || now.IsZero() || len(prefixes) == 0 || len(prefixes) > 32 || len(snapshot.Queries) > maxQueries || (!snapshot.Status.QueryLogEnabled && len(snapshot.Queries) != 0) {
+	if scopeID == "" || sensorID == "" || now.IsZero() || len(prefixes) == 0 || len(prefixes) > 32 || len(snapshot.Queries) > MaxQueryLogEntries || (!snapshot.Status.QueryLogEnabled && len(snapshot.Queries) != 0) {
 		return nil, ObservationStats{}, ErrObservationScope
 	}
 	for _, prefix := range prefixes {
@@ -64,7 +65,7 @@ func BuildObservations(snapshot Snapshot, scopeID, sensorID string, prefixes []n
 			stats.OutsideScope++
 			continue
 		}
-		if query.Time.IsZero() || query.Time.After(now) || query.Time.Before(now.Add(-24*time.Hour)) {
+		if query.Time.IsZero() || query.Time.After(now) || query.Time.Before(now.Add(-QueryAgeWindow)) {
 			stats.OutsideWindow++
 			continue
 		}

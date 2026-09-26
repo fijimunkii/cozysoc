@@ -23,7 +23,7 @@ export function parseAdGuardStatus(input: unknown): AdGuardStatus {
   return { connected: true, endpoint, version: value.version, running: value.running as boolean, protection_enabled: value.protection_enabled as boolean, filtering_enabled: value.filtering_enabled as boolean, query_log_enabled: value.query_log_enabled as boolean, anonymized_clients: value.anonymized_clients as boolean };
 }
 
-function parseAdminOrigin(input: unknown): string {
+export function parseAdminOrigin(input: unknown): string {
   if (typeof input !== "string" || input.length > 128) throw new Error("Invalid AdGuard Home admin origin");
   let url: URL;
   try { url = new URL(input); } catch { throw new Error("Invalid AdGuard Home admin origin"); }

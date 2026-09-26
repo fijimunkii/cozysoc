@@ -25,7 +25,11 @@ func (c *Client) DisconnectAdGuard(ctx context.Context) (api.AdGuardConnection, 
 }
 
 func (c *Client) CollectAdGuard(ctx context.Context, scopeID string) (api.AdGuardCollection, error) {
-	encoded, err := json.Marshal(api.AdGuardCollectParams{ScopeID: scopeID})
+	return c.CollectAdGuardReviewed(ctx, api.AdGuardCollectParams{ScopeID: scopeID})
+}
+
+func (c *Client) CollectAdGuardReviewed(ctx context.Context, params api.AdGuardCollectParams) (api.AdGuardCollection, error) {
+	encoded, err := json.Marshal(params)
 	if err != nil {
 		return api.AdGuardCollection{}, fmt.Errorf("encode AdGuard Home collection request: %w", err)
 	}

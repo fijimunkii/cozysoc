@@ -7,7 +7,15 @@ type AdGuardConnectParams struct {
 }
 
 type AdGuardCollectParams struct {
-	ScopeID string `json:"scope_id"`
+	ScopeID  string                  `json:"scope_id"`
+	Expected *AdGuardCollectExpected `json:"expected,omitempty"`
+}
+
+// Expected binds a browser-approved read to the reviewed instance and scope.
+// Native foreground collection can omit it because it has its own prompt.
+type AdGuardCollectExpected struct {
+	Endpoint  string           `json:"endpoint"`
+	Interface NetworkInterface `json:"interface"`
 }
 
 // AdGuardCollection reports only bounded counts and limitations. Private query

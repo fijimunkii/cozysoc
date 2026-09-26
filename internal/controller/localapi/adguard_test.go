@@ -98,10 +98,19 @@ func TestAdGuardCollectionNativeBoundaryReturnsCountsOnly(t *testing.T) {
 	if strings.Contains(string(encoded), "private.example") || strings.Contains(string(encoded), `"client_ip":`) || strings.Contains(string(encoded), "192.0.2.4") {
 		t.Fatalf("private query data leaked: %s", encoded)
 	}
+	if _, err := client.CollectAdGuardReviewed(context.Background(), api.AdGuardCollectParams{ScopeID: "scope.home", Expected: &api.AdGuardCollectExpected{
+		Endpoint: "https://192.0.2.5:3000", Interface: api.NetworkInterface{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.0.2.0/24"}},
+	}}); err != nil || h.calls != 2 {
+		t.Fatalf("reviewed collection boundary: %v, calls %d", err, h.calls)
+	}
 	for _, params := range []any{map[string]string{"scope_id": ""}, map[string]any{"scope_id": "scope.home", "unknown": true}, []string{"scope.home"}} {
 		_, err := client.CallWithParams(context.Background(), api.MethodAdGuardCollect, params)
-		if err == nil || !strings.Contains(err.Error(), "invalid_request") || h.calls != 1 {
+		if err == nil || !strings.Contains(err.Error(), "invalid_request") || h.calls != 2 {
 			t.Fatalf("invalid collection reached handler: %v, calls %d", err, h.calls)
 		}
+	}
+	_, err = client.CallWithParams(context.Background(), api.MethodAdGuardCollect, map[string]any{"scope_id": "scope.home", "expected": map[string]any{"endpoint": "https://192.0.2.5", "unknown": true}})
+	if err == nil || !strings.Contains(err.Error(), "invalid_request") || h.calls != 2 {
+		t.Fatalf("unknown review binding reached handler: %v, calls %d", err, h.calls)
 	}
 }

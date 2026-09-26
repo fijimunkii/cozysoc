@@ -4,6 +4,16 @@
   gap: 20px;
 }
 
+.adguard-collection-review {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.adguard-collection-review button {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .tools-controller,
 .capability-card {
   min-width: 0;
