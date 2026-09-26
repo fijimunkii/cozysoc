@@ -1,8 +1,10 @@
 # Gateway check preview (native, review only)
 
-Related to #14 and #29. This prepares a narrow active-check review boundary after
-the local metadata read and browser panel. It does **not** implement a probe,
-record execution consent, or complete connectivity diagnosis.
+Related to #14 and #29. This is the read-only native plan for a selected gateway
+target. Reading a plan sends no probe, records no execution consent, and does not
+complete connectivity diagnosis. The separately approved
+[native command](interactive-gateway-check.md) and
+[local browser flow](browser-gateway-check.md) can run the experimental check.
 
 ## Entry point
 
@@ -19,12 +21,13 @@ traffic limits, and privacy/interpretation limitations. Review expires after
 thirty seconds; the preview is neither a capability token nor a signed approval.
 Reissuing a preview never accumulates consent or schedules work.
 
-There is no default address, automatic gateway guess, browser route, execution
-command, or approve/run API. A [macOS route/source preflight](gateway-route-preflight.md)
-now inspects local routing metadata for the selected target; other platforms
-explicitly report unsupported route inspection. Existing Overview reads are
-unchanged. The destination is user-selected; prefix membership does not verify
-that it is a gateway, reachable, or even another machine rather than this host.
+There is no default address or automatic gateway guess. A
+[macOS route/source preflight](gateway-route-preflight.md) inspects local routing
+metadata for the selected target; other platforms explicitly report unsupported
+route inspection. The destination is user-selected; prefix membership does not
+verify that it is a gateway, reachable, or even another machine rather than this
+host. This preview is not an approval endpoint: the native and browser flows each
+require a separate, deliberate one-shot decision.
 
 ## Scope and authority
 
@@ -50,47 +53,52 @@ remain in the full binding; they do not authorize IPv6 probes. The pure builder
 bounds and copies its input and canonicalizes prefix order without mutation.
 
 Matching metadata cannot identify networks that reuse the same prefixes and
-interface. The new route review can establish sampled routing-table/interface
+interface. The route review can establish sampled routing-table/interface
 address consistency, not a future socket's source or egress binding, gateway role,
-ICMP permission, or application-specific routing policy. No sender exists.
+ICMP permission, or application-specific routing policy. The
+[bounded ICMP sender](gateway-icmp-sender.md) independently checks the binding
+before each send after one-shot admission; it does not trust the preview DTO.
 
-## Proposed executor limits, not implemented enforcement
+## Fixed review profile and execution limits
 
-The fixed profile proposes three ICMP echo attempts, at least one second between
+The fixed profile permits three ICMP echo attempts, at least one second between
 attempt starts, a one-second attempt deadline, and a five-second total deadline.
-It proposes one concurrent run and a minimum sixty-second controller-wide run
-interval (not per target), with no background scheduling or hidden retries.
+The [run coordinator](gateway-run-control.md) enforces one concurrent run and a
+minimum sixty-second controller-wide run interval (not per target), with no
+background scheduling or hidden retries.
 There is no configurable caller override in this initial profile.
 
-Each attempt proposes 32 payload bytes. The maximum 120 request bytes counts
+Each attempt uses 32 payload bytes. The maximum 120 request bytes counts
 three eight-byte ICMP echo headers plus data. This is **not total wire traffic**:
 IP/link headers, neighbor resolution, link retransmissions, and replies are
-excluded. A future executor must separately bound reception and disclose those
-limits. Probes can be logged by the destination or intervening infrastructure;
-no DNS lookup, third-party endpoint, or household payload is planned.
+excluded. The sender separately bounds reception as described in its
+[transport contract](gateway-icmp-sender.md). Probes can be logged by the
+destination or intervening infrastructure; the sender uses no DNS lookup,
+third-party endpoint, or household payload.
 
-These ceilings are reviewable data and future implementation requirements.
-There is no current traffic-limiting implementation to certify. Execution must
-add explicit one-shot consent, authoritative plan storage/consumption, expiry,
-revalidation before every send, verified source/route/interface binding,
-permissions, cancellation, bounded reception, reply matching, controller-wide
-rate/concurrency enforcement, and audited completion/failure. Never accept this
-client-visible DTO as authority to send. An ICMP failure alone must not become an
-internet-down verdict or a security finding.
+These ceilings are reviewable data, not authority to send. The experimental
+[consent session](gateway-consent-session.md) consumes a one-shot review after
+explicit approval; the coordinator and sender enforce expiry, fresh pre-send
+checks, rate/concurrency limits, bounded reception, reply matching, and durable
+execution audits. An ICMP failure alone does not become an internet-down verdict
+or a security finding. The [isolated macOS lab](macos-network-lab.md) exercises
+the native path, while packaged permissions and physical egress remain release
+gates.
 
 ## Evidence
 
 Pure policy tests cover destination syntax/scope, overlapping subnets, context
 bounds, fixed ceilings, clock bounds, and input isolation. Controller tests cover
 enrollment, complete binding, cancellation, safe errors, and no implicit grant.
-UDS tests cover authentication, narrow inputs, error mapping, absent execution
-methods, and bounded handler contexts. Linux process E2E previews only local
+UDS tests cover authentication, narrow inputs, error mapping, and bounded handler
+contexts. Linux process E2E previews only local
 metadata before/after enrollment and checks that Device Watch remains off and
 that previews create neither audits nor observation/coverage history. Its
 enrolled portion needs an RFC1918 interface and otherwise explicitly skips.
 
-No tests send ICMP or otherwise probe public/unowned networks. Cross-compilation
-is not macOS runtime, route-binding, ICMP-permission, or hardware validation.
+Preview tests send no ICMP. The separate isolated macOS lab exercises real ICMP
+against its controlled peer; it does not probe public or unowned networks or
+validate packaged permissions and physical hardware.
 
 References: [Go numeric address parsing](https://pkg.go.dev/net/netip),
 [private IPv4 addressing](https://www.rfc-editor.org/rfc/rfc1918), and
