@@ -69,7 +69,7 @@ function LiveHistoryPanel({ load }: { load: GatewayHistoryLoader }) {
     <button type="button" className="primary-action" disabled={view.kind === "loading"} onClick={() => { void readHistory(); }}>
       {view.kind === "error" ? "Retry history read" : view.kind === "history" ? "Refresh history list" : "Read gateway history"}
     </button>
-    <p className="gateway-history-limits">These are historical ICMP checks of a selected private IPv4 target, whose gateway role is unverified. They do not measure current connectivity, DNS, whole-network quality, security, or monitoring coverage. Creating a check requires the separate experimental native command and one-shot approval.</p>
+    <p className="gateway-history-limits">These are historical ICMP checks of a selected private IPv4 target, whose gateway role is unverified. They do not measure current connectivity, DNS, whole-network quality, security, or monitoring coverage. A new check requires a separate review and one-shot approval through the experimental browser flow or native command.</p>
   </section>;
 }
 function HistoryDetails({ data }: { data: GatewayHistory }) {

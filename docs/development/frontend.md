@@ -17,7 +17,7 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
 - chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
 - serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
-- exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for status/capabilities/coverage/devices/activity/networks, and narrowly typed network-enrollment / Device Watch control mutations;
+- exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for status/capabilities/coverage/devices/activity/networks/network quality, narrow enrollment / Device Watch control mutations, and an explicitly reviewed one-shot gateway check;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
 - requires the exact local origin on the browser-session bootstrap;
 - rejects request bodies and query parameters on the parameterless coverage endpoint;
@@ -51,7 +51,9 @@ State-changing browser endpoints require an additional mutation guard; the SameS
 
 The CSRF value is designed for in-memory frontend use only. It is not stored in a URL, localStorage, controller configuration, or the UDS credential file. Cross-origin requests cannot obtain it through a readable response, and unknown `/api/*` routes remain unavailable.
 
-The onboarding mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to typed controller methods. Browser enrollment requires the reviewed interface index and prefix snapshot alongside its name; the controller compares it with a fresh binding before storage. No arbitrary method name, command, file path, or network destination enters the native bridge. The setup UI uses these routes for network enrollment and Device Watch enable/disable.
+The onboarding mutation routes are `POST /api/networks/enroll`, `POST /api/device-watch/enable`, and `POST /api/device-watch/disable`; `GET /api/networks` supplies the read-only enrollment state needed by onboarding. They map only to typed controller methods. Browser enrollment requires the reviewed interface index and prefix snapshot alongside its name; the controller compares it with a fresh binding before storage. No arbitrary method name, command, or file path enters the native bridge; the gateway route accepts only one validated private IPv4 target. The setup UI uses these routes for network enrollment and Device Watch enable/disable.
+
+The [experimental browser gateway check](browser-gateway-check.md) adds two fixed POST routes. Review returns the selected private IPv4 target, route-associated source, enrolled interface/prefixes and fixed request budget without sending traffic. A separate approval consumes a short-lived web review, starts the controller's connection-bound native consent session, and proceeds only if its fresh review exactly matches those details. The native ticket and challenge remain inside the controller/native bridge. This route does not offer scheduling, generic execution, HTTPS or resolver checks.
 
 Expected typed controller mutation errors are mapped to bounded HTTP outcomes (`400`, `404`, `409`, `412`, `501`); transport/internal failures remain a generic `503 controller_unavailable` without copying controller diagnostic strings into the browser.
 

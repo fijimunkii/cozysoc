@@ -108,7 +108,8 @@ raw measurements. The HTTPS detail reuses the retained-history validator; its
 run reference, interface, sample times and execution outcome must agree with the
 selected comparison record. Fixed UI explanations provide safe next steps for each supported
 conclusion. Expandable records separate execution outcomes from measurement results.
-No browser execution authority is added.
+The diagnosis read grants no execution authority; the separate
+[browser gateway flow](browser-gateway-check.md) requires a fresh review and approval.
 
 Tests cover a shared read snapshot across a concurrent writer, read-only transaction
 rollback without losing an acknowledged audit, corruption without partial success,

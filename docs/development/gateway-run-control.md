@@ -5,7 +5,8 @@ Related to #14 and #29. This follows the
 one-shot orchestration and a real SQLite audit adapter. The later
 [experimental native consent session](gateway-consent-session.md) exposes one
 connection-bound operation only after explicit macOS controller opt-in. Ordinary
-startup and the browser still cannot initiate checks. Existing
+startup cannot initiate checks; the [local browser flow](browser-gateway-check.md)
+requires a separate short-lived review and explicit approval. Existing
 `network-quality-plan` responses remain read-only previews and grant no consent.
 The [measurement integration](gateway-run-measurements.md) preserves measured
 terminal audits. There is no scheduler, automatic probing, generic execution API
@@ -105,7 +106,7 @@ so restarting cannot reset the limiter to immediate eligibility. Exactly one
 control instance must be owned per controller lifetime; this is not a cross-process
 or distributed rate limiter. The controller lifecycle owns that single instance. The dedicated native
 consent session is available only with explicit experimental startup opt-in;
-there is no browser or general-purpose execution endpoint.
+there is no general-purpose execution endpoint.
 
 Prepare and Run each receive a five-second operation context. Run is additionally
 capped by the original review's remaining wall/monotonic lifetime, including the

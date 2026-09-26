@@ -2,8 +2,9 @@
 
 Related to #14 and #29. This adds the first authenticated native review / explicit
 consent / measured-result exchange through the controller-owned coordinator.
-It is **off by default**, with no browser route, Run button, automatic check,
-scheduler, new dependency, or general-purpose execution API.
+It is **off by default**, with no automatic check, scheduler, new dependency,
+or general-purpose execution API. The [local browser flow](browser-gateway-check.md)
+uses this same connection-bound session after separate on-screen approval.
 
 ## Explicit experimental boundary
 
@@ -30,7 +31,8 @@ deliberate opt-in native development boundary, not a claim that those gates pass
 
 The [interactive native command](interactive-gateway-check.md) now presents
 `localapi.Client.CheckGateway` with a foreground terminal, complete disclosure
-and exact default-decline confirmation. There is still no browser consent UI.
+and exact default-decline confirmation. The local browser also offers a narrow
+review and one-shot consent action; neither path retries automatically.
 It never approves on load or retries automatically.
 
 ## One connection, one review, one decision
@@ -141,9 +143,8 @@ cover EOF, timeout and delayed launch after owner death. The longer dedicated la
 timeout accommodates the real startup quiet interval; production budgets do not
 change.
 
-Neither #14 nor #29 is complete. The interactive native command is implemented.
-Still next: appropriate browser/UI presentation,
-bounded retained-result reads/assessment, and the remaining packaged/hardware
+Neither #14 nor #29 is complete. The native command and local browser flow are implemented.
+Still next: packaged-context permission recovery and the remaining packaged/hardware
 validation. Do not turn this experimental switch into a default merely because
 the controlled native lab passes.
 

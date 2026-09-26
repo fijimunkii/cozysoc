@@ -4,7 +4,8 @@ Related to #14 and #29. This joins the existing one-shot coordinator to the
 bounded ICMP candidate. A later [controller lifecycle](gateway-controller-lifecycle.md)
 owns a dormant-by-default instance. The [native consent session](gateway-consent-session.md)
 requires explicit experimental macOS startup opt-in plus one-shot approval. There
-is no browser consent flow, scheduler or automatic active check.
+is a [narrow local browser consent flow](browser-gateway-check.md), but no scheduler
+or automatic active check.
 Enrollment and Device Watch enablement still do not authorize probe traffic.
 
 ## Narrow internal adapter

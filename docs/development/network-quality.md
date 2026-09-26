@@ -95,7 +95,9 @@ stayed on the same network.
 Gateway, resolver and selected-HTTPS checks now have separate experimental
 native one-shot paths. Each requires its own saved or reviewed target, bounded
 run and deliberate foreground consent; none is enabled by Device Watch
-enrollment or exposed as a browser Run action. Retained results are available
+enrollment or treated as a browser approval. The separate
+[browser gateway flow](browser-gateway-check.md) has its own review and consent
+boundary. Retained results are available
 through bounded read-only history, while local interface evidence remains a
 separate passive read. The app continues to work offline with these active
 paths disabled. Physical-network, packaged permission, VPN, sleep/resume and
@@ -118,9 +120,10 @@ active execution remain separately gated.
 
 The [internal gateway run control](gateway-run-control.md) now provides bounded,
 one-shot review consumption and durable execution-state audits. It is wired to the [experimental native consent protocol](gateway-consent-session.md)
-only after explicit macOS controller opt-in. Ordinary startup and the browser do
-not gain active checks. The [interactive native command](interactive-gateway-check.md)
-requires a foreground terminal and deliberate approval. Packaged-context validation
+only after explicit macOS controller opt-in. Ordinary startup does not gain active checks.
+The [interactive native command](interactive-gateway-check.md) requires a foreground
+terminal and deliberate approval; the [local browser flow](browser-gateway-check.md)
+requires a separate on-screen review and approval. Packaged-context validation
 still precedes broad user-facing controls.
 
 ## Explicitly gated ICMP candidate
