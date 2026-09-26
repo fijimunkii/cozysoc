@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { CoverageDimension, CoverageObservationPoint, CoverageReport, CoverageSourceState } from "./types";
 import {
   coverageCadencePresentation,
@@ -47,7 +48,7 @@ export function CoveragePanel({ report }: CoveragePanelProps) {
 
 function ObservationPointCard({ point }: { point: CoverageObservationPoint }) {
   const state = coverageStatePresentation(point.state);
-  const domID = `coverage-${point.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const domID = useId();
 
   return (
     <article className="observation-card" aria-labelledby={`${domID}-title`}>

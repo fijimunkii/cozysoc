@@ -42,6 +42,25 @@ describe("CoveragePanel", () => {
     expect(document.querySelector("img")).toBeNull();
   });
 
+  it("keeps accessible headings distinct when point tokens normalize alike", () => {
+    const report = structuredClone(parseCoverageReport(demoCoverageRaw));
+    const first = report.observation_points[0];
+    if (first === undefined) throw new Error("demo point missing");
+    first.id = "sensor.one";
+    const second = structuredClone(first);
+    second.id = "sensor-one";
+    report.observation_points.push(second);
+
+    const { container } = render(<CoveragePanel report={report} />);
+    const cards = Array.from(container.querySelectorAll("article.observation-card"));
+    expect(cards).toHaveLength(2);
+    const titleIDs = cards.map((card) => card.getAttribute("aria-labelledby"));
+    expect(new Set(titleIDs).size).toBe(2);
+    for (const [index, card] of cards.entries()) {
+      expect(card.querySelector("h3")?.id).toBe(titleIDs[index]);
+    }
+  });
+
   it("does not introduce protection-score language", () => {
     render(<CoveragePanel report={parseCoverageReport(demoCoverageRaw)} />);
 
