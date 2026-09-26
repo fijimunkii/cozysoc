@@ -227,14 +227,14 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         ) : null}
         {activeData && page === "devices" ? (
           activeData.devices === null
-            ? <section className="product-card empty-product-state device-read-unavailable" aria-labelledby="devices-unavailable-title"><h2 id="devices-unavailable-title">Device evidence is temporarily unavailable</h2><p>Current presence is unknown. Coverage and other local evidence can still be read.</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry device evidence</button> : null}</section>
+            ? <section className="product-card empty-product-state device-read-unavailable" aria-labelledby="devices-unavailable-title"><h2 id="devices-unavailable-title">Device evidence is temporarily unavailable</h2><p role="alert">Current presence is unknown. Coverage and other local evidence can still be read.</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry device evidence</button> : null}</section>
             : view.mode === "live"
             ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} correctionClient={liveDeviceCorrectionClient} loadMerges={loadDeviceMerges} splitClient={liveDeviceSplitClient} loadSplits={loadDeviceSplits} onChanged={retryLive} onNavigate={setPage} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
         ) : null}
         {activeData && page === "activity" ? (
           activeData.activity === null
-            ? <section className="product-card empty-product-state" aria-labelledby="activity-unavailable-title"><h2 id="activity-unavailable-title">Activity is temporarily unavailable</h2><p>{activeData.activity_error ?? "The local activity projection could not be read. Existing device and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry activity</button> : null}</section>
+            ? <section className="product-card empty-product-state" aria-labelledby="activity-unavailable-title"><h2 id="activity-unavailable-title">Activity is temporarily unavailable</h2><p role="alert">{activeData.activity_error ?? "The local activity projection could not be read. Existing device and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry activity</button> : null}</section>
             : <ActivityPage activity={activeData.activity} mode={view.mode === "live" ? "live" : "demo"} />
         ) : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
@@ -243,8 +243,8 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         {activeData && page === "coverage" ? activeData.coverage.reports.map((report) => <CoveragePanel key={report.capability_id} report={report} />) : null}
         {activeData && page === "tools" ? (
           activeData.tools === null
-            ? <section className="product-card empty-product-state" aria-labelledby="tools-unavailable-title"><h2 id="tools-unavailable-title">Tool information is temporarily unavailable</h2><p>{activeData.tools_error ?? "The local capability catalog could not be read. Device, activity, and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry tools</button> : null}</section>
-            : <ToolsPage tools={activeData.tools} storage={activeData.storage} storageError={activeData.storage_error} mode={view.mode === "live" ? "live" : "demo"} onNavigate={(target) => setPage(target)} />
+            ? <section className="product-card empty-product-state" aria-labelledby="tools-unavailable-title"><h2 id="tools-unavailable-title">Tool information is temporarily unavailable</h2><p role="alert">{activeData.tools_error ?? "The local capability catalog could not be read. Device, activity, and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry tools</button> : null}</section>
+            : <ToolsPage tools={activeData.tools} storage={activeData.storage} storageError={activeData.storage_error} mode={view.mode === "live" ? "live" : "demo"} onRetryStorage={retryLive} onNavigate={(target) => setPage(target)} />
         ) : null}
       </main>
     </div>
