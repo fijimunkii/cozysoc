@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGatewayHistoryFromWeb, type GatewayHistory, type GatewayHistoryLoader, type HistoryEvidence, type HistoryOutcome, type HistoryRun } from "./gateway-history";
+import { HistoryExport } from "./HistoryExport";
+import { gatewayHistoryExportJSON } from "./history-export";
 import "./local-quality.css";
 import "./gateway-history.css";
 
@@ -80,6 +82,7 @@ function HistoryDetails({ data }: { data: GatewayHistory }) {
     {data.truncated || data.scan_truncated ? <p role="note" className="gateway-history-warning">The history list is incomplete: {data.truncated ? "the 20-run limit was reached. " : ""}{data.scan_truncated ? "the record read limit was reached. " : ""}More retained checks may exist.</p> : null}
     <p>Expired or missing records are not reconstructed. Older retained runs can be inspected with their run reference using the native history command; a reference grants no execution authority.</p>
     {data.runs.length > 0 ? <ul className="gateway-history-list">{data.runs.map((run) => <li key={run.run_id}><RunDetails run={run} /></li>)}</ul> : null}
+    <HistoryExport data={data} label="gateway" filename="cozysoc-gateway-history.json" serialize={gatewayHistoryExportJSON} privacy="The file can include private target and source IP addresses, interface details and run references." />
   </>;
 }
 function RunDetails({ run }: { run: HistoryRun }) {

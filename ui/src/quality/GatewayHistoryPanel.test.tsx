@@ -5,7 +5,7 @@ import { type GatewayHistory, type HistoryEvidence } from "./gateway-history";
 import { historyFixture } from "./history-fixtures.test-helper";
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function read(name = "Read gateway history") { await act(async () => fireEvent.click(screen.getByRole("button", { name }))); }
 describe("retained history panel", () => {
   it("reads manually, keeps original times and never treats refresh or focus as another check", async () => {
@@ -21,6 +21,32 @@ describe("retained history panel", () => {
     await read("Refresh history list"); expect(load).toHaveBeenCalledTimes(2);
     expect(container.querySelector('time[datetime="2026-09-12T11:59:56Z"]')).toBeTruthy();
     expect(screen.queryByRole("button", { name: /run|approve|enable/i })).toBeNull();
+  });
+  it("previews the exact local export, saves it without rereading, and clears the preview on refresh", async () => {
+    const first = historyFixture(); first.truncated = true;
+    const second = historyFixture(); second.runs = [];
+    const load = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    const createObjectURL = vi.fn(() => "blob:local-export");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", class ExportURL extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    render(<GatewayHistoryPanel mode="live" load={load} />);
+    expect(screen.queryByRole("button", { name: "Review gateway history JSON" })).toBeNull();
+    await read();
+    fireEvent.click(screen.getByRole("button", { name: "Review gateway history JSON" }));
+    const preview = screen.getByLabelText("gateway history JSON preview").textContent!;
+    expect(JSON.parse(preview)).toEqual({ format: "cozysoc-gateway-history", version: 1, snapshot: first });
+    fireEvent.click(screen.getByRole("button", { name: "Save gateway history JSON" }));
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(await (createObjectURL.mock.calls[0] as unknown as [Blob])[0].text()).toBe(preview);
+    await read("Refresh history list");
+    expect(screen.queryByRole("button", { name: "Save gateway history JSON" })).toBeNull();
+    expect(load).toHaveBeenCalledTimes(2);
   });
   it("keeps no replies, incomplete, missing and legacy evidence distinct", async () => {
     for (const [evidence, title] of [
