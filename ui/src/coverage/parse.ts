@@ -84,6 +84,7 @@ export function parseCoverageReport(input: unknown): CoverageReport {
   if (report.state === "unconfigured" || report.observation_points.length === 0) {
     fail("configured coverage requires at least one configured observation point");
   }
+  uniqueBy(report.observation_points, (point) => point.id, "coverage.observation_points");
   if (report.observation_points.length === 1) {
     const point = report.observation_points[0];
     if (point === undefined || point.state !== report.state || point.reason !== report.reason || point.next_step !== report.next_step) {

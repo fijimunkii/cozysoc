@@ -33,6 +33,17 @@ describe("parseCoverageReport", () => {
     expect(() => parseCoverageReport(raw)).toThrow(/aggregate must match/);
   });
 
+  it("rejects duplicate observation point IDs in a multi-point report", () => {
+    const raw = structuredClone(demoCoverageRaw) as {
+      observation_points: Array<Record<string, unknown>>;
+    };
+    const point = raw.observation_points[0];
+    if (point === undefined) throw new Error("demo point missing");
+    raw.observation_points.push(structuredClone(point));
+
+    expect(() => parseCoverageReport(raw)).toThrow(/duplicate/);
+  });
+
   it("rejects duplicate expected-unverified dimensions", () => {
     const raw = structuredClone(demoCoverageRaw) as {
       observation_points: Array<{ scope: { expected_unverified: unknown[] } }>;
