@@ -101,29 +101,29 @@ func (c *Collector) CollectReviewed(ctx context.Context, scopeID, expectedEndpoi
 	if err != nil {
 		return CollectionResult{}, err
 	}
+	result = CollectionResult{ScopeID: scopeID, Read: len(snapshot.Neighbors), IPv4Total: snapshot.IPv4Total, IPv6Total: snapshot.IPv6Total,
+		IPv4Truncated: snapshot.IPv4Truncated, IPv6Truncated: snapshot.IPv6Truncated}
 	latest, err := c.store.GetNetworkScope(ctx, scopeID)
 	if err != nil || latest.RetiredAt != nil || !bytes.Equal(latest.Metadata, scope.Metadata) {
-		return CollectionResult{}, ErrObservationScope
+		return result, ErrObservationScope
 	}
 	if _, err := devicewatch.ValidateCurrentScope(ctx, c.inspector, binding); err != nil {
-		return CollectionResult{}, ErrObservationScope
+		return result, ErrObservationScope
 	}
 	now := c.now().UTC()
 	digest := sha256.Sum256([]byte(scopeID + "\x00" + expectedEndpoint))
 	sensorID := "sensor.opnsense." + hex.EncodeToString(digest[:16])
 	observations, stats, err := BuildObservations(snapshot, scopeID, sensorID, prefixes, now)
 	if err != nil {
-		return CollectionResult{}, err
+		return result, err
 	}
-	result = CollectionResult{ScopeID: scopeID, Read: len(snapshot.Neighbors), IPv4Total: snapshot.IPv4Total, IPv6Total: snapshot.IPv6Total,
-		IPv4Truncated: snapshot.IPv4Truncated, IPv6Truncated: snapshot.IPv6Truncated,
-		SkippedOutside: stats.OutsideScope, SkippedDuplicate: stats.Duplicate}
+	result.SkippedOutside, result.SkippedDuplicate = stats.OutsideScope, stats.Duplicate
 	if len(observations) == 0 {
 		return result, nil
 	}
 	metadata := json.RawMessage(`{"schema_version":1,"capability":"opnsense"}`)
 	if err := c.store.EnsureSensor(ctx, domain.Sensor{ID: sensorID, ScopeID: scopeID, Kind: "opnsense", Ownership: "external", RegisteredAt: now, Metadata: metadata}); err != nil {
-		return CollectionResult{}, ErrObservationIngestion
+		return result, ErrObservationIngestion
 	}
 	for _, observation := range observations {
 		receipt, err := c.ingestor.SubmitObservation(ctx, observation, nil)

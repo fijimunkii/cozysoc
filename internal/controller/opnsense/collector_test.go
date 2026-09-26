@@ -2,10 +2,13 @@ package opnsense
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net"
 	"net/netip"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,7 +62,8 @@ func TestRouterCollectorRequiresReviewedScopeAndStoresOnlyRouterEvidence(t *test
 	connection.probe = func(string, string, secretstore.Secret, []byte) (serviceProbe, error) {
 		return routerCollectorProbe{snapshot: snapshot, reads: &reads, onRead: onRead}, nil
 	}
-	store, err := storage.Open(t.TempDir(), storage.DefaultLimits())
+	dir := t.TempDir()
+	store, err := storage.Open(dir, storage.DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,5 +141,39 @@ func TestRouterCollectorRequiresReviewedScopeAndStoresOnlyRouterEvidence(t *test
 	}
 	if _, err := collector.CollectReviewed(ctx, "scope.home", "https://192.168.1.1", binding); !errors.Is(err, ErrObservationScope) {
 		t.Fatalf("scope retirement during read was accepted: %v", err)
+	}
+	auditDB, err := sql.Open("sqlite", filepath.Join(dir, storage.Filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer auditDB.Close()
+	rows, err := auditDB.QueryContext(ctx, `SELECT payload FROM audit_events WHERE kind='opnsense-collection'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	failedAfterRead := false
+	for rows.Next() {
+		var encoded string
+		if err := rows.Scan(&encoded); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(encoded, "192.168.1.10") || strings.Contains(encoded, "02:00:00:00:00:10") || strings.Contains(encoded, "private-api-secret") {
+			t.Fatalf("private router data leaked to audit: %s", encoded)
+		}
+		var payload struct {
+			Phase string `json:"phase"`
+			Read  int    `json:"read"`
+		}
+		if err := json.Unmarshal([]byte(encoded), &payload); err != nil {
+			t.Fatal(err)
+		}
+		failedAfterRead = failedAfterRead || (payload.Phase == "failed" && payload.Read == 3)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !failedAfterRead {
+		t.Fatal("scope retirement did not audit the completed private read")
 	}
 }
