@@ -76,7 +76,7 @@ export function AdGuardStatusPanel({ mode, load = loadAdGuardStatus, collection 
           </> : <p>Filter list details are unavailable from this status read. The filtering setting above does not identify active list sources.</p>}
         </div>
         {status.running && status.query_log_enabled && !review ? <button type="button" className="secondary-action" disabled={collectionState === "loading"} onClick={() => void prepareCollection()}>Review one DNS history collection</button> : null}
-        {review ? <div className="adguard-collection-review">
+        {review ? <div className="tools-collection-review">
           <h3>Review one private DNS history read</h3>
           <p>Cozy SOC will read up to {review.max_queries} queries from the last {review.max_query_age_hours} hours from <code>{review.endpoint}</code> and keep only visible client IPs in the enrolled scope. Saved observations follow local ephemeral retention. No DNS or network settings change.</p>
           <dl className="tools-facts">

@@ -6,10 +6,12 @@ candidate targets the exact 26.7.4 API shape. A native, foreground-only
 `opnsense-status` makes a fresh version read, and
 `opnsense-disconnect` disables local intent before removing the protected
 credential. `opnsense-collect ENROLLED_SCOPE_ID` permits one separately approved
-ARP/NDP read. The Tools page can request a fresh status-only read and open a
+ARP/NDP read; the authenticated local browser offers its own one-use review
+and approval for the same bounded collector. The Tools page can request a
+fresh status-only read and open a
 validated credential-free link to the router's own admin page. The link is
 withheld when the router shares the Cozy SOC web session's host. There is no
-browser setup or browser neighbor collection, no background polling,
+browser connection setup or background polling,
 network-changing operation, or supported-router claim. An owned 26.7.4 lab
 must verify response schema, TLS enrollment, effective privileges, failures,
 and recovery before the adapter can be listed as supported.
@@ -57,6 +59,19 @@ native command returns bounded counts and truncation flags, not household
 addresses. Router reports may include stale ARP/NDP entries, omit other VLANs
 or east-west traffic, and show addresses affected by NAT. A zero-row result
 cannot prove absence or complete visibility.
+
+The browser's `POST /api/opnsense/collection/review` route requires the local
+session and CSRF token and makes only a fresh status probe, not a
+neighbor-table read. It shows the approved origin, enrolled scope,
+interface/prefixes, 2 MiB per-response cap and 256-row-per-family
+consideration ceiling.
+`POST /api/opnsense/collection/run` accepts only that review's short-lived,
+one-use ID and an explicit approve/decline choice. Approval uses the same
+controller collector, which rechecks the origin, enrollment and current
+interface before and after the router read and audits requested/completed or
+failed phases. Decline reads nothing. An uncertain response is never retried
+automatically; the UI directs the user to saved local reports. The browser
+receives count-only results, not newly read addresses or credentials.
 
 The client accepts one private IP-literal HTTPS origin with no URL credentials,
 path, query, or fragment. It uses OS certificate roots plus an optional

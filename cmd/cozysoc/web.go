@@ -69,6 +69,10 @@ type webHandler struct {
 	loadAdGuardStatus      adguardStatusLoader
 	loadOPNsenseStatus     opnsenseStatusLoader
 	loadOPNsenseNeighbors  opnsenseNeighborLoader
+	collectOPNsense        func(context.Context, api.OPNsenseCollectParams) (api.OPNsenseCollection, error)
+	opnsenseReviewMu       sync.Mutex
+	opnsenseReview         *webOPNsenseReviewState
+	opnsenseCollecting     bool
 	collectAdGuard         func(context.Context, api.AdGuardCollectParams) (api.AdGuardCollection, error)
 	adguardReviewMu        sync.Mutex
 	adguardReview          *webAdGuardReviewState
@@ -239,6 +243,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return localapi.NewClient(dir).OPNsenseStatus(requestCtx)
 	}
 	handler.collectAdGuard = localapi.NewClient(dir).CollectAdGuardReviewed
+	handler.collectOPNsense = localapi.NewClient(dir).CollectOPNsense
 	handler.loadOPNsenseNeighbors = func(requestCtx context.Context) (api.OPNsenseNeighborHistory, error) {
 		requestCtx, cancel := context.WithTimeout(requestCtx, webRequestTimeout)
 		defer cancel()
@@ -414,6 +419,10 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleOPNsenseStatus(w, r)
 	case "/api/opnsense/neighbors":
 		h.handleOPNsenseNeighbors(w, r)
+	case "/api/opnsense/collection/review":
+		h.handleOPNsenseCollectionReview(w, r)
+	case "/api/opnsense/collection/run":
+		h.handleOPNsenseCollectionRun(w, r)
 	case "/api/adguard/collection/review":
 		h.handleAdGuardCollectionReview(w, r)
 	case "/api/adguard/collection/run":
