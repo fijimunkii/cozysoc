@@ -136,8 +136,9 @@ by default. The new [experimental native consent case](gateway-consent-session.m
 exercises the actual controller, authenticated exchange and real SQLite audit.
 The [interactive command](interactive-gateway-check.md) is now exercised through
 real pseudo-terminals within that same session, including decline, type-ahead,
-expiry, interruption, redirection and one explicit approved sample. There is
-still no browser execution control. Validate the packaged product's
+expiry, interruption, redirection and one explicit approved sample. The
+[local browser flow](browser-gateway-check.md) now uses the same native
+consent session. Validate the packaged product's
 permission-denied/recovery behavior and the remaining hardware scenarios without
 turning fixture success into a broad support claim. Enrollment still does not
 enable Device Watch or grant one-shot probe consent. Neither #14 nor #29 is closed

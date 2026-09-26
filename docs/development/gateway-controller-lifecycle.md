@@ -4,7 +4,8 @@ Related to #14 and #29. Following the measured-run integration, `cozysoc serve`
 now owns one dormant gateway coordinator and concrete ICMP adapter for its
 lifetime. The later [native consent session](gateway-consent-session.md) reuses
 this owner only behind explicit experimental macOS startup opt-in. There is no
-browser route, Run button, automatic retry or scheduling. Opening the app, enrolling a network,
+automatic retry or scheduling. The [local browser flow](browser-gateway-check.md)
+requires a separate one-shot review and approval. Opening the app, enrolling a network,
 enabling Device Watch and reading gateway previews still do not send probes.
 
 ## Ownership and startup

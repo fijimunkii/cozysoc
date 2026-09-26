@@ -1,3 +1,5 @@
+import { parseGatewayCheckResult, parseGatewayCheckReview, type GatewayCheckClient } from "../quality/gateway-check";
+
 const maxCandidates = 64;
 const maxPrefixes = 64;
 const maxInterfaceNameLength = 64;
@@ -98,7 +100,7 @@ export async function loadNetworksFromWeb(): Promise<NetworkList> {
   return parseNetworkList(await readJSON(response, "Live network response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient {
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & GatewayCheckClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -154,6 +156,13 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient {
         throw new SetupRequestError("invalid_response", "Device label response did not match the requested change.");
       }
       return result;
+    },
+    async reviewGateway(target: string) {
+      return parseGatewayCheckReview(await mutate("/api/network-quality/gateway/review", { target }));
+    },
+    async decideGateway(reviewID: string, approve: boolean) {
+      if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "Gateway review is invalid or expired.");
+      return parseGatewayCheckResult(await mutate("/api/network-quality/gateway/run", { review_id: reviewID, approve }));
     },
   };
 }

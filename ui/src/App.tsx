@@ -22,6 +22,8 @@ import { loadHTTPSHistoryFromWeb, type HTTPSHistoryLoader } from "./quality/http
 import { ResolverHistoryPanel } from "./quality/ResolverHistoryPanel";
 import { loadResolverHistoryFromWeb, type ResolverHistoryLoader } from "./quality/resolver-history";
 import { GatewayHistoryPanel } from "./quality/GatewayHistoryPanel";
+import { GatewayCheckPanel } from "./quality/GatewayCheckPanel";
+import { type GatewayCheckClient } from "./quality/gateway-check";
 import { loadGatewayHistoryFromWeb, type GatewayHistoryLoader } from "./quality/gateway-history";
 import { LocalConnectionPanel } from "./quality/LocalConnectionPanel";
 import { loadLocalQualityFromWeb, type LocalQualityLoader } from "./quality/local-quality";
@@ -67,6 +69,7 @@ export interface AppProps {
   loadData?: () => Promise<AppData>;
   setupClient?: SetupClient;
   deviceLabelClient?: DeviceLabelClient;
+  gatewayCheckClient?: GatewayCheckClient;
   loadLocalQuality?: LocalQualityLoader;
   loadGatewayHistory?: GatewayHistoryLoader;
   loadHTTPSHistory?: HTTPSHistoryLoader;
@@ -82,7 +85,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, gatewayCheckClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -93,6 +96,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
   const defaultMutationClient = useMemo(() => createWebSetupClient(), []);
   const liveSetupClient = setupClient ?? defaultMutationClient;
   const liveDeviceLabelClient = deviceLabelClient ?? defaultMutationClient;
+  const liveGatewayCheckClient = gatewayCheckClient ?? defaultMutationClient;
 
   useEffect(() => {
     if (previousPage.current !== page) {
@@ -190,6 +194,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
             {view.mode === "live" ? <SetupPanel data={activeData} client={liveSetupClient} onChanged={retryLive} onReviewCoverage={() => setPage("coverage")} /> : null}
             <OverviewPage data={activeData} onNavigate={setPage} />
             <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
+            <GatewayCheckPanel key={`gateway-check-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} client={liveGatewayCheckClient} />
             <QualityDiagnosisPanel key={`diagnosis-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadQualityDiagnosis} />
             <HTTPSHistoryPanel key={`https-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadHTTPSHistory} />
             <ResolverHistoryPanel key={`resolver-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadResolverHistory} />

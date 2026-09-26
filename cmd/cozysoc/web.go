@@ -65,6 +65,10 @@ type webHandler struct {
 	loadHTTPSHistory     func(context.Context) (api.HTTPSHistory, error)
 	loadResolverHistory  func(context.Context) (api.ResolverHistory, error)
 	loadQualityDiagnosis func(context.Context) (api.QualityDiagnosis, error)
+	loadGatewayPlan      gatewayPlanLoader
+	runGatewayCheck      gatewayCheckRunner
+	gatewayReviewMu      sync.Mutex
+	gatewayReview        *webGatewayReviewState
 	labelDevice          deviceLabelMutator
 	loadNetworks         networkLoader
 	enrollNetwork        networkEnrollMutator
@@ -178,10 +182,11 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	configureWebResolverHistory(handler, dir)
 	configureWebHTTPSHistory(handler, dir)
 	configureWebQualityDiagnosis(handler, dir)
+	configureWebGatewayCheck(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      25 * time.Second,
 		IdleTimeout:       30 * time.Second,
 		MaxHeaderBytes:    maxWebHeaderBytes,
 	}
@@ -326,6 +331,10 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleResolverHistory(w, r)
 	case "/api/network-quality/history":
 		h.handleGatewayHistory(w, r)
+	case "/api/network-quality/gateway/review":
+		h.handleGatewayReview(w, r)
+	case "/api/network-quality/gateway/run":
+		h.handleGatewayRun(w, r)
 	case "/api/network-quality":
 		h.handleLocalQuality(w, r)
 	case "/api/networks":

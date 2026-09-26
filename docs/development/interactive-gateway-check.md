@@ -2,7 +2,7 @@
 
 Related to #14 and #29. `cozysoc network-quality-check` presents the existing
 connection-bound native protocol to a terminal user. It does not add an executor,
-change the sender, enable browser authority, persist consent, start a controller,
+change the sender, persist consent, start a controller,
 or remove the explicit experimental macOS startup gate.
 
 ## Run deliberately
@@ -22,7 +22,7 @@ Flags precede the single numeric private IPv4 target. There is no `--yes`,
 privilege escalation or alternate sender. Help works without a controller.
 Unsupported platforms, invalid targets, redirected/piped input or output, root,
 and a non-foreground/noncanonical terminal are rejected before controller access.
-This command does not expose checks through `dev` or the browser.
+This command is separate from the [local browser flow](browser-gateway-check.md); neither is exposed through `dev`.
 
 The disclosure shows the actual validated target/source/interface/index/prefixes,
 profile and expiry, all fixed traffic limits, unverified gateway role, privacy and
@@ -104,8 +104,8 @@ physical Wi-Fi/NIC egress, actual sleep/resume or arbitrary VPN policy. Those ga
 remain open; the experimental switch stays off by default.
 
 The [retained history read](gateway-history.md) now inspects earlier runs without
-repeating traffic. Next: appropriate browser/UI
-presentation after its separate consent and packaged-permission boundaries.
+repeating traffic. The [local browser flow](browser-gateway-check.md) uses its own
+separate review and consent boundary. Packaged-permission validation remains open.
 
 Primary terminal references: [Apple terminal queue control](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/tcflush.3.html)
 [Apple select](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/select.2.html),
