@@ -148,9 +148,9 @@ jobs:
 
       - name: Run process E2E smoke
         run: |
-          go build -o "${RUNNER_TEMP}/cozysoc-e2e" ./cmd/cozysoc
-          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-e2e" \
-          COZYSOC_E2E_UI_DIR="${GITHUB_WORKSPACE}/ui/dist" \
+          bash scripts/build-dev-bundle.sh "${RUNNER_TEMP}/cozysoc-dev-bundle"
+          COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-dev-bundle/cozysoc" \
+          COZYSOC_E2E_UI_DIR="${RUNNER_TEMP}/cozysoc-dev-bundle/ui/dist" \
             go test -v -count=1 ./tests/e2e
 
       - name: Verify macOS controller build

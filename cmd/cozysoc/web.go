@@ -115,7 +115,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	fs.SetOutput(stderr)
 	stateDir := fs.String("state-dir", "", "controller state directory")
 	listenAddr := fs.String("listen", defaultWebListen, "loopback listen address")
-	uiDir := fs.String("ui-dir", defaultWebUIDir, "built UI directory")
+	uiDir := fs.String("ui-dir", "", "built UI directory (defaults to bundled UI, then ui/dist)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -129,7 +129,24 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	if err != nil {
 		return err
 	}
-	assets, err := filepath.Abs(*uiDir)
+	uiDirExplicit := false
+	fs.Visit(func(option *flag.Flag) {
+		if option.Name == "ui-dir" {
+			uiDirExplicit = true
+		}
+	})
+	selectedUIDir := *uiDir
+	if !uiDirExplicit {
+		executable, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("locate web executable: %w", err)
+		}
+		selectedUIDir, err = defaultWebAssets(executable)
+		if err != nil {
+			return err
+		}
+	}
+	assets, err := filepath.Abs(selectedUIDir)
 	if err != nil {
 		return fmt.Errorf("resolve UI directory: %w", err)
 	}
@@ -211,6 +228,23 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return fmt.Errorf("serve local web UI: %w", err)
 	}
 	return nil
+}
+
+// defaultWebAssets prefers the UI shipped beside the real executable. A
+// present but incomplete bundle fails validation instead of silently serving
+// assets from an unrelated working directory.
+func defaultWebAssets(executable string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", fmt.Errorf("resolve web executable symlinks: %w", err)
+	}
+	uiRoot := filepath.Join(filepath.Dir(resolved), "ui")
+	if _, err := os.Lstat(uiRoot); err == nil {
+		return filepath.Join(uiRoot, "dist"), nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("inspect bundled UI directory: %w", err)
+	}
+	return defaultWebUIDir, nil
 }
 
 func newWebToken() (string, error) {

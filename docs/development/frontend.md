@@ -16,7 +16,7 @@ The Vite development server still binds to `127.0.0.1`. It is a frontend develop
 
 - binds only to a **literal loopback IP**; wildcard, LAN, hostname, and public bind targets are rejected;
 - chooses an ephemeral loopback port by default and prints the resulting authenticated local URL;
-- serves an already-built `ui/dist` directory (override with `--ui-dir` for packaging/development layouts);
+- serves built `ui/dist/` assets beside the resolved executable when a sibling `ui/` exists, otherwise `ui/dist` from the working directory; `--ui-dir` explicitly selects another built UI directory;
 - exposes only allowlisted browser routes: the one-time `POST /api/session` bootstrap, authenticated session/CSRF metadata, typed reads for status/capabilities/coverage/devices/activity/networks/network quality, narrow enrollment / Device Watch control mutations, and an explicitly reviewed one-shot gateway check;
 - uses strict Host matching and, when an `Origin` header is present, requires the exact same local HTTP origin;
 - requires the exact local origin on the browser-session bootstrap;
@@ -114,7 +114,9 @@ Demo data remains source code only; it is not written into controller storage or
 
 ## Static asset boundary
 
-Vite build output is not committed. `cozysoc web` serves a built UI directory through the unified executable. Release packaging must define whether installers embed or co-install those assets; developer serving does not establish installer support.
+Vite build output is not committed. `scripts/build-dev-bundle.sh DESTINATION` creates a relocatable unsigned developer directory with the unified executable, sibling `ui/dist/` assets, and source/platform metadata. It refuses an existing destination. `cozysoc web` resolves the executable path (including executable symlinks) and prefers its sibling `ui/dist/` when a sibling `ui/` exists. An incomplete sibling UI fails startup; it does not silently serve an unrelated working-directory copy. Without sibling assets it uses the repository's `ui/dist` developer path. An explicit `--ui-dir` overrides either default. `cozysoc dev` continues to use the repository build path and its temporary-controller lifecycle.
+
+The bundle does not install or supervise a controller, register a service, or establish signed release support. Production installer format, service registration, update trust and recovery remain #28 work.
 
 Static serving refuses directory listings and resolves symlinks before serving files so a requested path cannot escape the approved UI root. A regression fixture creates a symlink from the UI tree to an outside file and requires a 404 without serving the target.
 
