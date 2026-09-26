@@ -74,6 +74,11 @@ type webHandler struct {
 	runResolverCheck     resolverCheckRunner
 	resolverReviewMu     sync.Mutex
 	resolverReview       *webResolverReviewState
+	loadHTTPSSettings    httpsSettingsLoader
+	loadHTTPSPlan        httpsPlanLoader
+	runHTTPSCheck        httpsCheckRunner
+	httpsReviewMu        sync.Mutex
+	httpsReview          *webHTTPSReviewState
 	labelDevice          deviceLabelMutator
 	loadDeviceMerges     deviceMergeLoader
 	mergeDevice          deviceMergeMutator
@@ -215,6 +220,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	configureWebQualityDiagnosis(handler, dir)
 	configureWebGatewayCheck(handler, dir)
 	configureWebResolverCheck(handler, dir)
+	configureWebHTTPSCheck(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -388,6 +394,12 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleQualityDiagnosis(w, r)
 	case "/api/network-quality/https-history":
 		h.handleHTTPSHistory(w, r)
+	case "/api/network-quality/https/selections":
+		h.handleHTTPSSelections(w, r)
+	case "/api/network-quality/https/review":
+		h.handleHTTPSReview(w, r)
+	case "/api/network-quality/https/run":
+		h.handleHTTPSRun(w, r)
 	case "/api/network-quality/resolver-history":
 		h.handleResolverHistory(w, r)
 	case "/api/network-quality/resolver/selections":

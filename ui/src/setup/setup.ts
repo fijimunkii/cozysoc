@@ -1,5 +1,6 @@
 import { parseGatewayCheckResult, parseGatewayCheckReview, type GatewayCheckClient } from "../quality/gateway-check";
 import { parseResolverSelections, parseResolverReview, parseResolverResult, type ResolverCheckClient, type ResolverSelection } from "../quality/resolver-check";
+import { parseHTTPSSelections, parseHTTPSReview, parseHTTPSResult, type HTTPSCheckClient, type HTTPSSelection } from "../quality/https-check";
 
 const maxCandidates = 64;
 const maxPrefixes = 64;
@@ -160,6 +161,11 @@ export async function loadResolverSelectionsFromWeb(): Promise<ResolverSelection
   return parseResolverSelections(await readJSON(response, "Saved resolver selections"));
 }
 
+export async function loadHTTPSSelectionsFromWeb(): Promise<HTTPSSelection[]> {
+  const response = await request("/api/network-quality/https/selections", { method: "GET" });
+  return parseHTTPSSelections(await readJSON(response, "Saved HTTPS selections"));
+}
+
 export async function loadDeviceMergesFromWeb(): Promise<DeviceMergeList> {
   const response = await request("/api/devices/merges", { method: "GET" });
   return parseDeviceMergeList(await readJSON(response, "Device correction response"));
@@ -170,7 +176,7 @@ export async function loadDeviceSplitsFromWeb(): Promise<DeviceSplitList> {
   return parseDeviceSplitList(await readJSON(response, "Device split response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient & ResolverCheckClient {
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient & ResolverCheckClient & HTTPSCheckClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -275,6 +281,16 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Device
     async decideResolver(reviewID: string, approve: boolean) {
       if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "Resolver review is invalid or expired.");
       return parseResolverResult(await mutate("/api/network-quality/resolver/run", { review_id: reviewID, approve }));
+    },
+    async reviewHTTPS(selectionID: string) {
+      if (!/^https-selection\.[0-9a-f]{32}$/.test(selectionID)) throw new SetupRequestError("invalid_request", "Choose a saved HTTPS selection.");
+      const review = parseHTTPSReview(await mutate("/api/network-quality/https/review", { selection_id: selectionID }));
+      if (review.selection_id !== selectionID) throw new SetupRequestError("invalid_response", "HTTPS review changed selection.");
+      return review;
+    },
+    async decideHTTPS(reviewID: string, approve: boolean) {
+      if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "HTTPS review is invalid or expired.");
+      return parseHTTPSResult(await mutate("/api/network-quality/https/run", { review_id: reviewID, approve }));
     },
   };
 }

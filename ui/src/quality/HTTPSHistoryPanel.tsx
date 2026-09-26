@@ -64,7 +64,7 @@ function LiveHistoryPanel({ load }: { load: HTTPSHistoryLoader }) {
     <button type="button" className="primary-action" disabled={view.kind === "loading"} onClick={() => { void readHistory(); }}>
       {view.kind === "error" ? "Retry HTTPS history read" : view.kind === "history" ? "Refresh HTTPS history list" : "Read HTTPS history"}
     </button>
-    <p className="gateway-history-limits">These records describe one selected HTTPS endpoint and request at the original time. HTTP errors and redirects are responses, not packet loss. A single result does not establish current internet availability, a captive portal, security, or monitoring coverage. Creating a check requires the separate experimental native command and one-shot approval.</p>
+    <p className="gateway-history-limits">These records describe one selected HTTPS endpoint and request at the original time. HTTP errors and redirects are responses, not packet loss. A single result does not establish current internet availability, a captive portal, security, or monitoring coverage. Creating a check requires experimental controller opt-in and a separate one-shot approval.</p>
   </section>;
 }
 function HistoryDetails({ data }: { data: HTTPSHistory }) {
