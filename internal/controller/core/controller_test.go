@@ -47,10 +47,12 @@ func TestCapabilitiesExposeCatalogWithoutRestoringVerification(t *testing.T) {
 	}
 	controller := New("test", 2, time.Second, instances)
 	list := controller.Capabilities()
-	if list.CatalogSchemaVersion != capability.SchemaVersion || len(list.Capabilities) != 1 {
+	if list.CatalogSchemaVersion != capability.SchemaVersion || len(list.Capabilities) != 2 {
 		t.Fatalf("unexpected capability list: %+v", list)
 	}
-	if list.Capabilities[0].State.Verification != capability.VerificationUnverified {
-		t.Fatalf("capability verification was restored from configuration: %+v", list.Capabilities[0])
+	for _, item := range list.Capabilities {
+		if item.State.Verification != capability.VerificationUnverified {
+			t.Fatalf("capability verification was restored from configuration: %+v", item)
+		}
 	}
 }

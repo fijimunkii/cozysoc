@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "id": "adguard-home",
+  "display_name": "DNS connection",
+  "summary": "Connect to an existing AdGuard Home instance for read-only status without changing its configuration or ownership.",
+  "release": "v0.2",
+  "ownership": ["external"],
+  "targets": [
+    {"os": "darwin", "arch": "arm64", "min_version": "13.0", "support": "candidate", "evidence": "docs/development/adguard-readonly.md"}
+  ],
+  "inputs": [
+    {"id": "approved-endpoint", "required": true, "description": "An explicitly approved IP-literal AdGuard Home origin."}
+  ],
+  "privileges": [
+    {"id": "external-api-read", "requirement": "conditional", "description": "An existing instance may require a credential to read its API."}
+  ],
+  "dependencies": [
+    {"id": "adguard-home", "kind": "service", "required": true, "version_constraint": "v0.107.79", "description": "A separately operated AdGuard Home instance at the approved origin."}
+  ],
+  "config": {
+    "schema_version": 1,
+    "fields": [
+      {"name": "endpoint", "type": "string", "required": true, "description": "Approved HTTPS IP-literal origin, or loopback HTTP origin."},
+      {"name": "username", "type": "string", "required": false, "description": "Username for an authenticated instance."},
+      {"name": "credential_ref", "type": "secret-ref", "required": false, "description": "Controller-owned Keychain reference; no password is stored in configuration."}
+    ]
+  },
+  "resources": {"measurement": "unmeasured", "profile": "external-read-only", "evidence": "Runtime measurements remain release-gated."},
+  "provenance": {
+    "kind": "third-party", "license": "GPL-3.0", "source": "https://github.com/AdguardTeam/AdGuardHome",
+    "version_policy": "The external owner chooses the installed version; Cozy SOC accepts only the tested v0.107.79 API."
+  },
+  "health": {"process_required": false, "verification_signals": ["endpoint-authenticated", "version-supported", "observation-freshness"], "coverage_requires_verification": true},
+  "data_handling": {
+    "activation": "Connection setup reads service state after deliberate approval; it does not start DNS collection or change external settings.",
+    "sources": ["Approved external AdGuard Home status, filtering and query-log configuration GET endpoints."],
+    "stored": ["External ownership, approved origin, credential reference and control audit records."],
+    "excluded": ["Credentials in config or diagnostics, DNS query history during setup, and all external service configuration changes."]
+  },
+  "outputs": [{"kind": "integration-status", "schema_version": 1}],
+  "deep_links": [],
+  "lifecycle": ["preflight", "connect", "verify", "disconnect"]
+}

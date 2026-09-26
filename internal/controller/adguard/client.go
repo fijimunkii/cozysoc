@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
@@ -64,7 +65,7 @@ func NewClient(endpoint, user string, password secretstore.Secret) (*Client, err
 			return nil, ErrEndpoint
 		}
 	}
-	if len(user) > 128 || strings.ContainsAny(user, ":\r\n") || password.Len() > 1024 || (user == "") != (password.Len() == 0) {
+	if len(user) > 128 || strings.ContainsRune(user, ':') || strings.IndexFunc(user, unicode.IsControl) >= 0 || password.Len() > 1024 || (user == "") != (password.Len() == 0) {
 		return nil, ErrEndpoint
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -117,48 +118,59 @@ type queryItem struct {
 	Reason string `json:"reason"`
 }
 
-// Read gathers one bounded, read-only snapshot. Query-log reads are skipped when
-// the external owner has disabled logging. No successful HTTP status is treated as
-// evidence that every household client uses this resolver.
-func (c *Client) Read(ctx context.Context) (Snapshot, error) {
+// Probe validates the external instance and reads only service state. It never
+// fetches query history or starts collection.
+func (c *Client) Probe(ctx context.Context) (Status, error) {
 	var status struct {
 		Version           *string `json:"version"`
 		Running           *bool   `json:"running"`
 		ProtectionEnabled *bool   `json:"protection_enabled"`
 	}
 	if err := c.get(ctx, "/control/status", &status); err != nil {
-		return Snapshot{}, err
+		return Status{}, err
 	}
 	if status.Version == nil || status.Running == nil || status.ProtectionEnabled == nil {
-		return Snapshot{}, ErrResponse
+		return Status{}, ErrResponse
 	}
 	if *status.Version != SupportedVersion {
-		return Snapshot{}, ErrVersion
+		return Status{}, ErrVersion
 	}
-	result := Snapshot{Status: Status{Version: *status.Version, Running: *status.Running, ProtectionEnabled: *status.ProtectionEnabled}}
+	result := Status{Version: *status.Version, Running: *status.Running, ProtectionEnabled: *status.ProtectionEnabled}
 	var filtering struct {
 		Enabled *bool `json:"enabled"`
 	}
 	if err := c.get(ctx, "/control/filtering/status", &filtering); err != nil {
-		return Snapshot{}, err
+		return Status{}, err
 	}
 	if filtering.Enabled == nil {
-		return Snapshot{}, ErrResponse
+		return Status{}, ErrResponse
 	}
-	result.Status.FilteringEnabled = *filtering.Enabled
+	result.FilteringEnabled = *filtering.Enabled
 	var logConfig struct {
 		Enabled    *bool `json:"enabled"`
 		Anonymized *bool `json:"anonymize_client_ip"`
 	}
 	if err := c.get(ctx, "/control/querylog/config", &logConfig); err != nil {
-		return Snapshot{}, err
+		return Status{}, err
 	}
 	if logConfig.Enabled == nil || logConfig.Anonymized == nil {
-		return Snapshot{}, ErrResponse
+		return Status{}, ErrResponse
 	}
-	result.Status.QueryLogEnabled = *logConfig.Enabled
-	result.Status.AnonymizedClients = *logConfig.Anonymized
-	if !result.Status.Running || !result.Status.QueryLogEnabled {
+	result.QueryLogEnabled = *logConfig.Enabled
+	result.AnonymizedClients = *logConfig.Anonymized
+	return result, nil
+}
+
+// Read gathers one bounded, read-only snapshot. Query-log reads are skipped when
+// the external owner has disabled logging. No successful HTTP status is treated as
+// evidence that every household client uses this resolver.
+func (c *Client) Read(ctx context.Context) (Snapshot, error) {
+	status, err := c.Probe(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	result := Snapshot{Status: status}
+	if !status.Running || !status.QueryLogEnabled {
 		return result, nil
 	}
 	var log struct {

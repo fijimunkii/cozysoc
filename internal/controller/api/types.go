@@ -31,6 +31,9 @@ const (
 	MethodDeviceWatchCoverage = "device-watch.coverage"
 	MethodDeviceWatchEnable   = "device-watch.enable"
 	MethodDeviceWatchDisable  = "device-watch.disable"
+	MethodAdGuardConnect      = "adguard.connect"
+	MethodAdGuardStatus       = "adguard.status"
+	MethodAdGuardDisconnect   = "adguard.disconnect"
 )
 
 type Request struct {
