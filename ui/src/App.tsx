@@ -213,7 +213,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         {activeData && page === "tools" ? (
           activeData.tools === null
             ? <section className="product-card empty-product-state" aria-labelledby="tools-unavailable-title"><h2 id="tools-unavailable-title">Tool information is temporarily unavailable</h2><p>{activeData.tools_error ?? "The local capability catalog could not be read. Device, activity, and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry tools</button> : null}</section>
-            : <ToolsPage tools={activeData.tools} storage={activeData.storage} storageError={activeData.storage_error} onNavigate={(target) => setPage(target)} />
+            : <ToolsPage tools={activeData.tools} storage={activeData.storage} storageError={activeData.storage_error} mode={view.mode === "live" ? "live" : "demo"} onNavigate={(target) => setPage(target)} />
         ) : null}
       </main>
     </div>

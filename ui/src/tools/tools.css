@@ -180,6 +180,41 @@
   margin-top: 16px;
 }
 
+.diagnostics-action {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #d6d2c7;
+  border-radius: 11px;
+  background: #fff;
+  color: #343830;
+  cursor: pointer;
+}
+
+.diagnostics-action:focus-visible {
+  outline: 3px solid rgba(72, 91, 65, 0.25);
+  outline-offset: 2px;
+}
+
+.diagnostics-action:disabled {
+  cursor: wait;
+}
+
+.diagnostic-preview {
+  max-width: 100%;
+  max-height: 24rem;
+  padding: 16px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
+  background: #f4f2ea;
+}
+
+.diagnostic-preview:focus-visible {
+  outline: 3px solid rgba(72, 91, 65, 0.25);
+  outline-offset: 2px;
+}
+
 @media (max-width: 820px) {
   .capability-card__header {
     flex-direction: column;

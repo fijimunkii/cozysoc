@@ -13,6 +13,7 @@ const (
 	MethodStatus              = "status"
 	MethodHealth              = "health"
 	MethodStorageOverview     = "storage.overview"
+	MethodDiagnosticsPreview  = "diagnostics.preview"
 	MethodCapabilitiesList    = "capabilities.list"
 	MethodDevicesList         = "devices.list"
 	MethodDeviceDetail        = "device.detail"

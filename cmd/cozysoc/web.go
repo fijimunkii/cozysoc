@@ -59,6 +59,7 @@ type webHandler struct {
 	loadStatus           statusLoader
 	loadCapabilities     capabilityLoader
 	loadStorageOverview  storageOverviewLoader
+	loadDiagnostics      func(context.Context) (api.DiagnosticPreview, error)
 	loadLocalQuality     func(context.Context) (api.LocalNetworkQuality, error)
 	loadGatewayHistory   func(context.Context) (api.GatewayHistory, error)
 	loadHTTPSHistory     func(context.Context) (api.HTTPSHistory, error)
@@ -164,6 +165,9 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	handler.loadStorageOverview = func(requestCtx context.Context) (api.StorageOverview, error) {
 		return loadStorageOverviewFromController(requestCtx, dir)
+	}
+	handler.loadDiagnostics = func(requestCtx context.Context) (api.DiagnosticPreview, error) {
+		return loadDiagnosticsFromController(requestCtx, dir)
 	}
 	if err := configureWebMutationBridge(handler, dir); err != nil {
 		return err
@@ -302,6 +306,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleCapabilities(w, r)
 	case "/api/storage":
 		h.handleStorageOverview(w, r)
+	case "/api/diagnostics/preview":
+		h.handleDiagnosticsPreview(w, r)
 	case "/api/coverage":
 		h.handleCoverage(w, r)
 	case "/api/devices":

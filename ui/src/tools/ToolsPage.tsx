@@ -1,15 +1,17 @@
 import type { ToolCapability, ToolsSnapshot } from "./tools";
 import type { StorageOverview } from "./storage";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import "./tools.css";
 
 export interface ToolsPageProps {
   tools: ToolsSnapshot;
   storage?: StorageOverview | null | undefined;
   storageError?: string | undefined;
+  mode?: "live" | "demo";
   onNavigate: (page: "devices" | "activity" | "coverage") => void;
 }
 
-export function ToolsPage({ tools, storage, storageError, onNavigate }: ToolsPageProps) {
+export function ToolsPage({ tools, storage, storageError, mode = "demo", onNavigate }: ToolsPageProps) {
   return (
     <div className="tools-stack">
       <section className="product-card tools-controller" aria-labelledby="controller-title">
@@ -31,6 +33,8 @@ export function ToolsPage({ tools, storage, storageError, onNavigate }: ToolsPag
         <h2 id="storage-title">Storage and retention</h2>
         {storage ? <StorageFacts storage={storage} /> : <p>{storageError ?? "Live storage information is unavailable in this view."}</p>}
       </section>
+
+      <DiagnosticsPanel mode={mode} />
 
       {tools.capabilities.length === 0 ? (
         <section className="product-card empty-product-state">
