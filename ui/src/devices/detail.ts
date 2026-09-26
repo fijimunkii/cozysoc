@@ -42,6 +42,12 @@ export interface DeviceDetail {
   truncated: boolean;
 }
 
+// Export only the validated detail projection. Unknown fields from a future or
+// malformed controller response must never become part of a local export.
+export function deviceEvidenceExportJSON(detail: DeviceDetail): string {
+  return JSON.stringify({ format: "cozysoc-device-evidence", version: 1, snapshot: parseDeviceDetail(detail) }, null, 2) + "\n";
+}
+
 export function parseDeviceDetail(input: unknown): DeviceDetail {
   const value = objectValue(input, "device detail");
   const scopeID = idValue(value.scope_id, "scope_id");

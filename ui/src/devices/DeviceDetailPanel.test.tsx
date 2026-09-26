@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { DeviceDetailPanel } from "./DeviceDetailPanel";
 import { parseDeviceDetail } from "./detail";
 
@@ -42,5 +42,29 @@ describe("DeviceDetailPanel", () => {
     expect(screen.getByText("User correction")).toBeTruthy();
     expect(screen.getByText(/Grouped from earlier device/)).toBeTruthy();
     expect(screen.getAllByText("Inferred").length).toBeGreaterThan(0);
+  });
+
+  it("requires review before saving a local, bounded JSON snapshot", async () => {
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:device-evidence");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    try {
+      render(<DeviceDetailPanel detail={detail("visible")} onBack={() => undefined} />);
+      expect(screen.queryByRole("button", { name: "Save reviewed JSON" })).toBeNull();
+      expect(createObjectURL).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Review JSON before saving" }));
+      const preview = screen.getByLabelText("Device evidence export preview");
+      expect(preview.textContent).toContain('"format": "cozysoc-device-evidence"');
+      expect(preview.textContent).toContain('"value": "02:00:00:00:00:01"');
+      expect(screen.getByText(/not a backup or complete history/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Save reviewed JSON" }));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(click).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:device-evidence"));
+    } finally {
+      createObjectURL.mockRestore();
+      revokeObjectURL.mockRestore();
+      click.mockRestore();
+    }
   });
 });

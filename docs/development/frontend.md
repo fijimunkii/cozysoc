@@ -191,6 +191,8 @@ Presence (`visible` / `uncertain`) and identity validity are intentionally separ
 
 Device detail reports the controller's original read time. Its presence and identity labels apply to that read, even when the live list refreshes while the detail remains open; reopening the device requests newer evidence.
 
+The detail view offers an explicit, local JSON export for that one bounded read. The user reviews the exact versioned JSON before saving. The export serializes only the validated detail projection, so unexpected response fields cannot enter the file. It may contain household identifiers such as labels, IP/MAC addresses and source IDs; the UI says so before saving. It is limited to 100 retained identity records, carries the original read time and truncation flag, and is not a backup or complete history. It does not upload anything or read the controller again at save time. Broader history export and restore remain #30 work.
+
 ## Tools and capability presentation
 
 The Tools page consumes authenticated, parameterless read routes `GET /api/status`, `GET /api/capabilities`, and `GET /api/storage`. The first two are browser-specific projections over existing typed UDS reads. Storage uses a dedicated controller read, `storage.overview`, backed by the controller-owned store; none of these routes grants mutation authority.

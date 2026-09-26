@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const network = { interface_name: "en0", interface_index: 4, prefixes: ["192.168.1.0/24"] };
 
@@ -11,7 +12,7 @@ async function mockLiveDevice(page: Page, failFirstDetail: boolean) {
   const device = { id: "device.one", user_label: "Speaker", first_seen: firstSeen, last_seen: lastSeen, state: "visible" };
   const source = { observation_id: "obs.one", sensor_id: "sensor.dw", kind: "device-neighbor-seen", source_stream: "device-watch-neighbors", ingested_at: lastSeen, attribution: "device-watch:arp-cache" };
   const detail = {
-    scope_id: "scope.home", as_of: asOf, truncated: false, device,
+    scope_id: "scope.home", as_of: asOf, truncated: false, device, unexpected_private_value: "do-not-export",
     evidence: [
       { kind: "mac", value: "02:00:00:00:00:01", observed_at: lastSeen, valid_until: validUntil, link_valid_until: validUntil, current: true, claim_confidence: .9, link_confidence: .9, authority: "inferred", reason: "device-watch:new-mac-candidate:mac", source_sensor_id: "sensor.dw", source },
       { kind: "ipv6", value: "2001:db8:1111:2222:3333:4444:5555:6666", observed_at: firstSeen, valid_until: lastSeen, current: false, authority: "inferred", reason: "device-watch:recent-mac-continuity:ip", source_sensor_id: "sensor.dw", source: { ...source, observation_id: "obs.two", ingested_at: firstSeen, attribution: "device-watch:ndp-cache" } },
@@ -75,6 +76,29 @@ test("device detail and expanded provenance reflow at 320 pixels with 200% text"
   await page.getByText("Technical provenance", { exact: true }).first().click();
   await expectNoHorizontalOverflow(page);
   await checkPage(page);
+});
+
+test("device evidence export requires a preview and saves only the reviewed fields", async ({ page }) => {
+  await mockLiveDevice(page, false);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await openDeviceList(page);
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await page.getByRole("button", { name: "View evidence" }).click();
+  await expect(page.getByRole("button", { name: "Save reviewed JSON" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Review JSON before saving" }).click();
+  const preview = page.getByLabel("Device evidence export preview");
+  await expect(preview).toContainText('"format": "cozysoc-device-evidence"');
+  await expect(preview).toContainText('"value": "02:00:00:00:00:01"');
+  await expect(preview).not.toContainText("do-not-export");
+  await checkPage(page);
+  await expectNoHorizontalOverflow(page);
+  const downloadReady = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save reviewed JSON" }).click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe("cozysoc-device-evidence.json");
+  const saved = await readFile(await download.path(), "utf8");
+  expect(saved).toBe(await preview.textContent());
+  expect(saved).not.toContain("do-not-export");
 });
 
 async function expectNoHorizontalOverflow(page: Page) {
