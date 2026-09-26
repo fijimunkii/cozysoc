@@ -132,6 +132,8 @@ func sharedSourceState(state CoverageSourceState) sharedcoverage.SourceState {
 		return sharedcoverage.SourceCurrent
 	case CoverageSourceUnavailable:
 		return sharedcoverage.SourceUnavailable
+	case CoverageSourcePermission:
+		return sharedcoverage.SourcePermissionRequired
 	case CoverageSourceStale:
 		return sharedcoverage.SourceStale
 	case CoverageSourceMissing:

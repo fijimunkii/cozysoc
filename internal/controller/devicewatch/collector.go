@@ -98,13 +98,19 @@ func (c *Collector) CollectOnce(ctx context.Context, scopeID, sensorID string, b
 	snapshot, err := c.snapshotter.Snapshot(ctx, binding.InterfaceName)
 	if err != nil {
 		capturedAt := c.now().UTC()
+		permissionRequired := errors.Is(err, ErrSnapshotPermission)
+		sources := []SourceStatus{
+			{Method: MethodARPCache, PermissionRequired: permissionRequired},
+			{Method: MethodNDPCache, PermissionRequired: permissionRequired},
+		}
+		var failure *snapshotFailure
+		if errors.As(err, &failure) {
+			sources = append([]SourceStatus(nil), failure.Sources...)
+		}
 		coverageErr := c.putCoverage(ctx, scopeID, sensorID, binding, Snapshot{
 			CapturedAt:    capturedAt,
 			InterfaceName: binding.InterfaceName,
-			Sources: []SourceStatus{
-				{Method: MethodARPCache},
-				{Method: MethodNDPCache},
-			},
+			Sources:       sources,
 		}, 0, 0, 0, "unavailable")
 		if coverageErr != nil {
 			return CollectionResult{}, errors.Join(err, coverageErr)
@@ -218,12 +224,13 @@ func (c *Collector) putCoverage(ctx context.Context, scopeID, sensorID string, b
 	available := make([]map[string]any, 0, len(sources))
 	for _, source := range sources {
 		available = append(available, map[string]any{
-			"method":    source.Method,
-			"available": source.Available,
+			"method":              source.Method,
+			"available":           source.Available,
+			"permission_required": source.PermissionRequired && !source.Available,
 		})
 	}
 	evidence, err := json.Marshal(map[string]any{
-		"schema_version":                1,
+		"schema_version":                2,
 		"interface":                     binding.InterfaceName,
 		"sources":                       available,
 		"neighbors_in_scope":            visible,
@@ -252,7 +259,7 @@ func (c *Collector) putCoverage(ctx context.Context, scopeID, sensorID string, b
 		Status:        status,
 		StartedAt:     capturedAt,
 		EndedAt:       capturedAt,
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Evidence:      evidence,
 		Retention:     domain.RetentionShort,
 	}

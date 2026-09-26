@@ -70,6 +70,7 @@ The response reports the two currently expected sources independently:
 A source state can be:
 
 - `current` — the latest fresh sample reported that source available;
+- `permission-required` — a fresh sample records a confirmed operating-system denial when launching that neighbor-table utility;
 - `unavailable` — the latest fresh sample reported that source unavailable;
 - `stale` — the latest sample is too old to establish current source health;
 - `missing` — no coverage sample exists yet;
@@ -77,7 +78,7 @@ A source state can be:
 
 `reported` and `available_at_last_sample` are separate. This keeps "we have no current evidence" distinct from "the last trusted collection explicitly said this source was unavailable."
 
-In the shared contract, legacy Device Watch `missing` maps to `expected-unverified`. The shared vocabulary can also represent `permission-required`, but Cozy SOC does **not** currently relabel neighbor-source `unavailable` that way: the passive source does not yet provide enough evidence to distinguish permission denial from a missing/failed system source.
+In the shared contract, Device Watch `missing` maps to `expected-unverified`, and a confirmed permission denial maps to `permission-required`. An unavailable source with no typed denial remains `unavailable`; command exit text, missing tools, and parse failures do not establish that permission is the cause. If both sources fail, their separate health results remain in the retained sample. Retained version-1 samples remain readable without inventing a permission diagnosis.
 
 ## Sensor operational health
 
@@ -91,6 +92,7 @@ The configured Device Watch runtime is evaluated independently from the evidence
 - `unavailable` — the platform/runtime cannot provide Device Watch operational state.
 
 The response includes the last attempt, last success, and a coarse bounded error class. Those fields describe collection health, not attack evidence.
+When both native neighbor utilities are denied by the OS, that class is `permission-required`; untyped command failures stay generic rather than being diagnosed from error text.
 
 ## Ingestion health, measured lag, and write recovery
 

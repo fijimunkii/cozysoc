@@ -22,6 +22,7 @@ const (
 
 var (
 	ErrSnapshotUnavailable = errors.New("device watch neighbor snapshot is unavailable")
+	ErrSnapshotPermission  = errors.New("device watch neighbor snapshot requires permission")
 	ErrSnapshotTooLarge    = errors.New("device watch neighbor snapshot exceeds safety limits")
 )
 
@@ -41,9 +42,20 @@ type Neighbor struct {
 }
 
 type SourceStatus struct {
-	Method    NeighborMethod
-	Available bool
+	Method             NeighborMethod
+	Available          bool
+	PermissionRequired bool
 }
+
+// snapshotFailure preserves per-source health without carrying command output
+// into retained coverage evidence.
+type snapshotFailure struct {
+	Sources []SourceStatus
+	Cause   error
+}
+
+func (f *snapshotFailure) Error() string { return f.Cause.Error() }
+func (f *snapshotFailure) Unwrap() error { return f.Cause }
 
 type Snapshot struct {
 	CapturedAt    time.Time

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -15,6 +16,15 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
+
+func TestRuntimeClassifiesTypedNeighborPermission(t *testing.T) {
+	if got := runtimeErrorClass(ErrSnapshotPermission); got != "permission-required" {
+		t.Fatalf("permission error class = %q", got)
+	}
+	if got := runtimeErrorClass(errors.New("permission denied")); got == "permission-required" {
+		t.Fatalf("untyped error inferred permission: %q", got)
+	}
+}
 
 func TestRuntimeFlowsPassiveNeighborIntoTemporalPresence(t *testing.T) {
 	store, err := storage.Open(t.TempDir(), storage.DefaultLimits())

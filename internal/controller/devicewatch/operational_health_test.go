@@ -1,6 +1,7 @@
 package devicewatch
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ func TestSensorHealthDistinguishesCurrentStaleFailureAndDisconnection(t *testing
 		{name: "disconnected", runtime: &fakeRuntimeControl{}, want: OperationalDisconnected},
 		{name: "starting", runtime: &fakeRuntimeControl{running: true}, want: OperationalStarting},
 		{name: "failed collection", runtime: &fakeRuntimeControl{running: true, state: RuntimeState{LastAttemptAt: now, LastSuccessfulAt: now.Add(-time.Minute), LastErrorClass: "source-unavailable"}}, want: OperationalDegraded},
+		{name: "permission denied", runtime: &fakeRuntimeControl{running: true, state: RuntimeState{LastAttemptAt: now, LastSuccessfulAt: now.Add(-time.Minute), LastErrorClass: "permission-required"}}, want: OperationalDegraded},
 		{name: "stale", runtime: &fakeRuntimeControl{running: true, state: RuntimeState{LastAttemptAt: now.Add(-4 * time.Minute), LastSuccessfulAt: now.Add(-4 * time.Minute)}}, want: OperationalStale},
 		{name: "current", runtime: &fakeRuntimeControl{running: true, state: RuntimeState{LastAttemptAt: now.Add(-time.Minute), LastSuccessfulAt: now.Add(-time.Minute)}}, want: OperationalCurrent},
 	}
@@ -28,6 +30,12 @@ func TestSensorHealthDistinguishesCurrentStaleFailureAndDisconnection(t *testing
 				t.Fatalf("sensor health = %+v, want %s", got, test.want)
 			}
 		})
+	}
+}
+
+func TestPermissionFailureHasActionableSensorRecovery(t *testing.T) {
+	if got := sensorErrorNextStep("permission-required"); !strings.Contains(got, "permission") {
+		t.Fatalf("permission next step = %q", got)
 	}
 }
 
