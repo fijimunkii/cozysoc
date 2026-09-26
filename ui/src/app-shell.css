@@ -33,8 +33,9 @@
 .overview-next-step span { color: #5e655b; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .overview-next-step p { margin: 6px 0 0; color: #4f544b; line-height: 1.55; }
 .overview-empty { padding: 4px 28px 28px; color: #62675e; }
-.empty-product-state { padding: 28px; }
+.empty-product-state { min-width: 0; padding: 28px; overflow-wrap: anywhere; }
 .empty-product-state h2 { margin: 5px 0 10px; font-size: 1.6rem; }
+.empty-product-state :is(h2, p, button) { max-width: 100%; overflow-wrap: anywhere; }
 .device-read-unavailable { min-width: 0; overflow-wrap: anywhere; }
 .device-read-unavailable :is(h2, p, button) { max-width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 900px) {

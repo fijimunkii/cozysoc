@@ -9,7 +9,7 @@ The default GitHub Actions workflow runs native macOS jobs and Linux checks and 
 - repository hygiene and conventional-commit checks;
 - Go formatting, `go vet`, and package/unit/integration tests;
 - frontend type checking, component tests, and a production build;
-- Chromium browser setup, synthetic-demo navigation, and live device-evidence journeys with keyboard-focus, semantic-label/contrast, reduced-motion, narrow-viewport, and enlarged-text checks;
+- Chromium browser setup, synthetic-demo navigation, live device-evidence, and controller-outage/recovery journeys with keyboard-focus, semantic-label/contrast, reduced-motion, narrow-viewport, and enlarged-text checks;
 - a black-box controller process E2E suite;
 - macOS arm64 cgo-free cross-compilation for the controller and Darwin-specific packages; and
 - Foundation feasibility harness tests.
