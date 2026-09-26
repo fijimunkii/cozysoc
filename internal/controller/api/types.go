@@ -18,6 +18,7 @@ const (
 	MethodDevicesList         = "devices.list"
 	MethodDeviceDetail        = "device.detail"
 	MethodDeviceActivity      = "device.activity"
+	MethodArrivalFindings     = "findings.arrivals"
 	MethodDeviceLabel         = "device.label"
 	MethodDeviceMerge         = "device.merge"
 	MethodDeviceUnmerge       = "device.unmerge"
@@ -199,6 +200,23 @@ type DeviceActivityList struct {
 	AsOf       time.Time            `json:"as_of"`
 	Items      []DeviceActivityItem `json:"items"`
 	Truncated  bool                 `json:"truncated"`
+}
+
+// ArrivalFindingList is a read-only informational finding projection. It never
+// includes raw finding payloads or treats a first identity as a security alert.
+type ArrivalFindingList struct {
+	AsOf      time.Time            `json:"as_of"`
+	Items     []ArrivalFindingItem `json:"items"`
+	Truncated bool                 `json:"truncated"`
+}
+
+type ArrivalFindingItem struct {
+	ID                    string    `json:"id"`
+	ScopeID               string    `json:"scope_id"`
+	ObservedAt            time.Time `json:"observed_at"`
+	RecordedAt            time.Time `json:"recorded_at"`
+	EvidenceObservationID string    `json:"evidence_observation_id"`
+	EvidenceRetained      bool      `json:"evidence_retained"`
 }
 
 type DeviceLabelParams struct {

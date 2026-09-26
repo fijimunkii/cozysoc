@@ -15,6 +15,7 @@ import { demoActivityRaw } from "./demo/activity";
 import { demoDevicesRaw } from "./demo/devices";
 import { demoCapabilitiesRaw, demoStatusRaw } from "./demo/tools";
 import { OverviewPage } from "./OverviewPage";
+import { ArrivalFindingsPage } from "./findings/ArrivalFindingsPage";
 import { QualityDiagnosisPanel } from "./quality/QualityDiagnosisPanel";
 import { loadQualityDiagnosisFromWeb, type QualityDiagnosisLoader } from "./quality/quality-diagnosis";
 import { HTTPSHistoryPanel } from "./quality/HTTPSHistoryPanel";
@@ -38,7 +39,7 @@ import { createWebSetupClient, loadDeviceMergesFromWeb, loadDeviceSplitsFromWeb,
 import { ToolsPage } from "./tools/ToolsPage";
 import { parseToolsSnapshot } from "./tools/tools";
 
-type Page = "overview" | "devices" | "activity" | "coverage" | "tools";
+type Page = "overview" | "devices" | "activity" | "findings" | "coverage" | "tools";
 type DataView =
   | { mode: "loading" }
   | { mode: "live"; data: AppData }
@@ -95,6 +96,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   overview: { eyebrow: "Overview", title: "Your home at a glance", detail: "Current device evidence and coverage limits, without turning either into a security score." },
   devices: { eyebrow: "Devices", title: "What Cozy SOC has actually seen", detail: "Positive presence evidence, labels, and uncertainty when a Device Watch scope is configured." },
   activity: { eyebrow: "Activity", title: "What changed on your visible network", detail: "A low-noise timeline of positive device evidence and proven identity changes—never inferred departures from silence." },
+  findings: { eyebrow: "Findings", title: "What Cozy SOC has recorded", detail: "Informational Device Watch arrivals with their original observation references and clear uncertainty." },
   coverage: { eyebrow: "Coverage", title: "Know what is visible. Know what is not.", detail: "Observation points, verified scope, expected gaps, and evidence freshness stay explicit." },
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
@@ -191,6 +193,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           <NavButton page="overview" current={page} onNavigate={setPage}>Overview</NavButton>
           <NavButton page="devices" current={page} onNavigate={setPage}>Devices</NavButton>
           <NavButton page="activity" current={page} onNavigate={setPage}>Activity</NavButton>
+          <NavButton page="findings" current={page} onNavigate={setPage}>Findings</NavButton>
           <NavButton page="coverage" current={page} onNavigate={setPage}>Coverage</NavButton>
           <NavButton page="tools" current={page} onNavigate={setPage}>Tools</NavButton>
         </nav>
@@ -237,6 +240,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
             ? <section className="product-card empty-product-state" aria-labelledby="activity-unavailable-title"><h2 id="activity-unavailable-title">Activity is temporarily unavailable</h2><p role="alert">{activeData.activity_error ?? "The local activity projection could not be read. Existing device and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry activity</button> : null}</section>
             : <ActivityPage activity={activeData.activity} mode={view.mode === "live" ? "live" : "demo"} />
         ) : null}
+        {activeData && page === "findings" ? <ArrivalFindingsPage mode={view.mode === "live" ? "live" : "demo"} /> : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>
         ) : null}

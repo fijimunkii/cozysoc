@@ -1,0 +1,7 @@
+.arrival-findings-page { display: grid; gap: 1rem; }
+.arrival-findings-list { list-style: none; margin: 0; padding: 0; }
+.arrival-findings-list li { padding: 1rem 0; border-top: 1px solid #ebe8df; overflow-wrap: anywhere; }
+.arrival-findings-list h3 { margin: 0 0 .4rem; }
+.arrival-findings-list dl { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+.arrival-findings-list dt { color: #74796f; font-size: .85rem; }
+.arrival-findings-list dd { margin: 0; }

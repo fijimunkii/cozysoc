@@ -173,6 +173,31 @@ func (h *controllerAPIHandler) StorageOverview(ctx context.Context) (api.Storage
 	}, nil
 }
 
+type arrivalFindingReader interface {
+	ListRecentArrivalFindings(context.Context, time.Time) (storage.ArrivalFindingPage, error)
+}
+
+func (h *controllerAPIHandler) ArrivalFindings(ctx context.Context) (api.ArrivalFindingList, error) {
+	reader, ok := h.store.(arrivalFindingReader)
+	if !ok {
+		return api.ArrivalFindingList{}, fmt.Errorf("arrival findings are unavailable")
+	}
+	asOf := h.now().UTC()
+	page, err := reader.ListRecentArrivalFindings(ctx, asOf)
+	if err != nil {
+		return api.ArrivalFindingList{}, err
+	}
+	out := api.ArrivalFindingList{AsOf: asOf, Items: make([]api.ArrivalFindingItem, 0, len(page.Findings)), Truncated: page.Truncated}
+	for _, finding := range page.Findings {
+		out.Items = append(out.Items, api.ArrivalFindingItem{
+			ID: finding.ID, ScopeID: finding.ScopeID, ObservedAt: finding.ObservedAt,
+			RecordedAt: finding.RecordedAt, EvidenceObservationID: finding.EvidenceObservationID,
+			EvidenceRetained: finding.EvidenceRetained,
+		})
+	}
+	return out, nil
+}
+
 func (h *controllerAPIHandler) Capabilities() api.CapabilityList {
 	return h.controller.Capabilities()
 }
