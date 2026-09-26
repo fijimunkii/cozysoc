@@ -8,8 +8,15 @@ const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 async function expectAccessibleNarrowState(page: Page) {
   const result = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
   expect(result.violations, JSON.stringify(result.violations, null, 2)).toEqual([]);
-  const widths = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
-  expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
+  const widths = await page.evaluate(() => ({
+    viewport: innerWidth,
+    content: document.documentElement.scrollWidth,
+    overflowing: Array.from(document.querySelectorAll("body *"))
+      .filter((element) => element.getBoundingClientRect().right > innerWidth + 1)
+      .slice(0, 5)
+      .map((element) => `${element.tagName.toLowerCase()}.${element.className} (${Math.round(element.getBoundingClientRect().right)}px)`),
+  }));
+  expect(widths.content, JSON.stringify(widths)).toBeLessThanOrEqual(widths.viewport + 1);
 }
 
 test("live outage and stale refresh recover without substituting demo evidence", async ({ page }) => {
