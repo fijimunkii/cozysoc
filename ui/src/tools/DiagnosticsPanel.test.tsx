@@ -14,6 +14,7 @@ describe("DiagnosticsPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Save preview as JSON" })).toBeTruthy());
     expect(load).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("Diagnostic bundle preview").textContent).toContain('"failure_category": "sensor"');
+    expect(screen.getByLabelText("Diagnostic bundle preview").textContent).toContain('"quota_state": "pressure"');
     expect(screen.getByText(/Nothing is uploaded/)).toBeTruthy();
   });
 
