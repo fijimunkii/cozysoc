@@ -6,7 +6,10 @@ candidate targets the exact 26.7.4 API shape. A native, foreground-only
 `opnsense-status` makes a fresh version read, and
 `opnsense-disconnect` disables local intent before removing the protected
 credential. `opnsense-collect ENROLLED_SCOPE_ID` permits one separately approved
-ARP/NDP read. There is no browser setup, background polling,
+ARP/NDP read. The Tools page can request a fresh status-only read and open a
+validated credential-free link to the router's own admin page. The link is
+withheld when the router shares the Cozy SOC web session's host. There is no
+browser setup or browser neighbor collection, no background polling,
 network-changing operation, or supported-router claim. An owned 26.7.4 lab
 must verify response schema, TLS enrollment, effective privileges, failures,
 and recovery before the adapter can be listed as supported.
