@@ -122,6 +122,8 @@ The store records an explicit expiry timestamp on evidence-bearing rows and has 
 
 #30 will expose and refine user-facing retention controls. The current store hard-limits the main database with SQLite `max_page_count`; the default is the architecture target of 1 GiB. Transient filesystem overhead and sustained-growth behavior still require #29 measurement.
 
+The authenticated Tools storage section now reads the controller-owned store through `storage.overview` and shows the active expiry durations plus live page accounting. It does not offer retention edits, deletion, export, backup, or restore; those #30 controls remain to be built. Its host-volume figure is filesystem capacity, not the size of Cozy SOC data outside the SQLite file.
+
 Operational database-quota health uses SQLite page accounting rather than raw file size alone. The controller reports allocated database bytes, actively used page bytes, reusable free-list bytes, and the effective `max_page_count` capacity. Pressure begins when used pages reach 90% of that configured database quota; reusable free-list pages count as headroom, so retention pruning can recover capacity even if the database file has not physically shrunk.
 
 Host-volume capacity is a separate signal. On Darwin and Linux the controller reads filesystem statistics for the volume containing the state directory and reports total and **available-to-this-process** bytes. Filesystem states are:

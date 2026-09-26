@@ -1,12 +1,15 @@
 import type { ToolCapability, ToolsSnapshot } from "./tools";
+import type { StorageOverview } from "./storage";
 import "./tools.css";
 
 export interface ToolsPageProps {
   tools: ToolsSnapshot;
+  storage?: StorageOverview | null | undefined;
+  storageError?: string | undefined;
   onNavigate: (page: "devices" | "activity" | "coverage") => void;
 }
 
-export function ToolsPage({ tools, onNavigate }: ToolsPageProps) {
+export function ToolsPage({ tools, storage, storageError, onNavigate }: ToolsPageProps) {
   return (
     <div className="tools-stack">
       <section className="product-card tools-controller" aria-labelledby="controller-title">
@@ -23,6 +26,12 @@ export function ToolsPage({ tools, onNavigate }: ToolsPageProps) {
         </dl>
       </section>
 
+      <section className="product-card" aria-labelledby="storage-title">
+        <p className="eyebrow">Local data</p>
+        <h2 id="storage-title">Storage and retention</h2>
+        {storage ? <StorageFacts storage={storage} /> : <p>{storageError ?? "Live storage information is unavailable in this view."}</p>}
+      </section>
+
       {tools.capabilities.length === 0 ? (
         <section className="product-card empty-product-state">
           <h2>No capabilities are registered</h2>
@@ -33,6 +42,44 @@ export function ToolsPage({ tools, onNavigate }: ToolsPageProps) {
       ))}
     </div>
   );
+}
+
+function StorageFacts({ storage }: { storage: StorageOverview }) {
+  return <>
+    <p>Read {formatTimestamp(storage.as_of)}. Usage is based on SQLite pages, not a count of household events.</p>
+    <dl className="tools-facts">
+      <Fact label="Used database pages" value={formatBytes(storage.used_bytes)} />
+      <Fact label="Reusable database pages" value={formatBytes(storage.reusable_bytes)} />
+      <Fact label="Allocated database pages" value={formatBytes(storage.database_bytes)} />
+      <Fact label="Database quota" value={`${formatBytes(storage.max_bytes)} · ${quotaLabel(storage.quota_state)}`} />
+      <Fact label="Host volume" value={storage.filesystem_supported && storage.filesystem_state !== "unavailable" ? `${formatBytes(storage.filesystem_available_bytes)} available · ${volumeLabel(storage.filesystem_state)}` : "Capacity unavailable"} />
+    </dl>
+    <h3>Current evidence expiry</h3>
+    <p>These are the controller's current class durations. Individual evidence is hidden when its expiry ends, even if cleanup has not reclaimed its pages yet.</p>
+    <ul className="tool-list">{storage.retention.map((item) => <li key={item.class}><strong>{retentionLabel(item.class)}</strong><span>{formatDuration(item.duration_seconds)}</span></li>)}</ul>
+    <p>Database quota and host-volume space are separate limits. Volume availability includes space used by other applications; the database figures do not.</p>
+  </>;
+}
+
+function formatBytes(value: number): string {
+  return `${(value / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 1 })} MiB`;
+}
+
+function formatDuration(seconds: number): string {
+  const days = seconds / 86400;
+  return Number.isInteger(days) ? `${days} ${days === 1 ? "day" : "days"}` : `${seconds / 3600} hours`;
+}
+
+function retentionLabel(value: StorageOverview["retention"][number]["class"]): string {
+  return { ephemeral: "Ephemeral evidence", short: "Short-lived evidence", standard: "Standard evidence", audit: "Audit records" }[value];
+}
+
+function quotaLabel(value: StorageOverview["quota_state"]): string {
+  return { current: "Within quota", pressure: "Approaching quota", "at-quota": "At quota" }[value];
+}
+
+function volumeLabel(value: string): string {
+  return { current: "Space available", pressure: "Low space", full: "Volume full" }[value] ?? "Capacity unavailable";
 }
 
 function CapabilityCard({ capability, onNavigate }: { capability: ToolCapability; onNavigate: ToolsPageProps["onNavigate"] }) {

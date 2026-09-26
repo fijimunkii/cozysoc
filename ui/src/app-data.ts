@@ -3,6 +3,7 @@ import { loadCoverageFromWeb, type CoverageBundle } from "./coverage/bundle";
 import { loadDevicesFromWeb, type DeviceList } from "./devices/devices";
 import { loadNetworksFromWeb, type NetworkList } from "./setup/setup";
 import { loadToolsFromWeb, type ToolsSnapshot } from "./tools/tools";
+import { loadStorageOverviewFromWeb, type StorageOverview } from "./tools/storage";
 
 export interface AppData {
   coverage: CoverageBundle;
@@ -11,6 +12,8 @@ export interface AppData {
   activity_error?: string;
   tools: ToolsSnapshot | null;
   tools_error?: string;
+  storage?: StorageOverview | null;
+  storage_error?: string;
   networks: NetworkList;
   network_error?: string;
 }
@@ -33,12 +36,15 @@ export async function loadAppDataFromWeb(): Promise<AppData> {
       tools: null,
       tools_error: error instanceof Error ? error.message : "Tool information is unavailable.",
     }));
+  const storagePromise = loadStorageOverviewFromWeb()
+    .then((storage) => ({ storage }))
+    .catch(() => ({ storage: null, storage_error: "Storage information is temporarily unavailable." }));
   const networksPromise = loadNetworksFromWeb()
     .then((networks) => ({ networks }))
     .catch((error: unknown) => ({
       networks: { candidates: [], candidates_truncated: false } as NetworkList,
       network_error: error instanceof Error ? error.message : "Network setup information is unavailable.",
     }));
-  const [devices, activityState, toolsState, networkState] = await Promise.all([devicesPromise, activityPromise, toolsPromise, networksPromise]);
-  return { coverage, devices, ...activityState, ...toolsState, ...networkState };
+  const [devices, activityState, toolsState, storageState, networkState] = await Promise.all([devicesPromise, activityPromise, toolsPromise, storagePromise, networksPromise]);
+  return { coverage, devices, ...activityState, ...toolsState, ...storageState, ...networkState };
 }

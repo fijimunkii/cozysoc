@@ -173,7 +173,9 @@ Device detail reports the controller's original read time. Its presence and iden
 
 ## Tools and capability presentation
 
-The Tools page consumes two additional authenticated, parameterless read routes: `GET /api/status` and `GET /api/capabilities`. Both are browser-specific projections over existing typed UDS reads; they add no new controller method and no lifecycle mutation authority.
+The Tools page consumes authenticated, parameterless read routes `GET /api/status`, `GET /api/capabilities`, and `GET /api/storage`. The first two are browser-specific projections over existing typed UDS reads. Storage uses a dedicated controller read, `storage.overview`, backed by the controller-owned store; none of these routes grants mutation authority.
+
+The storage section reports live SQLite allocated, used, and reusable page bytes against the database quota. It reports host-volume available space separately, when capacity is supported and available, and displays the four active controller retention durations. Those durations are current expiry defaults, not configurable user settings. Expired evidence is hidden by the query layer even before physical pruning; reclaiming reusable pages need not shrink the database file or free host-volume bytes immediately. Host-volume availability reflects all files on that volume, not just Cozy SOC. A storage read failure leaves the rest of Tools available with an explicit unavailable state.
 
 `GET /api/status` deliberately excludes PID, uptime, controller API internals, and credentials. It exposes only the controller build/version string, start time, configuration schema version, and the fact that management transport is the protected local Unix socket.
 

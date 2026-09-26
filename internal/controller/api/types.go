@@ -12,6 +12,7 @@ const Version = 1
 const (
 	MethodStatus              = "status"
 	MethodHealth              = "health"
+	MethodStorageOverview     = "storage.overview"
 	MethodCapabilitiesList    = "capabilities.list"
 	MethodDevicesList         = "devices.list"
 	MethodDeviceDetail        = "device.detail"
@@ -59,6 +60,25 @@ type Health struct {
 	LastTickAt time.Time  `json:"last_tick_at"`
 	GapCount   uint64     `json:"gap_count"`
 	LastGapAt  *time.Time `json:"last_gap_at,omitempty"`
+}
+
+type StorageRetention struct {
+	Class           string `json:"class"`
+	DurationSeconds int64  `json:"duration_seconds"`
+}
+
+type StorageOverview struct {
+	AsOf                     time.Time          `json:"as_of"`
+	QuotaState               string             `json:"quota_state"`
+	DatabaseBytes            int64              `json:"database_bytes"`
+	UsedBytes                int64              `json:"used_bytes"`
+	ReusableBytes            int64              `json:"reusable_bytes"`
+	MaxBytes                 int64              `json:"max_bytes"`
+	FilesystemState          string             `json:"filesystem_state"`
+	FilesystemSupported      bool               `json:"filesystem_supported"`
+	FilesystemTotalBytes     int64              `json:"filesystem_total_bytes"`
+	FilesystemAvailableBytes int64              `json:"filesystem_available_bytes"`
+	Retention                []StorageRetention `json:"retention"`
 }
 
 type CapabilityList struct {

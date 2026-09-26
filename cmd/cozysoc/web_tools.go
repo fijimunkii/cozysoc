@@ -80,6 +80,45 @@ type webCapabilityList struct {
 	Capabilities         []webCapability `json:"capabilities"`
 }
 
+type webStorageOverview struct {
+	AsOf                     time.Time              `json:"as_of"`
+	QuotaState               string                 `json:"quota_state"`
+	DatabaseBytes            int64                  `json:"database_bytes"`
+	UsedBytes                int64                  `json:"used_bytes"`
+	ReusableBytes            int64                  `json:"reusable_bytes"`
+	MaxBytes                 int64                  `json:"max_bytes"`
+	FilesystemState          string                 `json:"filesystem_state"`
+	FilesystemSupported      bool                   `json:"filesystem_supported"`
+	FilesystemTotalBytes     int64                  `json:"filesystem_total_bytes,omitempty"`
+	FilesystemAvailableBytes int64                  `json:"filesystem_available_bytes,omitempty"`
+	Retention                []api.StorageRetention `json:"retention"`
+}
+
+func loadStorageOverviewFromController(ctx context.Context, stateDir string) (api.StorageOverview, error) {
+	requestCtx, cancel := context.WithTimeout(ctx, webRequestTimeout)
+	defer cancel()
+	result, err := localapi.NewClient(stateDir).Call(requestCtx, api.MethodStorageOverview)
+	if err != nil {
+		return api.StorageOverview{}, fmt.Errorf("load controller storage overview: %w", err)
+	}
+	var overview api.StorageOverview
+	if err := json.Unmarshal(result, &overview); err != nil {
+		return api.StorageOverview{}, fmt.Errorf("decode controller storage overview: %w", err)
+	}
+	return overview, nil
+}
+
+func projectWebStorageOverview(native api.StorageOverview) webStorageOverview {
+	return webStorageOverview{
+		AsOf: native.AsOf.UTC(), QuotaState: native.QuotaState,
+		DatabaseBytes: native.DatabaseBytes, UsedBytes: native.UsedBytes,
+		ReusableBytes: native.ReusableBytes, MaxBytes: native.MaxBytes,
+		FilesystemState: native.FilesystemState, FilesystemSupported: native.FilesystemSupported,
+		FilesystemTotalBytes: native.FilesystemTotalBytes, FilesystemAvailableBytes: native.FilesystemAvailableBytes,
+		Retention: append([]api.StorageRetention(nil), native.Retention...),
+	}
+}
+
 func loadStatusFromController(ctx context.Context, stateDir string) (api.Status, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, webRequestTimeout)
 	defer cancel()
@@ -221,6 +260,29 @@ func (h *webHandler) handleCapabilities(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeWebJSON(w, http.StatusOK, projectWebCapabilities(capabilities))
+}
+
+func (h *webHandler) handleStorageOverview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.authenticated(r) {
+		writeWebError(w, http.StatusUnauthorized, "web_session_required", "open the authenticated local Cozy SOC web URL")
+		return
+	}
+	if !validateParameterlessWebRead(w, r, "storage overview") {
+		return
+	}
+	if h.loadStorageOverview == nil {
+		writeWebError(w, http.StatusServiceUnavailable, "controller_unavailable", "storage information is unavailable")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), webRequestTimeout)
+	defer cancel()
+	overview, err := h.loadStorageOverview(ctx)
+	if err != nil {
+		writeWebError(w, http.StatusServiceUnavailable, "controller_unavailable", "storage information is unavailable")
+		return
+	}
+	writeWebJSON(w, http.StatusOK, projectWebStorageOverview(overview))
 }
 
 func validateParameterlessWebRead(w http.ResponseWriter, r *http.Request, label string) bool {
