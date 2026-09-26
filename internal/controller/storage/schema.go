@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -302,4 +302,11 @@ CREATE TABLE device_identity_split_links (
  FOREIGN KEY(scope_id,observation_id) REFERENCES device_identity_splits(scope_id,observation_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX device_identity_split_links_observation ON device_identity_split_links(scope_id,observation_id);
+`
+
+// Review state belongs to the retained finding and expires with it. The
+// corresponding user action is also recorded in the audit history.
+const migrationV7 = `
+ALTER TABLE findings ADD COLUMN acknowledged_at_ns INTEGER
+ CHECK (acknowledged_at_ns IS NULL OR acknowledged_at_ns > 0);
 `

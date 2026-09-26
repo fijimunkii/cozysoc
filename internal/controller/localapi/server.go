@@ -68,6 +68,10 @@ type ArrivalFindingsHandler interface {
 	ArrivalFindings(context.Context) (api.ArrivalFindingList, error)
 }
 
+type ArrivalAcknowledgeHandler interface {
+	AcknowledgeArrivalFinding(context.Context, api.ArrivalAcknowledgeParams) (api.ArrivalAcknowledgeResult, error)
+}
+
 type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
@@ -465,6 +469,33 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = findings
+	case api.MethodArrivalAcknowledge:
+		ackHandler, ok := s.handler.(ArrivalAcknowledgeHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		var params api.ArrivalAcknowledgeParams
+		if err := decodeRequiredParams(request.Params, &params); err != nil || params.FindingID == "" {
+			s.writeError(conn, request.ID, "invalid_request", "invalid arrival acknowledgement parameters")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		ack, ackErr := ackHandler.AcknowledgeArrivalFinding(requestCtx, params)
+		cancel()
+		if ackErr != nil {
+			switch {
+			case errors.Is(ackErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid arrival acknowledgement parameters")
+			case errors.Is(ackErr, ErrMutationTargetNotFound):
+				s.writeError(conn, request.ID, "not_found", "arrival finding is unavailable")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", api.MethodArrivalAcknowledge)
+				s.writeError(conn, request.ID, "internal_error", "unable to acknowledge arrival finding")
+			}
+			return
+		}
+		result = ack
 	case api.MethodDeviceDetail:
 		detailHandler, ok := s.handler.(DeviceDetailHandler)
 		if !ok {

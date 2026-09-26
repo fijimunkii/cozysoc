@@ -77,6 +77,28 @@ func (h *mutationTestHandler) LabelDevice(_ context.Context, params api.DeviceLa
 	return api.DeviceLabelResult{DeviceID: params.DeviceID, UserLabel: *params.Label, Changed: true}, nil
 }
 
+func (*mutationTestHandler) AcknowledgeArrivalFinding(_ context.Context, params api.ArrivalAcknowledgeParams) (api.ArrivalAcknowledgeResult, error) {
+	return api.ArrivalAcknowledgeResult{FindingID: params.FindingID, AcknowledgedAt: time.Unix(1, 0).UTC(), Changed: true}, nil
+}
+
+func TestArrivalAcknowledgeRoundTripAndStrictParams(t *testing.T) {
+	server := startMutationTestServer(t, &mutationTestHandler{})
+	client := NewClient(server.stateDir)
+	for _, params := range []any{map[string]string{}, map[string]string{"finding_id": "finding.one", "extra": "bad"}} {
+		if _, err := client.CallWithParams(context.Background(), api.MethodArrivalAcknowledge, params); err == nil || !strings.Contains(err.Error(), "invalid_request") {
+			t.Fatalf("invalid params accepted: %v", err)
+		}
+	}
+	raw, err := client.CallWithParams(context.Background(), api.MethodArrivalAcknowledge, api.ArrivalAcknowledgeParams{FindingID: "finding.one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result api.ArrivalAcknowledgeResult
+	if err := json.Unmarshal(raw, &result); err != nil || result.FindingID != "finding.one" || !result.Changed {
+		t.Fatal(result, err)
+	}
+}
+
 func startMutationTestServer(t *testing.T, handler Handler) *Server {
 	t.Helper()
 	server, err := newServer(t.TempDir(), handler, slog.New(slog.NewTextHandler(io.Discard, nil)), verifyPeer)

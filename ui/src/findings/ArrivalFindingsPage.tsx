@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { loadArrivalFindings, type ArrivalFindingList } from "./arrivals";
+import { acknowledgeArrivalFinding, loadArrivalFindings, type ArrivalFindingList } from "./arrivals";
 import "./arrivals.css";
 
 export function ArrivalFindingsPage({ mode, onNavigate }: { mode: "live" | "demo"; onNavigate: (page: "devices" | "activity") => void }) {
   const [state, setState] = useState<{ status: "loading" | "ready" | "failed"; data?: ArrivalFindingList }>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [pendingID, setPendingID] = useState<string | null>(null);
+  const [acknowledgementError, setAcknowledgementError] = useState(false);
   useEffect(() => {
     if (mode !== "live") return;
     const controller = new AbortController();
@@ -17,6 +19,22 @@ export function ArrivalFindingsPage({ mode, onNavigate }: { mode: "live" | "demo
     return () => controller.abort();
   }, [mode, attempt]);
 
+  async function acknowledge(findingID: string): Promise<void> {
+    if (pendingID !== null) return;
+    setAcknowledgementError(false);
+    setPendingID(findingID);
+    try {
+      const at = await acknowledgeArrivalFinding(findingID);
+      setState((current) => current.status !== "ready" || current.data === undefined ? current : ({
+        status: "ready", data: { ...current.data, items: current.data.items.map((item) => item.id === findingID ? { ...item, acknowledged_at: at } : item) },
+      }));
+    } catch {
+      setAcknowledgementError(true);
+    } finally {
+      setPendingID(null);
+    }
+  }
+
   if (mode === "demo") return <section className="product-card empty-product-state"><h2>Arrival findings are live evidence only</h2><p>The synthetic demo has no findings. Connect to a local controller to read retained Device Watch arrivals.</p></section>;
   return <div className="arrival-findings-page">
     <section className="product-card">
@@ -27,6 +45,7 @@ export function ArrivalFindingsPage({ mode, onNavigate }: { mode: "live" | "demo
     </section>
     {state.status === "loading" ? <section className="product-card" role="status">Reading retained findings…</section> : null}
     {state.status === "failed" ? <section className="product-card" role="alert"><h2>Findings are temporarily unavailable</h2><p>Other local evidence remains available.</p><button type="button" className="primary-action" onClick={() => setAttempt((value) => value + 1)}>Retry findings</button></section> : null}
+    {acknowledgementError ? <section className="product-card" role="alert"><p>The acknowledgement could not be confirmed. Refresh findings to check its current state before trying again.</p><button type="button" className="secondary-action" onClick={() => { setAcknowledgementError(false); setAttempt((value) => value + 1); }}>Refresh findings</button></section> : null}
     {state.status === "ready" && state.data ? <section className="product-card">
       <p>Read {formatTime(state.data.as_of)}. Only the newest 100 retained Device Watch arrivals can appear here. Source observations may expire independently.</p>
       {state.data.truncated ? <p role="status">Older arrival findings are outside this bounded view.</p> : null}
@@ -35,6 +54,7 @@ export function ArrivalFindingsPage({ mode, onNavigate }: { mode: "live" | "demo
           <h3>New network identity observed</h3>
           <p>Recorded {formatTime(item.recorded_at)}. Source observation time: {formatTime(item.observed_at)}.</p>
           <p>{item.evidence_retained ? "The source observation is still retained." : "The source observation has expired or is unavailable; this finding remains historical."}</p>
+          {item.acknowledged_at ? <p>Acknowledged {formatTime(item.acknowledged_at)}. This records review only; it does not verify identity or suppress later findings.</p> : <button type="button" className="secondary-action" disabled={pendingID !== null || acknowledgementError} onClick={() => void acknowledge(item.id)}>{pendingID === item.id ? "Saving acknowledgement…" : "Mark as reviewed"}</button>}
           <dl><div><dt>Finding</dt><dd><code>{item.id}</code></dd></div><div><dt>Network scope</dt><dd><code>{item.scope_id}</code></dd></div><div><dt>Source observation</dt><dd><code>{item.evidence_observation_id}</code></dd></div></dl>
         </li>)}</ol>}
     </section> : null}

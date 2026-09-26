@@ -177,6 +177,10 @@ type arrivalFindingReader interface {
 	ListRecentArrivalFindings(context.Context, time.Time) (storage.ArrivalFindingPage, error)
 }
 
+type arrivalFindingAcknowledger interface {
+	AcknowledgeArrivalFinding(context.Context, string) (time.Time, bool, error)
+}
+
 func (h *controllerAPIHandler) ArrivalFindings(ctx context.Context) (api.ArrivalFindingList, error) {
 	reader, ok := h.store.(arrivalFindingReader)
 	if !ok {
@@ -192,10 +196,28 @@ func (h *controllerAPIHandler) ArrivalFindings(ctx context.Context) (api.Arrival
 		out.Items = append(out.Items, api.ArrivalFindingItem{
 			ID: finding.ID, ScopeID: finding.ScopeID, ObservedAt: finding.ObservedAt,
 			RecordedAt: finding.RecordedAt, EvidenceObservationID: finding.EvidenceObservationID,
-			EvidenceRetained: finding.EvidenceRetained,
+			EvidenceRetained: finding.EvidenceRetained, AcknowledgedAt: finding.AcknowledgedAt,
 		})
 	}
 	return out, nil
+}
+
+func (h *controllerAPIHandler) AcknowledgeArrivalFinding(ctx context.Context, params api.ArrivalAcknowledgeParams) (api.ArrivalAcknowledgeResult, error) {
+	if !deviceIDPattern.MatchString(params.FindingID) {
+		return api.ArrivalAcknowledgeResult{}, localapi.ErrInvalidMutation
+	}
+	writer, ok := h.store.(arrivalFindingAcknowledger)
+	if !ok {
+		return api.ArrivalAcknowledgeResult{}, fmt.Errorf("arrival acknowledgement is unavailable")
+	}
+	at, changed, err := writer.AcknowledgeArrivalFinding(ctx, params.FindingID)
+	if errors.Is(err, storage.ErrArrivalFindingNotFound) {
+		return api.ArrivalAcknowledgeResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if err != nil {
+		return api.ArrivalAcknowledgeResult{}, err
+	}
+	return api.ArrivalAcknowledgeResult{FindingID: params.FindingID, AcknowledgedAt: at, Changed: changed}, nil
 }
 
 func (h *controllerAPIHandler) Capabilities() api.CapabilityList {

@@ -12,6 +12,7 @@ describe("arrival findings", () => {
     expect(parsed.items).toHaveLength(1);
     expect(JSON.stringify(parsed)).not.toContain("secret");
     expect(parsed.items[0]?.evidence_retained).toBe(false);
+    expect(parsed.items[0]?.acknowledged_at).toBeUndefined();
   });
 
   it("rejects invalid identity, times and count", () => {
