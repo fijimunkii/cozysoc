@@ -259,7 +259,8 @@ observation's retained links move together in current device detail, presence,
 scope membership, and activity views; its original inferred links remain
 unchanged and visible as provenance. First/last-seen and address-change
 classification use the corrected evidence. Undo restores the original
-projection without reconstructing the observation.
+projection without reconstructing the observation; an empty Device created
+only for the split is removed after its last active split is undone.
 
 Storage checks the current LAN scope and the selected observation's retained
 inferred links in one transaction. A real transition and its `device-identity`

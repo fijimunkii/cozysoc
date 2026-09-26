@@ -227,6 +227,9 @@ func (s *Store) SplitDeviceObservation(ctx context.Context, scopeID, sourceID, o
 		if _, err := tx.ExecContext(ctx, `INSERT INTO devices(id,created_at_ns) VALUES(?,?)`, targetID, selected[0].Evidence.ObservedAt.UnixNano()); err != nil {
 			return "", false, wrapWrite("create split device", err)
 		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO device_identity_split_targets(device_id,scope_id,created_at_ns) VALUES(?,?,?)`, targetID, scopeID, now.UnixNano()); err != nil {
+			return "", false, wrapWrite("register split device", err)
+		}
 	} else {
 		if _, err := view.getOriginalDeviceEvidenceDetail(ctx, DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: targetID, AsOf: now, Limit: 1}); errors.Is(err, ErrDeviceEvidenceNotFound) {
 			if len(splits.byTarget[targetID]) == 0 {
@@ -283,6 +286,27 @@ func (s *Store) UndoDeviceSplitObservation(ctx context.Context, scopeID, observa
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM device_identity_splits WHERE scope_id=? AND observation_id=?`, scopeID, observationID); err != nil {
 		return false, wrapWrite("remove device split", err)
+	}
+	var createdTarget bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM device_identity_split_targets WHERE scope_id=? AND device_id=?)`, scopeID, targetID).Scan(&createdTarget); err != nil {
+		return false, err
+	}
+	if createdTarget {
+		var stillUsed bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM device_identity_splits WHERE scope_id=? AND target_device_id=?)`, scopeID, targetID).Scan(&stillUsed); err != nil {
+			return false, err
+		}
+		if !stillUsed {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM device_identity_split_targets WHERE scope_id=? AND device_id=?`, scopeID, targetID); err != nil {
+				return false, wrapWrite("remove split device registration", err)
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM devices WHERE id=?
+				AND NOT EXISTS(SELECT 1 FROM device_claim_links WHERE device_id=?)
+				AND NOT EXISTS(SELECT 1 FROM evidence_batch_identity_routes WHERE device_id=?)
+				AND NOT EXISTS(SELECT 1 FROM device_identity_splits WHERE source_device_id=? OR target_device_id=?)`, targetID, targetID, targetID, targetID, targetID); err != nil {
+				return false, wrapWrite("remove empty split device", err)
+			}
+		}
 	}
 	if err := appendDeviceIdentityAudit(ctx, tx, "unsplit", scopeID, sourceID, targetID, now, expiresAt, observationID); err != nil {
 		return false, err

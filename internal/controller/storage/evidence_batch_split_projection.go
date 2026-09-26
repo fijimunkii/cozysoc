@@ -169,7 +169,7 @@ func (s *MixedIdentitySnapshot) listCorrectedDeviceEvidence(ctx context.Context,
 	}
 	cursor := q.AfterID
 	pageSize := min(MaxQueryLimit, q.Limit+len(splits.bySource)+1)
-	for len(byID) <= q.Limit {
+	for {
 		page, err := s.listMergedDeviceEvidence(ctx, DeviceEvidenceQuery{ScopeID: q.ScopeID, AsOf: q.AsOf, AfterID: cursor, Limit: pageSize})
 		if err != nil {
 			return DeviceEvidencePage{}, err
@@ -191,6 +191,16 @@ func (s *MixedIdentitySnapshot) listCorrectedDeviceEvidence(ctx context.Context,
 			return DeviceEvidencePage{}, ErrEvidenceBatchData
 		}
 		cursor = page.NextID
+		if len(byID) > q.Limit {
+			ordered := make([]DeviceEvidenceSummary, 0, len(byID))
+			for _, summary := range byID {
+				ordered = append(ordered, summary)
+			}
+			sortCorrectedSummaries(ordered)
+			if cursor >= ordered[q.Limit].Device.ID {
+				break
+			}
+		}
 	}
 	result := make([]DeviceEvidenceSummary, 0, len(byID))
 	for _, summary := range byID {
@@ -245,7 +255,7 @@ func (s *MixedIdentitySnapshot) listCorrectedDevicesForScope(ctx context.Context
 	}
 	cursor := q.AfterID
 	pageSize := min(MaxQueryLimit, q.Limit+len(splits.bySource)+1)
-	for len(byID) <= q.Limit {
+	for {
 		page, err := s.listMergedDevicesForScope(ctx, DeviceQuery{ScopeID: q.ScopeID, AsOf: q.AsOf, AfterID: cursor, Limit: pageSize})
 		if err != nil {
 			return DevicePage{}, err
@@ -266,6 +276,16 @@ func (s *MixedIdentitySnapshot) listCorrectedDevicesForScope(ctx context.Context
 			return DevicePage{}, ErrEvidenceBatchData
 		}
 		cursor = page.NextID
+		if len(byID) > q.Limit {
+			ordered := make([]string, 0, len(byID))
+			for id := range byID {
+				ordered = append(ordered, id)
+			}
+			sort.Strings(ordered)
+			if cursor >= ordered[q.Limit] {
+				break
+			}
+		}
 	}
 	result := make([]domain.Device, 0, len(byID))
 	for _, device := range byID {

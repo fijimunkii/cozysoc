@@ -286,6 +286,11 @@ CREATE TABLE device_identity_splits (
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX device_identity_splits_source ON device_identity_splits(scope_id,source_device_id);
 CREATE INDEX device_identity_splits_target ON device_identity_splits(scope_id,target_device_id);
+CREATE TABLE device_identity_split_targets (
+ device_id TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE RESTRICT,
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id) ON DELETE RESTRICT,
+ created_at_ns INTEGER NOT NULL
+) STRICT, WITHOUT ROWID;
 CREATE TABLE device_identity_split_links (
  scope_id TEXT NOT NULL,
  observation_id TEXT NOT NULL,

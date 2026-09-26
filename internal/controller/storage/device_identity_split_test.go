@@ -59,6 +59,13 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 			t.Fatal("split erased original association", item)
 		}
 	}
+	if labeled, err := s.SetDeviceLabel(ctx, "scope.fixture", target, "Separate device"); err != nil || !labeled {
+		t.Fatal("split target could not be labeled", labeled, err)
+	}
+	targetDetail, err = readMixedDetail(t, db, now, DeviceEvidenceDetailQuery{ScopeID: "scope.fixture", DeviceID: target, AsOf: now})
+	if err != nil || targetDetail.Summary.Device.UserLabel != "Separate device" {
+		t.Fatal("split target label", targetDetail.Summary, err)
+	}
 	page, err := readMixedDevices(t, db, now, DeviceEvidenceQuery{ScopeID: "scope.fixture", AsOf: now, Limit: 10})
 	if err != nil || len(page.Devices) != 2 {
 		t.Fatal("corrected device list", page, err)
@@ -101,6 +108,10 @@ func TestDeviceObservationSplitIsScopedAuditedAndUndoable(t *testing.T) {
 	}
 	if changed, err := s.UndoDeviceSplitObservation(ctx, "scope.fixture", second.Observation.ID); err != nil || changed {
 		t.Fatal("idempotent undo", changed, err)
+	}
+	var remainingDevices int
+	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM devices`).Scan(&remainingDevices); err != nil || remainingDevices != 1 {
+		t.Fatal("undo retained empty split device", remainingDevices, err)
 	}
 	var audits int
 	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind='device-identity'`).Scan(&audits); err != nil || audits != 2 {
@@ -207,5 +218,125 @@ func TestDeviceSplitOfFirstObservationMovesSourceFirstSeen(t *testing.T) {
 		if item.Kind != DeviceActivityFirstObserved {
 			t.Fatal("corrected identity did not start at its first observation", item)
 		}
+	}
+}
+
+func TestDeviceSplitPaginationIncludesEarlierUncorrectedDevice(t *testing.T) {
+	s, db := batchSQLFixture(t)
+	ctx := context.Background()
+	base := batchRecordFixture().Claims[0].Claim.ObservedAt
+	for _, id := range []string{"device.a", "device.z"} {
+		if err := s.CreateDevice(ctx, domain.Device{ID: id, CreatedAt: base}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records := []EvidenceBatchRecord{
+		activityRecord(1, "device.a", 0, "192.168.50.10", domain.ClaimIPv4),
+		activityRecord(2, "device.z", time.Minute, "192.168.50.20", domain.ClaimIPv4),
+		activityRecord(3, "device.z", 2*time.Minute, "192.168.50.30", domain.ClaimIPv4),
+	}
+	for _, record := range records {
+		if ok, err := batchSQLAppend(t, db, record); err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+	}
+	now := base.Add(3 * time.Minute)
+	s.now = func() time.Time { return now }
+	for _, record := range records[1:] {
+		if _, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.z", record.Observation.ID, ""); err != nil || !changed {
+			t.Fatal("split", changed, err)
+		}
+	}
+	first, err := readMixedDevices(t, db, now, DeviceEvidenceQuery{ScopeID: "scope.fixture", AsOf: now, Limit: 1})
+	if err != nil || len(first.Devices) != 1 || first.Devices[0].Device.ID != "device.a" || first.NextID != "device.a" {
+		t.Fatal("corrected list skipped earlier device", first, err)
+	}
+	current, err := readMergedScopeDevices(t, db, now, DeviceQuery{ScopeID: "scope.fixture", AsOf: now, Limit: 1})
+	if err != nil || len(current.Devices) != 1 || current.Devices[0].ID != "device.a" || current.NextID != "device.a" {
+		t.Fatal("corrected scope skipped earlier device", current, err)
+	}
+}
+
+func TestDeviceSplitCanReuseCreatedTargetAndUndoEachObservation(t *testing.T) {
+	s, db := batchSQLFixture(t)
+	ctx := context.Background()
+	base := batchRecordFixture().Claims[0].Claim.ObservedAt
+	if err := s.CreateDevice(ctx, domain.Device{ID: "device.source", CreatedAt: base}); err != nil {
+		t.Fatal(err)
+	}
+	records := []EvidenceBatchRecord{
+		activityRecord(1, "device.source", 0, "192.168.50.10", domain.ClaimIPv4),
+		activityRecord(2, "device.source", time.Minute, "192.168.50.20", domain.ClaimIPv4),
+		activityRecord(3, "device.source", 2*time.Minute, "192.168.50.30", domain.ClaimIPv4),
+	}
+	for _, record := range records {
+		if ok, err := batchSQLAppend(t, db, record); err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+	}
+	now := base.Add(3 * time.Minute)
+	s.now = func() time.Time { return now }
+	target, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.source", records[0].Observation.ID, "")
+	if err != nil || !changed {
+		t.Fatal("first split", target, changed, err)
+	}
+	if reused, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.source", records[1].Observation.ID, target); err != nil || !changed || reused != target {
+		t.Fatal("reuse target", reused, changed, err)
+	}
+	if changed, err := s.UndoDeviceSplitObservation(ctx, "scope.fixture", records[0].Observation.ID); err != nil || !changed {
+		t.Fatal("undo first", changed, err)
+	}
+	detail, err := readMixedDetail(t, db, now, DeviceEvidenceDetailQuery{ScopeID: "scope.fixture", DeviceID: target, AsOf: now})
+	if err != nil || len(detail.Evidence) != 2 {
+		t.Fatal("shared target was removed too early", detail, err)
+	}
+	if changed, err := s.UndoDeviceSplitObservation(ctx, "scope.fixture", records[1].Observation.ID); err != nil || !changed {
+		t.Fatal("undo second", changed, err)
+	}
+	var count int
+	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM devices WHERE id=?`, target).Scan(&count); err != nil || count != 0 {
+		t.Fatal("empty shared target was retained", count, err)
+	}
+}
+
+func TestDeviceSplitSurvivesObservationExpiryWithoutRevivingExpiredClaims(t *testing.T) {
+	s, db := batchSQLFixture(t)
+	ctx := context.Background()
+	base := batchRecordFixture().Claims[0].Claim.ObservedAt
+	if err := s.CreateDevice(ctx, domain.Device{ID: "device.source", CreatedAt: base}); err != nil {
+		t.Fatal(err)
+	}
+	first := activityRecord(1, "device.source", 0, "192.168.50.10", domain.ClaimIPv4)
+	second := activityRecord(2, "device.source", time.Minute, "192.168.50.20", domain.ClaimIPv4)
+	observationExpiry := base.Add(3 * time.Minute)
+	second.ObservationExpiresAt = &observationExpiry
+	for _, record := range []EvidenceBatchRecord{first, second} {
+		if ok, err := batchSQLAppend(t, db, record); err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+	}
+	s.now = func() time.Time { return base.Add(2 * time.Minute) }
+	target, changed, err := s.SplitDeviceObservation(ctx, "scope.fixture", "device.source", second.Observation.ID, "")
+	if err != nil || !changed {
+		t.Fatal(target, changed, err)
+	}
+	if _, err := batchSQLPrune(t, db, observationExpiry, 10); err != nil {
+		t.Fatal(err)
+	}
+	now := base.Add(4 * time.Minute)
+	detail, err := readMixedDetail(t, db, now, DeviceEvidenceDetailQuery{ScopeID: "scope.fixture", DeviceID: target, AsOf: now})
+	if err != nil || len(detail.Evidence) != 2 {
+		t.Fatal("surviving claims lost correction", detail, err)
+	}
+	for _, item := range detail.Evidence {
+		if item.Observation != nil || item.OriginalDeviceID != "device.source" {
+			t.Fatal("retained claim provenance", item)
+		}
+	}
+	if _, err := batchSQLPrune(t, db, second.Claims[0].ExpiresAt, 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readMixedDetail(t, db, second.Claims[0].ExpiresAt, DeviceEvidenceDetailQuery{ScopeID: "scope.fixture", DeviceID: target, AsOf: second.Claims[0].ExpiresAt}); !errors.Is(err, ErrDeviceEvidenceNotFound) {
+		t.Fatal("expired claims still projected", err)
 	}
 }
