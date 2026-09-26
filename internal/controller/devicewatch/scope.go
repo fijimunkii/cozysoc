@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -60,20 +61,12 @@ func CaptureScopeBinding(ctx context.Context, inspector InterfaceInspector, inte
 	if err := validateInterfaceState(state); err != nil {
 		return ScopeBinding{}, err
 	}
-	prefixes := make([]string, 0, len(state.Prefixes))
-	for _, prefix := range state.Prefixes {
-		if !usablePrefix(prefix) {
-			continue
-		}
-		prefixes = append(prefixes, prefix.Masked().String())
+	prefixes, hasNetworkPrefix, err := canonicalUsablePrefixes(state.Prefixes)
+	if err != nil {
+		return ScopeBinding{}, err
 	}
-	sort.Strings(prefixes)
-	prefixes = compactStrings(prefixes)
-	if len(prefixes) > 32 {
-		return ScopeBinding{}, fmt.Errorf("%w: interface exposes too many IP prefixes", ErrUnsupportedInterface)
-	}
-	if len(prefixes) == 0 {
-		return ScopeBinding{}, fmt.Errorf("%w: interface has no usable IP prefixes", ErrUnsupportedInterface)
+	if !hasNetworkPrefix {
+		return ScopeBinding{}, fmt.Errorf("%w: interface has no non-link-local IP prefix", ErrUnsupportedInterface)
 	}
 	return ScopeBinding{
 		InterfaceName:  state.Name,
@@ -151,20 +144,40 @@ func ValidateCurrentScope(ctx context.Context, inspector InterfaceInspector, bin
 		return InterfaceState{}, fmt.Errorf("%w: interface identity changed", ErrScopeMismatch)
 	}
 
-	enrolled := make(map[string]struct{}, len(binding.Prefixes))
-	for _, raw := range binding.Prefixes {
-		prefix, _ := netip.ParsePrefix(raw)
-		enrolled[prefix.Masked().String()] = struct{}{}
+	current, hasNetworkPrefix, err := canonicalUsablePrefixes(state.Prefixes)
+	if err != nil {
+		return InterfaceState{}, err
 	}
-	for _, prefix := range state.Prefixes {
+	enrolled := slices.Clone(binding.Prefixes)
+	slices.Sort(enrolled)
+	if !hasNetworkPrefix || !slices.Equal(current, enrolled) {
+		return InterfaceState{}, fmt.Errorf("%w: interface IP prefixes changed", ErrScopeMismatch)
+	}
+	return state, nil
+}
+
+func canonicalUsablePrefixes(prefixes []netip.Prefix) ([]string, bool, error) {
+	result := make([]string, 0, len(prefixes))
+	hasNetworkPrefix := false
+	for _, prefix := range prefixes {
+		if !prefix.IsValid() {
+			return nil, false, fmt.Errorf("%w: interface prefix is invalid", ErrUnsupportedInterface)
+		}
 		if !usablePrefix(prefix) {
 			continue
 		}
-		if _, ok := enrolled[prefix.Masked().String()]; ok {
-			return state, nil
+		masked := prefix.Masked()
+		result = append(result, masked.String())
+		if !masked.Addr().IsLinkLocalUnicast() {
+			hasNetworkPrefix = true
 		}
 	}
-	return InterfaceState{}, fmt.Errorf("%w: enrolled IP prefixes are no longer present", ErrScopeMismatch)
+	sort.Strings(result)
+	result = compactStrings(result)
+	if len(result) > 32 {
+		return nil, false, fmt.Errorf("%w: interface exposes too many IP prefixes", ErrUnsupportedInterface)
+	}
+	return result, hasNetworkPrefix, nil
 }
 
 func AddressInScope(binding ScopeBinding, address netip.Addr) bool {
