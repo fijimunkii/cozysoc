@@ -50,52 +50,56 @@ type capabilityLoader func(context.Context) (api.CapabilityList, error)
 type storageOverviewLoader func(context.Context) (api.StorageOverview, error)
 
 type webHandler struct {
-	expectedHost         string
-	uiDir                string
-	loadCoverage         coverageLoader
-	loadDevices          deviceLoader
-	loadDeviceDetail     deviceDetailLoader
-	loadDeviceActivity   deviceActivityLoader
-	loadStatus           statusLoader
-	loadCapabilities     capabilityLoader
-	loadStorageOverview  storageOverviewLoader
-	loadDiagnostics      func(context.Context) (api.DiagnosticPreview, error)
-	loadLocalQuality     func(context.Context) (api.LocalNetworkQuality, error)
-	loadGatewayHistory   func(context.Context) (api.GatewayHistory, error)
-	loadHTTPSHistory     func(context.Context) (api.HTTPSHistory, error)
-	loadResolverHistory  func(context.Context) (api.ResolverHistory, error)
-	loadQualityDiagnosis func(context.Context) (api.QualityDiagnosis, error)
-	loadGatewayPlan      gatewayPlanLoader
-	runGatewayCheck      gatewayCheckRunner
-	gatewayReviewMu      sync.Mutex
-	gatewayReview        *webGatewayReviewState
-	loadResolverSettings resolverSettingsLoader
-	loadResolverPlan     resolverPlanLoader
-	runResolverCheck     resolverCheckRunner
-	resolverReviewMu     sync.Mutex
-	resolverReview       *webResolverReviewState
-	loadHTTPSSettings    httpsSettingsLoader
-	loadHTTPSPlan        httpsPlanLoader
-	runHTTPSCheck        httpsCheckRunner
-	httpsReviewMu        sync.Mutex
-	httpsReview          *webHTTPSReviewState
-	labelDevice          deviceLabelMutator
-	loadDeviceMerges     deviceMergeLoader
-	mergeDevice          deviceMergeMutator
-	unmergeDevice        deviceUnmergeMutator
-	loadDeviceSplits     deviceSplitLoader
-	splitDevice          deviceSplitMutator
-	unsplitDevice        deviceUnsplitMutator
-	loadNetworks         networkLoader
-	enrollNetwork        networkEnrollMutator
-	retireNetwork        networkRetireMutator
-	enableDeviceWatch    deviceWatchMutator
-	disableDeviceWatch   deviceWatchMutator
-	csrfToken            string
-	bootstrapToken       string
-	sessionToken         string
-	bootstrapMu          sync.Mutex
-	bootstrapUsed        bool
+	expectedHost           string
+	uiDir                  string
+	loadCoverage           coverageLoader
+	loadDevices            deviceLoader
+	loadDeviceDetail       deviceDetailLoader
+	loadDeviceActivity     deviceActivityLoader
+	loadStatus             statusLoader
+	loadCapabilities       capabilityLoader
+	loadStorageOverview    storageOverviewLoader
+	loadDiagnostics        func(context.Context) (api.DiagnosticPreview, error)
+	loadLocalQuality       func(context.Context) (api.LocalNetworkQuality, error)
+	loadGatewayHistory     func(context.Context) (api.GatewayHistory, error)
+	loadHTTPSHistory       func(context.Context) (api.HTTPSHistory, error)
+	loadResolverHistory    func(context.Context) (api.ResolverHistory, error)
+	loadQualityDiagnosis   func(context.Context) (api.QualityDiagnosis, error)
+	loadGatewayPlan        gatewayPlanLoader
+	runGatewayCheck        gatewayCheckRunner
+	gatewayReviewMu        sync.Mutex
+	gatewayReview          *webGatewayReviewState
+	loadResolverSettings   resolverSettingsLoader
+	saveResolverSettings   func(context.Context, api.ResolverSettingsParams) (api.ResolverSettingsResult, error)
+	retireResolverSettings func(context.Context, api.ResolverIDParams) (api.ResolverRetireResult, error)
+	saveHTTPSSettings      func(context.Context, api.HTTPSSettingsParams) (api.HTTPSSettingsResult, error)
+	retireHTTPSSettings    func(context.Context, api.HTTPSIDParams) (api.HTTPSRetireResult, error)
+	loadResolverPlan       resolverPlanLoader
+	runResolverCheck       resolverCheckRunner
+	resolverReviewMu       sync.Mutex
+	resolverReview         *webResolverReviewState
+	loadHTTPSSettings      httpsSettingsLoader
+	loadHTTPSPlan          httpsPlanLoader
+	runHTTPSCheck          httpsCheckRunner
+	httpsReviewMu          sync.Mutex
+	httpsReview            *webHTTPSReviewState
+	labelDevice            deviceLabelMutator
+	loadDeviceMerges       deviceMergeLoader
+	mergeDevice            deviceMergeMutator
+	unmergeDevice          deviceUnmergeMutator
+	loadDeviceSplits       deviceSplitLoader
+	splitDevice            deviceSplitMutator
+	unsplitDevice          deviceUnsplitMutator
+	loadNetworks           networkLoader
+	enrollNetwork          networkEnrollMutator
+	retireNetwork          networkRetireMutator
+	enableDeviceWatch      deviceWatchMutator
+	disableDeviceWatch     deviceWatchMutator
+	csrfToken              string
+	bootstrapToken         string
+	sessionToken           string
+	bootstrapMu            sync.Mutex
+	bootstrapUsed          bool
 }
 
 func runCoverageCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
@@ -221,6 +225,8 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	configureWebGatewayCheck(handler, dir)
 	configureWebResolverCheck(handler, dir)
 	configureWebHTTPSCheck(handler, dir)
+	configureWebResolverSettings(handler, dir)
+	configureWebHTTPSSettings(handler, dir)
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -404,6 +410,14 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleResolverHistory(w, r)
 	case "/api/network-quality/resolver/selections":
 		h.handleResolverSelections(w, r)
+	case "/api/network-quality/resolver/selections/save":
+		h.handleResolverSelectionSave(w, r)
+	case "/api/network-quality/resolver/selections/retire":
+		h.handleResolverSelectionRetire(w, r)
+	case "/api/network-quality/https/selections/save":
+		h.handleHTTPSSelectionSave(w, r)
+	case "/api/network-quality/https/selections/retire":
+		h.handleHTTPSSelectionRetire(w, r)
 	case "/api/network-quality/resolver/review":
 		h.handleResolverReview(w, r)
 	case "/api/network-quality/resolver/run":

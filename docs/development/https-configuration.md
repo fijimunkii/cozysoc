@@ -4,7 +4,8 @@ Related issues: #14 and #29. The controller now owns private SQLite settings for
 [explicit HTTPS review plans](https-review-plan.md). Save, list, resolve and retire
 storage methods underpin the [native settings commands](https-controller.md).
 They add no traffic, monitoring enablement, execution approval, route sample or
-network-quality observation. No browser endpoint exposes these settings.
+network-quality observation. The authenticated local browser exposes fixed,
+configuration-only save and retire routes plus an explicit saved-selection read.
 
 ## Immutable settings and attribution
 
