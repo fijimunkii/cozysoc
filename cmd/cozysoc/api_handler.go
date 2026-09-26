@@ -17,6 +17,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/gatewayroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/httpsroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/opnsense"
 	"github.com/fijimunkii/cozysoc/internal/controller/resolverroute"
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
@@ -69,6 +70,12 @@ type adguardCollectionControl interface {
 	CollectReviewed(context.Context, string, string, devicewatch.ScopeBinding) (adguard.CollectionResult, error)
 }
 
+type opnsenseConnectionControl interface {
+	Connect(context.Context, string, string, secretstore.Secret, []byte) (opnsense.Connection, error)
+	Current(context.Context) (opnsense.Connection, error)
+	Disconnect(context.Context) error
+}
+
 type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
@@ -87,6 +94,7 @@ type controllerAPIHandler struct {
 	listScopeCandidates    scopeCandidateLister
 	adguardConnections     adguardConnectionControl
 	adguardCollector       adguardCollectionControl
+	opnsenseConnections    opnsenseConnectionControl
 	now                    func() time.Time
 }
 

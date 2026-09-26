@@ -5,7 +5,7 @@ This directory records the evidence used to decide which specialist tools Cozy S
 - [`evaluation-2026-09-08.md`](evaluation-2026-09-08.md) — dated Foundation research snapshot for issue #6.
 - [`../adr/0007-integration-engine-strategy.md`](../adr/0007-integration-engine-strategy.md) — accepted product/architecture decision derived from that research.
 - [`../development/adguard-readonly.md`](../development/adguard-readonly.md) — candidate native AdGuard Home external connection, scoped one-shot DNS evidence with native or browser review, inferred device-history view, browser status/admin link, and remaining release gates.
-- [`../development/opnsense-readonly.md`](../development/opnsense-readonly.md) — internal OPNsense 26.7.4 read-client contract and required owned-lab gates; no product connection is exposed yet.
+- [`../development/opnsense-readonly.md`](../development/opnsense-readonly.md) — candidate native OPNsense 26.7.4 status-only external connection, internal bounded neighbor client, and required owned-lab gates; no neighbor import or support claim yet.
 
 The important distinction is **product support versus upstream availability**. A tool being installable, open source, or supported by its own project does not make it a Cozy SOC dependency or support claim.
 

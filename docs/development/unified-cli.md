@@ -9,6 +9,16 @@ Current modes:
 - `cozysoc web` — separate authenticated loopback UI process backed by the controller's protected UDS client; and
 - `cozysoc dev` — **development-only** orchestration for the controller + web experience.
 
+The native external-router candidate uses `cozysoc opnsense-connect --endpoint
+https://PRIVATE_IP[:PORT] [--trust-pem-file PATH]`, `opnsense-status`, and
+`opnsense-disconnect`. Connect and disconnect require a normal-user foreground
+macOS terminal and explicit typed approval. The API key and secret are read
+with terminal echo disabled, never supplied on the command line. An optional
+PEM must be an explicitly chosen regular file; its SHA-256 is shown for
+independent review. Setup and status read the exact OPNsense 26.7.4 version
+endpoint only. These commands do not collect neighbors or change the router.
+The [OPNsense boundary](opnsense-readonly.md) records the remaining lab gates.
+
 `cozysoc dev` first validates the same loopback/UI inputs required by `cozysoc web`. It then checks the configured state directory for a healthy authenticated controller. If one already exists, dev reuses it and never starts, stops, or rotates that controller. If none is available, dev starts the **same `cozysoc` executable with the fixed `serve --state-dir ...` subcommand**, waits for the authenticated UDS status to report the child PID, and treats only that child as temporary dev-owned state.
 
 When dev exits, it stops only a temporary controller that it started itself. A pre-existing service continues with the same PID and controller session secret. Web startup failure also cleans up a dev-owned controller rather than leaving an accidental background service behind.

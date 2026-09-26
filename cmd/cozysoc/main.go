@@ -23,6 +23,7 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/core"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/localapi"
+	"github.com/fijimunkii/cozysoc/internal/controller/opnsense"
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
@@ -61,6 +62,12 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runAdGuardDisconnectCommand(ctx, args[1:], stdout, stderr)
 	case "adguard-collect":
 		return runAdGuardCollectCommand(ctx, args[1:], stdout, stderr)
+	case "opnsense-connect":
+		return runOPNsenseConnectCommand(ctx, args[1:], stdout, stderr)
+	case "opnsense-status":
+		return runOPNsenseStatusCommand(ctx, args[1:], stdout, stderr)
+	case "opnsense-disconnect":
+		return runOPNsenseDisconnectCommand(ctx, args[1:], stdout, stderr)
 	case "status":
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
@@ -143,6 +150,9 @@ Usage:
   cozysoc adguard-status [--state-dir PATH]
   cozysoc adguard-disconnect [--state-dir PATH] (interactive macOS only)
   cozysoc adguard-collect [--state-dir PATH] ENROLLED_SCOPE_ID (interactive macOS only)
+  cozysoc opnsense-connect [--state-dir PATH] --endpoint HTTPS_IP_ORIGIN [--trust-pem-file PATH] (interactive macOS only)
+  cozysoc opnsense-status [--state-dir PATH]
+  cozysoc opnsense-disconnect [--state-dir PATH] (interactive macOS only)
   cozysoc status [--state-dir PATH]
   cozysoc health [--state-dir PATH]
   cozysoc capabilities [--state-dir PATH]
@@ -298,6 +308,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("initialize AdGuard Home observation: %w", err)
 	}
 	apiHandler.adguardCollector = adguardCollector
+	opnsenseConnections, err := opnsense.NewConnections(configManager, store, lifecycle, secretstore.NewDesktop)
+	if err != nil {
+		return fmt.Errorf("initialize OPNsense connection: %w", err)
+	}
+	apiHandler.opnsenseConnections = opnsenseConnections
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver

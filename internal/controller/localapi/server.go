@@ -288,6 +288,13 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 		}
 		s.handleAdGuard(ctx, conn, request)
 		return
+	case api.MethodOPNsenseConnect, api.MethodOPNsenseStatus, api.MethodOPNsenseDisconnect:
+		if !identity.Verified {
+			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
+			return
+		}
+		s.handleOPNsense(ctx, conn, request)
+		return
 	case api.MethodHTTPSCheck:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")

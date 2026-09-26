@@ -47,7 +47,7 @@ func TestCapabilitiesExposeCatalogWithoutRestoringVerification(t *testing.T) {
 	}
 	controller := New("test", 2, time.Second, instances)
 	list := controller.Capabilities()
-	if list.CatalogSchemaVersion != capability.SchemaVersion || len(list.Capabilities) != 2 {
+	if list.CatalogSchemaVersion != capability.SchemaVersion || len(list.Capabilities) != len(registry.List()) {
 		t.Fatalf("unexpected capability list: %+v", list)
 	}
 	for _, item := range list.Capabilities {
