@@ -6,6 +6,7 @@ import { parseDeviceList } from "./devices";
 
 const devices = parseDeviceList({ configured: true, scope_id: "scope.home", as_of: "2026-09-10T13:00:00Z", truncated: false, devices: [{ id: "device.one", user_label: "Speaker", first_seen: "2026-09-10T12:00:00Z", last_seen: "2026-09-10T12:59:00Z", state: "visible" }] });
 const detail = parseDeviceDetail({ scope_id: "scope.home", as_of: "2026-09-10T13:00:00Z", truncated: false, device: devices.devices[0], evidence: [] });
+const otherScope = parseDeviceList({ configured: true, scope_id: "scope.other", as_of: "2026-09-10T13:01:00Z", truncated: false, devices: [{ ...devices.devices[0]!, user_label: "New scope device" }] });
 
 describe("Devices evidence navigation", () => {
   it("loads device detail only when explicitly opened and returns to the list", async () => {
@@ -42,5 +43,45 @@ describe("Devices evidence navigation", () => {
   it("keeps read-only/demo rows from exposing live evidence fetch controls", () => {
     render(<DevicesPage devices={devices} />);
     expect(screen.queryByRole("button", { name: "View evidence" })).toBeNull();
+  });
+
+  it("closes old evidence when a refreshed device list changes scope", async () => {
+    const { rerender } = render(<DevicesPage devices={devices} loadDetail={async () => detail} />);
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+    await screen.findByRole("heading", { name: "Speaker" });
+    rerender(<DevicesPage devices={otherScope} loadDetail={async () => detail} />);
+    expect(screen.queryByRole("heading", { name: "Speaker" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Visible network identities" })).toBe(document.activeElement);
+    expect(screen.getByText("New scope device")).toBeTruthy();
+  });
+
+  it("closes detail when its device leaves the retained list", async () => {
+    const { rerender } = render(<DevicesPage devices={devices} loadDetail={async () => detail} />);
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+    await screen.findByRole("heading", { name: "Speaker" });
+    const empty = parseDeviceList({ configured: true, scope_id: "scope.home", as_of: "2026-09-10T13:01:00Z", truncated: false, devices: [] });
+    rerender(<DevicesPage devices={empty} loadDetail={async () => detail} />);
+    expect(screen.queryByRole("heading", { name: "Speaker" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Visible network identities" })).toBe(document.activeElement);
+  });
+
+  it("ignores an in-flight detail read after scope changes", async () => {
+    let finishRead: (value: typeof detail) => void = () => undefined;
+    const loadDetail = vi.fn(() => new Promise<typeof detail>((resolve) => { finishRead = resolve; }));
+    const { rerender } = render(<DevicesPage devices={devices} loadDetail={loadDetail} />);
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+    expect(screen.getByRole("heading", { name: "Reading device evidence" })).toBeTruthy();
+    rerender(<DevicesPage devices={otherScope} loadDetail={loadDetail} />);
+    await act(async () => { finishRead(detail); });
+    expect(screen.queryByRole("heading", { name: "Speaker" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Visible network identities" })).toBe(document.activeElement);
+  });
+
+  it("rejects detail from a scope different from the current list", async () => {
+    const wrongScope = { ...detail, scope_id: "scope.other" };
+    render(<DevicesPage devices={devices} loadDetail={async () => wrongScope} />);
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+    expect((await screen.findByText(/different network scope/)).textContent).toContain("Refresh the device list");
+    expect(screen.queryByRole("heading", { name: "Speaker" })).toBeNull();
   });
 });
