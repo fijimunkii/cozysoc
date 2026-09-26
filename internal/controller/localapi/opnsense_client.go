@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 )
@@ -18,6 +19,18 @@ func (c *Client) ConnectOPNsense(ctx context.Context, params api.OPNsenseConnect
 
 func (c *Client) OPNsenseStatus(ctx context.Context) (api.OPNsenseConnection, error) {
 	return c.opnsenseCall(ctx, api.MethodOPNsenseStatus, nil)
+}
+
+func (c *Client) OPNsenseNeighbors(ctx context.Context) (api.OPNsenseNeighborHistory, error) {
+	raw, err := c.callWithTimeout(ctx, api.MethodOPNsenseNeighbors, nil, 5*time.Second)
+	if err != nil {
+		return api.OPNsenseNeighborHistory{}, err
+	}
+	var result api.OPNsenseNeighborHistory
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return api.OPNsenseNeighborHistory{}, fmt.Errorf("decode OPNsense neighbor history: %w", err)
+	}
+	return result, nil
 }
 
 func (c *Client) DisconnectOPNsense(ctx context.Context) (api.OPNsenseConnection, error) {

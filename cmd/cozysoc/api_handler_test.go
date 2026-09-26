@@ -29,6 +29,9 @@ type fakeDeviceStore struct {
 	activity       storage.DeviceActivityPage
 	activityErr    error
 	activityQuery  storage.DeviceActivityQuery
+	obsPage        storage.ObservationPage
+	obsErr         error
+	obsQuery       storage.ObservationQuery
 	setScope       string
 	setDevice      string
 	setLabel       string
@@ -76,6 +79,11 @@ func (f *fakeDeviceStore) GetDeviceDetailSnapshot(_ context.Context, query stora
 func (f *fakeDeviceStore) ListDeviceActivity(_ context.Context, query storage.DeviceActivityQuery) (storage.DeviceActivityPage, error) {
 	f.activityQuery = query
 	return f.activity, f.activityErr
+}
+
+func (f *fakeDeviceStore) ListObservations(_ context.Context, query storage.ObservationQuery) (storage.ObservationPage, error) {
+	f.obsQuery = query
+	return f.obsPage, f.obsErr
 }
 
 func (f *fakeDeviceStore) SetDeviceLabel(_ context.Context, scopeID, deviceID, label string) (bool, error) {

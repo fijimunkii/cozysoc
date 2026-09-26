@@ -50,6 +50,7 @@ type capabilityLoader func(context.Context) (api.CapabilityList, error)
 type storageOverviewLoader func(context.Context) (api.StorageOverview, error)
 type adguardStatusLoader func(context.Context) (api.AdGuardConnection, error)
 type opnsenseStatusLoader func(context.Context) (api.OPNsenseConnection, error)
+type opnsenseNeighborLoader func(context.Context) (api.OPNsenseNeighborHistory, error)
 
 type webHandler struct {
 	expectedHost           string
@@ -63,6 +64,7 @@ type webHandler struct {
 	loadStorageOverview    storageOverviewLoader
 	loadAdGuardStatus      adguardStatusLoader
 	loadOPNsenseStatus     opnsenseStatusLoader
+	loadOPNsenseNeighbors  opnsenseNeighborLoader
 	collectAdGuard         func(context.Context, api.AdGuardCollectParams) (api.AdGuardCollection, error)
 	adguardReviewMu        sync.Mutex
 	adguardReview          *webAdGuardReviewState
@@ -227,6 +229,11 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return localapi.NewClient(dir).OPNsenseStatus(requestCtx)
 	}
 	handler.collectAdGuard = localapi.NewClient(dir).CollectAdGuardReviewed
+	handler.loadOPNsenseNeighbors = func(requestCtx context.Context) (api.OPNsenseNeighborHistory, error) {
+		requestCtx, cancel := context.WithTimeout(requestCtx, webRequestTimeout)
+		defer cancel()
+		return localapi.NewClient(dir).OPNsenseNeighbors(requestCtx)
+	}
 	handler.loadDiagnostics = func(requestCtx context.Context) (api.DiagnosticPreview, error) {
 		return loadDiagnosticsFromController(requestCtx, dir)
 	}
@@ -395,6 +402,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleAdGuardStatus(w, r)
 	case "/api/opnsense/status":
 		h.handleOPNsenseStatus(w, r)
+	case "/api/opnsense/neighbors":
+		h.handleOPNsenseNeighbors(w, r)
 	case "/api/adguard/collection/review":
 		h.handleAdGuardCollectionReview(w, r)
 	case "/api/adguard/collection/run":

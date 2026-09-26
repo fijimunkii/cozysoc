@@ -3,12 +3,38 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
 	"github.com/fijimunkii/cozysoc/internal/controller/opnsense"
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
+
+func (h *controllerAPIHandler) OPNsenseNeighbors(ctx context.Context) (api.OPNsenseNeighborHistory, error) {
+	asOf := h.now().UTC()
+	result := api.OPNsenseNeighborHistory{AsOf: asOf, Reports: []api.OPNsenseNeighborReport{}}
+	scopes, err := h.store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil || len(scopes) > 1 {
+		return api.OPNsenseNeighborHistory{}, fmt.Errorf("resolve enrolled router observation scope")
+	}
+	if len(scopes) == 0 {
+		return result, nil
+	}
+	history, err := opnsense.RecentNeighbors(ctx, h.store, scopes[0].ID, asOf)
+	if err != nil {
+		return api.OPNsenseNeighborHistory{}, err
+	}
+	result.ScopeEnrolled = true
+	result.ScopeID = history.ScopeID
+	result.Truncated = history.Truncated
+	for _, report := range history.Reports {
+		result.Reports = append(result.Reports, api.OPNsenseNeighborReport{ObservationID: report.ObservationID,
+			CapturedAt: report.CapturedAt, Address: report.Address, Hardware: report.Hardware,
+			Interface: report.Interface, Family: report.Family})
+	}
+	return result, nil
+}
 
 func (h *controllerAPIHandler) ConnectOPNsense(ctx context.Context, params api.OPNsenseConnectParams) (api.OPNsenseConnection, error) {
 	if h.opnsenseConnections == nil {
