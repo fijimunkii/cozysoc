@@ -35,6 +35,11 @@ func (testHandler) DeviceActivity(context.Context) (api.DeviceActivityList, erro
 	return api.DeviceActivityList{Configured: true, ScopeID: "scope.home", Since: time.Unix(1, 0).UTC(), AsOf: time.Unix(2, 0).UTC(), Items: []api.DeviceActivityItem{{ID: "obs.one", Kind: "observed", At: time.Unix(2, 0).UTC(), DeviceID: "device.one", AddressFamily: "ipv4", Address: "192.168.1.10", HardwareAddress: "02:00:00:00:00:01", Source: api.DeviceEvidenceSource{ObservationID: "obs.one", SensorID: "sensor.one", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: time.Unix(2, 0).UTC(), Attribution: "device-watch:arp-cache"}}}}, nil
 }
 
+func (testHandler) ArrivalFindings(context.Context) (api.ArrivalFindingList, error) {
+	at := time.Unix(2, 0).UTC()
+	return api.ArrivalFindingList{AsOf: at, Items: []api.ArrivalFindingItem{{ID: "finding.one", ScopeID: "scope.home", ObservedAt: at, RecordedAt: at, EvidenceObservationID: "obs.one", EvidenceRetained: true}}}, nil
+}
+
 func (testHandler) DeviceDetail(_ context.Context, params api.DeviceDetailParams) (api.DeviceDetail, error) {
 	if params.DeviceID != "device.one" {
 		return api.DeviceDetail{}, ErrReadTargetNotFound
@@ -133,6 +138,18 @@ func TestDeviceActivityRoundTrip(t *testing.T) {
 	}
 	if !activity.Configured || activity.ScopeID != "scope.home" || len(activity.Items) != 1 || activity.Items[0].Kind != "observed" {
 		t.Fatalf("unexpected activity: %+v", activity)
+	}
+}
+
+func TestArrivalFindingsRoundTrip(t *testing.T) {
+	server, _ := startTestServer(t, nil)
+	raw, err := NewClient(server.stateDir).Call(context.Background(), api.MethodArrivalFindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result api.ArrivalFindingList
+	if err := json.Unmarshal(raw, &result); err != nil || len(result.Items) != 1 || !result.Items[0].EvidenceRetained {
+		t.Fatal(result, err)
 	}
 }
 

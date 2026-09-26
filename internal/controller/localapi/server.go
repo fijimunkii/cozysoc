@@ -64,6 +64,10 @@ type DeviceActivityHandler interface {
 	DeviceActivity(context.Context) (api.DeviceActivityList, error)
 }
 
+type ArrivalFindingsHandler interface {
+	ArrivalFindings(context.Context) (api.ArrivalFindingList, error)
+}
+
 type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
@@ -443,6 +447,24 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = activity
+	case api.MethodArrivalFindings:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		findingHandler, ok := s.handler.(ArrivalFindingsHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		findings, findingErr := findingHandler.ArrivalFindings(requestCtx)
+		cancel()
+		if findingErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodArrivalFindings)
+			s.writeError(conn, request.ID, "internal_error", "unable to load arrival findings")
+			return
+		}
+		result = findings
 	case api.MethodDeviceDetail:
 		detailHandler, ok := s.handler.(DeviceDetailHandler)
 		if !ok {
