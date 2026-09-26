@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 import { demoCapabilitiesRaw, demoStatusRaw } from "../src/demo/tools";
 import { diagnosticFixture } from "../src/tools/diagnostics-fixtures.test-helper";
@@ -32,6 +33,13 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   expect(previewReads).toBe(1);
   await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"failure_category": "sensor"');
   await expect(page.getByLabel("Diagnostic bundle preview")).not.toContainText("private");
+  const downloadReady = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save preview as JSON" }).click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe("cozysoc-diagnostic-preview.json");
+  const saved = await readFile(await download.path(), "utf8");
+  expect(saved).toContain('"failure_category": "sensor"');
+  expect(saved).not.toContain("private");
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   const widths = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));
   expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
