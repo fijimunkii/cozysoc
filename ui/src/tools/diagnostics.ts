@@ -1,3 +1,5 @@
+import { readBoundedWebJSON } from "../web-json";
+
 const COVERAGE_STATES = new Set(["unconfigured", "unavailable", "unverified", "active-limited", "degraded", "stale", "disconnected", "unknown"]);
 const FAILURE_CATEGORIES = new Set(["none", "not-configured", "read-failed", "sensor", "ingestion", "storage", "evidence", "source", "unknown"]);
 const VERIFICATION_STATES = new Set(["unverified", "verifying", "verified", "degraded", "stale", "unknown"]);
@@ -23,7 +25,7 @@ export interface DiagnosticPreview {
 export async function loadDiagnosticPreview(signal: AbortSignal): Promise<DiagnosticPreview> {
   const response = await fetch("/api/diagnostics/preview", { credentials: "same-origin", headers: { Accept: "application/json" }, signal });
   if (!response.ok) throw new Error("Diagnostic preview is unavailable.");
-  return parseDiagnosticPreview(await response.json());
+  return parseDiagnosticPreview(await readBoundedWebJSON(response));
 }
 
 export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {

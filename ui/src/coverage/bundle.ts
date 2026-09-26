@@ -1,5 +1,6 @@
 import { parseCoverageReport } from "./parse";
 import type { CoverageReport } from "./types";
+import { readBoundedWebJSON } from "../web-json";
 
 const maxCoverageReports = 32;
 const bootstrapPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -59,15 +60,11 @@ export async function loadCoverageFromWeb(): Promise<CoverageBundle> {
   if (!response.ok) {
     throw new CoverageLoadError(`Live coverage request failed with status ${response.status}.`);
   }
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
-    throw new CoverageLoadError("Live coverage response was not JSON.");
-  }
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = await readBoundedWebJSON(response);
   } catch {
-    throw new CoverageLoadError("Live coverage response was not valid JSON.");
+    throw new CoverageLoadError("Live coverage response was invalid or too large.");
   }
   return parseCoverageBundle(payload);
 }
