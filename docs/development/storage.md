@@ -143,8 +143,10 @@ Database quota and host-volume capacity can therefore disagree legitimately. A d
 
 On unsupported platforms filesystem capacity is reported as unsupported/unavailable and does not by itself degrade storage verification. On a platform where capacity introspection is expected but cannot currently be read, the filesystem state is `unavailable` and coverage degrades as `filesystem-unknown` rather than guessing current or full.
 
-The live controller runs mixed-format retention once after acquiring its local
-socket and every 15 minutes thereafter. Each pass is bounded to 10,000 rows per
+The live controller completes its first mixed-format retention pass after
+acquiring its local socket and before accepting API requests. This keeps the
+startup pass from contending with the first network-enrollment transaction.
+Later passes run every 15 minutes. Each pass is bounded to 10,000 rows per
 legacy table and 100 batch records. At database-quota pressure or host-volume
 pressure/full, a cycle repeats bounded passes while expired evidence is found,
 up to 64 passes or five minutes total. It never shortens a retention deadline to
@@ -189,7 +191,8 @@ mixed-format read view;
 each request uses one fixed read-only SQLite snapshot and can see retained batch
 evidence alongside earlier rows. The controller also runs mixed-format retention
 over the installed schema. Other observation kinds keep their existing storage
-path. The unchanged full-controller #150 resource gate is still open.
+path. The #150 storage design decision is complete; the full live-controller
+resource measurement remains an untested #29 validation gate.
 
 ## Mixed-format maintenance and reserved deletion boundary
 

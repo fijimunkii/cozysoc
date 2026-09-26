@@ -22,8 +22,9 @@ type storageMaintenanceStore interface {
 	PruneEvidenceBatchExpired(context.Context, time.Time, int, int) (*storage.EvidenceBatchRetentionResult, error)
 }
 
-// startStorageMaintenance joins shutdown before the parent Store closes. The
-// caller starts it only after acquiring the controller's local socket.
+// startStorageMaintenance completes the first pass before the controller
+// accepts requests. Later passes run on the ticker and are joined before the
+// parent Store closes. The caller starts it after acquiring the local socket.
 func startStorageMaintenance(ctx context.Context, store storageMaintenanceStore, logger *slog.Logger) (func(), error) {
 	if store == nil {
 		return nil, fmt.Errorf("storage maintenance requires a store")
@@ -32,20 +33,20 @@ func startStorageMaintenance(ctx context.Context, store storageMaintenanceStore,
 		logger = slog.Default()
 	}
 	runCtx, cancel := context.WithCancel(ctx)
+	run := func() {
+		if runCtx.Err() != nil {
+			return
+		}
+		passCtx, passCancel := context.WithTimeout(runCtx, storageMaintenanceTimeout)
+		defer passCancel()
+		if err := runStorageMaintenancePass(passCtx, store, time.Now().UTC()); err != nil && runCtx.Err() == nil {
+			logger.Warn("storage_maintenance_failed")
+		}
+	}
+	run()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		run := func() {
-			if runCtx.Err() != nil {
-				return
-			}
-			passCtx, passCancel := context.WithTimeout(runCtx, storageMaintenanceTimeout)
-			defer passCancel()
-			if err := runStorageMaintenancePass(passCtx, store, time.Now().UTC()); err != nil && runCtx.Err() == nil {
-				logger.Warn("storage_maintenance_failed")
-			}
-		}
-		run()
 		ticker := time.NewTicker(storageMaintenanceInterval)
 		defer ticker.Stop()
 		for {
