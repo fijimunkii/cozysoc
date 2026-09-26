@@ -170,10 +170,10 @@ func ensureIdentityLink(ctx context.Context, writer identityQueryWriter, link do
 }
 
 func (s *Store) FindRecentDevicesByClaim(ctx context.Context, scopeID string, kind domain.ClaimKind, value string, since, until time.Time) ([]domain.Device, error) {
-	return findRecentDevicesByClaim(ctx, s.conn, s.now().UTC(), scopeID, kind, value, since, until)
+	return findRecentDevicesByClaim(ctx, s.conn, s.now().UTC(), scopeID, kind, value, since, until, 3)
 }
 
-func findRecentDevicesByClaim(ctx context.Context, reader identityQueryReader, now time.Time, scopeID string, kind domain.ClaimKind, value string, since, until time.Time) ([]domain.Device, error) {
+func findRecentDevicesByClaim(ctx context.Context, reader identityQueryReader, now time.Time, scopeID string, kind domain.ClaimKind, value string, since, until time.Time, limit int) ([]domain.Device, error) {
 	if err := validateQueryID("scope id", scopeID); err != nil {
 		return nil, err
 	}
@@ -192,14 +192,14 @@ func findRecentDevicesByClaim(ctx context.Context, reader identityQueryReader, n
 		  AND c.observed_at_ns >= ? AND c.observed_at_ns <= ?
 		  AND c.expires_at_ns > ?
 		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)
-		ORDER BY d.id ASC LIMIT 3`, scopeID, kind, normalized, unixNanos(since.UTC()), unixNanos(until.UTC()),
-		unixNanos(now), unixNanos(until.UTC()))
+		ORDER BY d.id ASC LIMIT ?`, scopeID, kind, normalized, unixNanos(since.UTC()), unixNanos(until.UTC()),
+		unixNanos(now), unixNanos(until.UTC()), limit)
 	if err != nil {
 		return nil, fmt.Errorf("find recent devices by claim: %w", err)
 	}
 	defer rows.Close()
 
-	devices := make([]domain.Device, 0, 3)
+	devices := make([]domain.Device, 0, limit)
 	for rows.Next() {
 		device, err := scanDevice(rows)
 		if err != nil {

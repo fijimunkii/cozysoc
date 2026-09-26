@@ -24,17 +24,18 @@ type DeviceEvidenceObservation struct {
 }
 
 type DeviceIdentityEvidence struct {
-	Kind            domain.ClaimKind
-	Value           string
-	ObservedAt      time.Time
-	ClaimValidUntil *time.Time
-	ClaimConfidence *float64
-	SourceSensorID  string
-	LinkValidUntil  *time.Time
-	LinkConfidence  *float64
-	Authority       domain.LinkAuthority
-	Reason          string
-	Observation     *DeviceEvidenceObservation
+	OriginalDeviceID string
+	Kind             domain.ClaimKind
+	Value            string
+	ObservedAt       time.Time
+	ClaimValidUntil  *time.Time
+	ClaimConfidence  *float64
+	SourceSensorID   string
+	LinkValidUntil   *time.Time
+	LinkConfidence   *float64
+	Authority        domain.LinkAuthority
+	Reason           string
+	Observation      *DeviceEvidenceObservation
 }
 
 type DeviceEvidenceDetailQuery struct {

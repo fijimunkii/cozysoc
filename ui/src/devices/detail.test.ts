@@ -24,6 +24,13 @@ describe("device detail contract", () => {
     expect(() => parseDeviceDetail({ ...fixture, evidence: Array.from({ length: 101 }, () => fixture.evidence[0]) })).toThrow();
   });
 
+  it("retains a corrected association's original device without accepting forged identity", () => {
+	const corrected = parseDeviceDetail({ ...fixture, evidence: [{ ...fixture.evidence[0], original_device_id: "device.earlier" }] });
+	expect(corrected.evidence[0]?.original_device_id).toBe("device.earlier");
+	expect(() => parseDeviceDetail({ ...fixture, evidence: [{ ...fixture.evidence[0], original_device_id: "../outside" }] })).toThrow();
+	expect(() => parseDeviceDetail({ ...fixture, evidence: [{ ...fixture.evidence[0], original_device_id: "device.one" }] })).toThrow();
+  });
+
   it("requests only the device id and maps scoped 404", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(fixture), { status: 200, headers: { "Content-Type": "application/json" } })).mockResolvedValueOnce(new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);

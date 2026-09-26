@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -256,3 +256,17 @@ END;
 // evidence is read through the mixed-format compatibility layer after later
 // runtime activation; this migration never rewrites or deletes legacy rows.
 const migrationV4 = evidenceBatchSchema
+
+// User identity corrections are a small scope-local projection over immutable
+// claim/link evidence. Their transitions are recorded separately in audit_events.
+const migrationV5 = `
+CREATE TABLE device_identity_merges (
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id) ON DELETE RESTRICT,
+ source_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
+ target_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
+ created_at_ns INTEGER NOT NULL,
+ PRIMARY KEY(scope_id, source_device_id),
+ CHECK(source_device_id <> target_device_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX device_identity_merges_target ON device_identity_merges(scope_id,target_device_id,source_device_id);
+`

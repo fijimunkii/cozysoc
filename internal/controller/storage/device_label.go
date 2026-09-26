@@ -59,6 +59,13 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 		return false, fmt.Errorf("begin device label transaction: %w", err)
 	}
 	defer tx.Rollback()
+	merges, err := loadDeviceMerges(ctx, tx, scopeID)
+	if err != nil {
+		return false, err
+	}
+	if merges.bySource[deviceID] != "" {
+		return false, ErrDeviceNotInScope
+	}
 
 	var current sql.NullString
 	err = tx.QueryRowContext(ctx, `SELECT d.user_label

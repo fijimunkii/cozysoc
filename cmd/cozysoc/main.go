@@ -91,6 +91,12 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodDeviceWatchDisable, args[1:], stdout, stderr)
 	case "device-label":
 		return runDeviceLabelCommand(ctx, args[1:], stdout, stderr)
+	case "device-merge":
+		return runDeviceMergeCommand(ctx, args[1:], stdout, stderr)
+	case "device-unmerge":
+		return runDeviceUnmergeCommand(ctx, args[1:], stdout, stderr)
+	case "device-merges":
+		return runDeviceMergesCommand(ctx, args[1:], stdout, stderr)
 	case "network-enroll":
 		return runNetworkEnrollCommand(ctx, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
@@ -139,6 +145,9 @@ Usage:
   cozysoc device-watch-enable [--state-dir PATH]
   cozysoc device-watch-disable [--state-dir PATH]
   cozysoc device-label [--state-dir PATH] DEVICE_ID LABEL
+  cozysoc device-merge [--state-dir PATH] SOURCE_DEVICE_ID TARGET_DEVICE_ID
+  cozysoc device-unmerge [--state-dir PATH] SOURCE_DEVICE_ID
+  cozysoc device-merges [--state-dir PATH]
   cozysoc network-enroll [--state-dir PATH] INTERFACE
 
 The controller mode uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.

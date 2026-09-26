@@ -68,6 +68,15 @@ type DeviceLabelHandler interface {
 	LabelDevice(context.Context, api.DeviceLabelParams) (api.DeviceLabelResult, error)
 }
 
+type DeviceIdentityHandler interface {
+	MergeDevices(context.Context, api.DeviceMergeParams) (api.DeviceIdentityCorrectionResult, error)
+	UnmergeDevices(context.Context, api.DeviceUnmergeParams) (api.DeviceIdentityCorrectionResult, error)
+}
+
+type DeviceMergeListHandler interface {
+	DeviceMerges(context.Context) (api.DeviceMergeList, error)
+}
+
 type NetworkHandler interface {
 	Networks(context.Context) (api.NetworkList, error)
 }
@@ -352,6 +361,24 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = deviceList
+	case api.MethodDeviceMerges:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		mergeHandler, ok := s.handler.(DeviceMergeListHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		merges, mergeErr := mergeHandler.DeviceMerges(requestCtx)
+		cancel()
+		if mergeErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceMerges)
+			s.writeError(conn, request.ID, "internal_error", "unable to load device corrections")
+			return
+		}
+		result = merges
 	case api.MethodDeviceActivity:
 		if s.rejectUnexpectedParams(conn, request) {
 			return
@@ -442,6 +469,48 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = labelResult
+	case api.MethodDeviceMerge, api.MethodDeviceUnmerge:
+		identityHandler, ok := s.handler.(DeviceIdentityHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		var correction api.DeviceIdentityCorrectionResult
+		var correctionErr error
+		if request.Method == api.MethodDeviceMerge {
+			var params api.DeviceMergeParams
+			if err := decodeRequiredParams(request.Params, &params); err != nil || params.SourceDeviceID == "" || params.TargetDeviceID == "" {
+				cancel()
+				s.writeError(conn, request.ID, "invalid_request", "invalid device identity parameters")
+				return
+			}
+			correction, correctionErr = identityHandler.MergeDevices(requestCtx, params)
+		} else {
+			var params api.DeviceUnmergeParams
+			if err := decodeRequiredParams(request.Params, &params); err != nil || params.SourceDeviceID == "" {
+				cancel()
+				s.writeError(conn, request.ID, "invalid_request", "invalid device identity parameters")
+				return
+			}
+			correction, correctionErr = identityHandler.UnmergeDevices(requestCtx, params)
+		}
+		cancel()
+		if correctionErr != nil {
+			switch {
+			case errors.Is(correctionErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid device identity parameters")
+			case errors.Is(correctionErr, ErrMutationTargetNotFound):
+				s.writeError(conn, request.ID, "not_found", "device is not available")
+			case errors.Is(correctionErr, ErrMutationConflict):
+				s.writeError(conn, request.ID, "conflict", "device identity correction conflicts with current state")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", request.Method)
+				s.writeError(conn, request.ID, "internal_error", "unable to correct device identity")
+			}
+			return
+		}
+		result = correction
 	case api.MethodQualityDiagnosis:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")

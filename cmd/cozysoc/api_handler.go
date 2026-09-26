@@ -28,6 +28,9 @@ type controllerStore interface {
 	GetDeviceEvidenceDetail(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceEvidenceDetail, error)
 	ListDeviceActivity(context.Context, storage.DeviceActivityQuery) (storage.DeviceActivityPage, error)
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
+	MergeDevices(context.Context, string, string, string) (bool, error)
+	UnmergeDevices(context.Context, string, string) (bool, error)
+	ListDeviceMerges(context.Context, string) ([]storage.DeviceMerge, error)
 	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
 }
@@ -229,7 +232,8 @@ func (h *controllerAPIHandler) DeviceDetail(ctx context.Context, params api.Devi
 		current := (evidence.ClaimValidUntil == nil || evidence.ClaimValidUntil.After(asOf)) &&
 			(evidence.LinkValidUntil == nil || evidence.LinkValidUntil.After(asOf))
 		item := api.DeviceIdentityEvidence{
-			Kind: string(evidence.Kind), Value: evidence.Value, ObservedAt: evidence.ObservedAt,
+			OriginalDeviceID: evidence.OriginalDeviceID,
+			Kind:             string(evidence.Kind), Value: evidence.Value, ObservedAt: evidence.ObservedAt,
 			ValidUntil: evidence.ClaimValidUntil, LinkValidUntil: evidence.LinkValidUntil, Current: current, ClaimConfidence: evidence.ClaimConfidence,
 			LinkConfidence: evidence.LinkConfidence, Authority: string(evidence.Authority), Reason: evidence.Reason,
 			SourceSensorID: evidence.SourceSensorID,
@@ -352,6 +356,72 @@ func (h *controllerAPIHandler) LabelDevice(ctx context.Context, params api.Devic
 		UserLabel: label,
 		Changed:   changed,
 	}, nil
+}
+
+func (h *controllerAPIHandler) MergeDevices(ctx context.Context, params api.DeviceMergeParams) (api.DeviceIdentityCorrectionResult, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceIdentityCorrectionResult{}, err
+	}
+	if !configured || scopeID == "" {
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if !deviceIDPattern.MatchString(params.SourceDeviceID) || !deviceIDPattern.MatchString(params.TargetDeviceID) || params.SourceDeviceID == params.TargetDeviceID {
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrInvalidMutation
+	}
+	changed, err := h.store.MergeDevices(ctx, scopeID, params.SourceDeviceID, params.TargetDeviceID)
+	switch {
+	case errors.Is(err, storage.ErrDeviceNotInScope):
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrMutationTargetNotFound
+	case errors.Is(err, storage.ErrDeviceMergeConflict), errors.Is(err, storage.ErrDeviceMergeLimit):
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrMutationConflict
+	case err != nil:
+		return api.DeviceIdentityCorrectionResult{}, err
+	}
+	return api.DeviceIdentityCorrectionResult{SourceDeviceID: params.SourceDeviceID, TargetDeviceID: params.TargetDeviceID, Changed: changed}, nil
+}
+
+func (h *controllerAPIHandler) UnmergeDevices(ctx context.Context, params api.DeviceUnmergeParams) (api.DeviceIdentityCorrectionResult, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceIdentityCorrectionResult{}, err
+	}
+	if !configured || scopeID == "" {
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if !deviceIDPattern.MatchString(params.SourceDeviceID) {
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrInvalidMutation
+	}
+	changed, err := h.store.UnmergeDevices(ctx, scopeID, params.SourceDeviceID)
+	if errors.Is(err, storage.ErrDeviceNotInScope) {
+		return api.DeviceIdentityCorrectionResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if err != nil {
+		return api.DeviceIdentityCorrectionResult{}, err
+	}
+	return api.DeviceIdentityCorrectionResult{SourceDeviceID: params.SourceDeviceID, Changed: changed}, nil
+}
+
+func (h *controllerAPIHandler) DeviceMerges(ctx context.Context) (api.DeviceMergeList, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceMergeList{}, err
+	}
+	result := api.DeviceMergeList{Configured: configured, Merges: []api.DeviceMerge{}}
+	if !configured || scopeID == "" {
+		return result, nil
+	}
+	result.ScopeID = scopeID
+	items, err := h.store.ListDeviceMerges(ctx, scopeID)
+	if err != nil {
+		return api.DeviceMergeList{}, err
+	}
+	for _, item := range items {
+		result.Merges = append(result.Merges, api.DeviceMerge{
+			SourceDeviceID: item.SourceDeviceID, TargetDeviceID: item.TargetDeviceID, CreatedAt: item.CreatedAt,
+		})
+	}
+	return result, nil
 }
 
 func (h *controllerAPIHandler) EnableDeviceWatch(ctx context.Context) (api.DeviceWatchControlResult, error) {

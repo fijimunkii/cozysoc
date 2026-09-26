@@ -47,6 +47,7 @@ function EvidenceItem({ item }: { item: DeviceIdentityEvidence }) {
       <dl className="evidence-facts">
         <div><dt>Source</dt><dd>{sourceLabel(item)}</dd></div>
         <div><dt>Association</dt><dd>{item.authority === "user" ? "User-confirmed" : "Inferred"}</dd></div>
+        {item.original_device_id ? <div><dt>User correction</dt><dd>Grouped from earlier device <code>{item.original_device_id}</code>. The original observation and association remain unchanged.</dd></div> : null}
         {confidence !== undefined ? <div><dt>Identity-link confidence</dt><dd>{Math.round(confidence * 100)}% <span>— association only, not device safety</span></dd></div> : null}
         <div><dt>Why linked</dt><dd>{reasonLabel(item.reason)}</dd></div>
         {item.valid_until ? <div><dt>Claim valid until</dt><dd>{formatTimestamp(item.valid_until)}</dd></div> : null}

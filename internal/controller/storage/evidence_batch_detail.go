@@ -14,6 +14,14 @@ import (
 // snapshot. It does not commit, open storage, or fall back on reserved-schema or
 // corrupt-data errors. Runtime readers must own a separate read connection.
 func (s *MixedIdentitySnapshot) GetDeviceEvidenceDetail(ctx context.Context, query DeviceEvidenceDetailQuery) (DeviceEvidenceDetail, error) {
+	return s.getMergedDeviceEvidenceDetail(ctx, query)
+}
+
+func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceDetail(ctx context.Context, query DeviceEvidenceDetailQuery) (DeviceEvidenceDetail, error) {
+	return s.getOriginalDeviceEvidenceDetailBudget(ctx, query, nil)
+}
+
+func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceDetailBudget(ctx context.Context, query DeviceEvidenceDetailQuery, remaining *int) (DeviceEvidenceDetail, error) {
 	if s == nil || s.legacy == nil {
 		return DeviceEvidenceDetail{}, ErrEvidenceBatchData
 	}
@@ -25,7 +33,7 @@ func (s *MixedIdentitySnapshot) GetDeviceEvidenceDetail(ctx context.Context, que
 	if err != nil && !errors.Is(err, ErrDeviceEvidenceNotFound) {
 		return DeviceEvidenceDetail{}, err
 	}
-	batch, err := getBatchDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q)
+	batch, err := getBatchDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q, false, remaining)
 	if err != nil {
 		return DeviceEvidenceDetail{}, err
 	}
@@ -78,7 +86,7 @@ const batchDeviceDetailCandidateSQL = `SELECT d.id,d.user_label,d.created_at_ns,
  AND (? OR b.last_claim_ns<? OR (b.last_claim_ns=? AND b.id<?))
  ORDER BY b.last_claim_ns DESC,b.id DESC LIMIT 1`
 
-func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time, q DeviceEvidenceDetailQuery) (deviceEvidenceDetailRows, error) {
+func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time, q DeviceEvidenceDetailQuery, requireValidity bool, remaining *int) (deviceEvidenceDetailRows, error) {
 	result := deviceEvidenceDetailRows{}
 	var cursorTime, cursorBatch int64
 	seenLinks := map[string]bool{}
@@ -97,6 +105,12 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 		}
 		if inspected >= evidenceBatchIdentityMaxCandidates {
 			return deviceEvidenceDetailRows{}, ErrEvidenceBatchQueryLimit
+		}
+		if remaining != nil {
+			if *remaining <= 0 {
+				return deviceEvidenceDetailRows{}, ErrEvidenceBatchQueryLimit
+			}
+			*remaining = *remaining - 1
 		}
 		records, err := candidate.records(ctx, tx, q.ScopeID)
 		if err != nil {
@@ -122,7 +136,7 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 				claims[claim.Claim.ID] = claim
 			}
 			for _, link := range record.Links {
-				if link.DeviceID != q.DeviceID || link.ValidFrom.After(q.AsOf) {
+				if link.DeviceID != q.DeviceID || link.ValidFrom.After(q.AsOf) || (requireValidity && link.ValidUntil != nil && link.ValidUntil.Before(q.AsOf)) {
 					continue
 				}
 				retained, ok := claims[link.ClaimID]
@@ -130,7 +144,7 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 					return deviceEvidenceDetailRows{}, ErrEvidenceBatchData
 				}
 				claim := retained.Claim
-				if !retained.ExpiresAt.After(now) || claim.ObservedAt.After(q.AsOf) {
+				if !retained.ExpiresAt.After(now) || claim.ObservedAt.After(q.AsOf) || (requireValidity && claim.ValidUntil != nil && claim.ValidUntil.Before(q.AsOf)) {
 					continue
 				}
 				if seenLinks[link.ID] {

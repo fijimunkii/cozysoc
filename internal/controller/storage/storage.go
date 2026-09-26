@@ -484,7 +484,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if version == schemaVersion {
 		return nil
 	}
-	if version < 0 || version > 3 {
+	if version < 0 || version > 4 {
 		return fmt.Errorf("no migration path from storage schema version %d", version)
 	}
 	tx, err := s.conn.BeginTx(ctx, nil)
@@ -510,6 +510,11 @@ func (s *Store) migrate(ctx context.Context) error {
 	if version < 4 {
 		if _, err := tx.ExecContext(ctx, migrationV4); err != nil {
 			return fmt.Errorf("apply storage schema v4: %w", err)
+		}
+	}
+	if version < 5 {
+		if _, err := tx.ExecContext(ctx, migrationV5); err != nil {
+			return fmt.Errorf("apply storage schema v5: %w", err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {

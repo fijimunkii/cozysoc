@@ -32,17 +32,49 @@ func (s *MixedIdentitySnapshot) FindRecentDevicesByClaim(ctx context.Context, sc
 	if s == nil || s.legacy == nil {
 		return nil, fmt.Errorf("identity snapshot is unavailable")
 	}
-	legacy, err := s.legacy.FindRecentDevicesByClaim(ctx, scope, kind, value, since, until)
+	merges, err := loadDeviceMerges(ctx, s.legacy.tx, scope)
 	if err != nil {
 		return nil, err
 	}
-	batch, err := findRecentBatchDevicesByClaim(ctx, s.legacy.tx, s.legacy.now, scope, kind, value, since, until)
+	limit := 3
+	if len(merges.bySource) != 0 {
+		limit = MaxDeviceMergesPerScope + 2
+	}
+	legacy, err := findRecentDevicesByClaim(ctx, s.legacy.tx, s.legacy.now, scope, kind, value, since, until, limit)
+	if err != nil {
+		return nil, err
+	}
+	batch, err := findRecentBatchDevicesByClaimLimit(ctx, s.legacy.tx, s.legacy.now, scope, kind, value, since, until, limit)
 	if err != nil {
 		return nil, err
 	}
 	byID := map[string]domain.Device{}
 	for _, d := range append(legacy, batch...) {
-		byID[d.ID] = d
+		id := merges.canonical(d.ID)
+		if id == d.ID {
+			byID[id] = d
+			continue
+		}
+		if _, exists := byID[id]; exists {
+			continue
+		}
+		var target domain.Device
+		var label sql.NullString
+		var created int64
+		var retired sql.NullInt64
+		if err := s.legacy.tx.QueryRowContext(ctx, `SELECT id,user_label,created_at_ns,retired_at_ns FROM devices WHERE id=?`, id).Scan(&target.ID, &label, &created, &retired); err != nil {
+			return nil, err
+		}
+		target.UserLabel = label.String
+		target.CreatedAt = time.Unix(0, created).UTC()
+		if retired.Valid {
+			at := time.Unix(0, retired.Int64).UTC()
+			target.RetiredAt = &at
+		}
+		if target.RetiredAt != nil && target.RetiredAt.Before(until) {
+			return nil, ErrEvidenceBatchData
+		}
+		byID[id] = target
 	}
 	devices := make([]domain.Device, 0, len(byID))
 	for _, d := range byID {
@@ -70,6 +102,10 @@ const batchIdentityCandidateSQL = `SELECT d.id,d.user_label,d.created_at_ns,d.re
  ORDER BY r.device_id,r.group_id,b.id DESC LIMIT 1`
 
 func findRecentBatchDevicesByClaim(ctx context.Context, tx *sql.Tx, now time.Time, scope string, kind domain.ClaimKind, value string, since, until time.Time) ([]domain.Device, error) {
+	return findRecentBatchDevicesByClaimLimit(ctx, tx, now, scope, kind, value, since, until, 3)
+}
+
+func findRecentBatchDevicesByClaimLimit(ctx context.Context, tx *sql.Tx, now time.Time, scope string, kind domain.ClaimKind, value string, since, until time.Time, limit int) ([]domain.Device, error) {
 	if validateQueryID("scope", scope) != nil || !batchTimeFits(now) || !batchTimeFits(since) || !batchTimeFits(until) || until.Before(since) || until.Sub(since) > MaxQueryWindow {
 		return nil, ErrEvidenceBatchData
 	}
@@ -77,7 +113,7 @@ func findRecentBatchDevicesByClaim(ctx context.Context, tx *sql.Tx, now time.Tim
 	if err != nil {
 		return nil, err
 	}
-	devices := make([]domain.Device, 0, 3)
+	devices := make([]domain.Device, 0, limit)
 	cursorDevice := ""
 	var cursorGroup int64
 	cursorBatch := int64(math.MaxInt64)
@@ -151,7 +187,7 @@ func findRecentBatchDevicesByClaim(ctx context.Context, tx *sql.Tx, now time.Tim
 			d.RetiredAt = &at
 		}
 		devices = append(devices, d)
-		if len(devices) == 3 {
+		if len(devices) == limit {
 			return devices, nil
 		}
 		// A verified device is already represented; skip its remaining batches.
