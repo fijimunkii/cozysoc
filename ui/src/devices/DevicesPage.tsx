@@ -8,33 +8,46 @@ import { SetupRequestError, validateDeviceLabelInput } from "../setup/setup";
 import "./devices.css";
 import type { DeviceList, DevicePresence, DevicePresenceState } from "./devices";
 
+type DetailView = { deviceID: string; scopeID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string };
+
 export function DevicesPage({ devices, labelClient, onChanged, onNavigate, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; onNavigate?: (page: "overview" | "coverage") => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
-  const [detailView, setDetailView] = useState<{ deviceID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string } | null>(null);
+  const [detailView, setDetailView] = useState<DetailView | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const statusHeading = useRef<HTMLHeadingElement>(null);
+  const detailRequest = useRef(0);
   const previousDetailState = useRef<"loading" | "ready" | "error" | null>(null);
+  const activeDetailView = detailView !== null && devices.scope_id !== undefined && detailView.scopeID === devices.scope_id && devices.devices.some((device) => device.id === detailView.deviceID) ? detailView : null;
 
   useEffect(() => {
-    const state = detailView?.state ?? null;
+    const state = activeDetailView?.state ?? null;
     if (state === "loading" || state === "error") statusHeading.current?.focus();
     if (state === null && previousDetailState.current !== null) listHeading.current?.focus();
     previousDetailState.current = state;
-  }, [detailView?.state]);
+    if (detailView !== null && activeDetailView === null) {
+      detailRequest.current += 1;
+      setDetailView(null);
+    }
+  }, [activeDetailView, detailView]);
 
   async function openDetail(deviceID: string): Promise<void> {
-    if (loadDetail === undefined) return;
-    setDetailView({ deviceID, state: "loading" });
+    const scopeID = devices.scope_id;
+    if (loadDetail === undefined || scopeID === undefined) return;
+    const requestID = ++detailRequest.current;
+    setDetailView({ deviceID, scopeID, state: "loading" });
     try {
       const detail = await loadDetail(deviceID);
-      setDetailView({ deviceID, state: "ready", detail });
+      if (requestID !== detailRequest.current) return;
+      if (detail.scope_id !== scopeID) throw new DeviceLoadError("Device evidence belongs to a different network scope. Refresh the device list and try again.");
+      setDetailView({ deviceID, scopeID, state: "ready", detail });
     } catch (error: unknown) {
-      setDetailView({ deviceID, state: "error", message: error instanceof DeviceLoadError ? error.message : "Device evidence could not be loaded." });
+      if (requestID !== detailRequest.current) return;
+      setDetailView({ deviceID, scopeID, state: "error", message: error instanceof DeviceLoadError ? error.message : "Device evidence could not be loaded." });
     }
   }
 
-  if (detailView?.state === "ready" && detailView.detail !== undefined) return <DeviceDetailPanel detail={detailView.detail} onBack={() => setDetailView(null)} />;
-  if (detailView?.state === "loading") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Reading device evidence</h2><p>Loading retained observations and identity associations from the local controller.</p></section>;
-  if (detailView?.state === "error") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Device evidence is unavailable</h2><p>{detailView.message}</p><div className="device-detail-error-actions"><button type="button" className="secondary-action" onClick={() => void openDetail(detailView.deviceID)}>Retry evidence</button><button type="button" className="quiet-button" onClick={() => setDetailView(null)}>Back to devices</button></div></section>;
+  if (activeDetailView?.state === "ready" && activeDetailView.detail !== undefined) return <DeviceDetailPanel detail={activeDetailView.detail} onBack={() => setDetailView(null)} />;
+  if (activeDetailView?.state === "loading") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Reading device evidence</h2><p>Loading retained observations and identity associations from the local controller.</p></section>;
+  if (activeDetailView?.state === "error") return <section className="product-card empty-product-state"><h2 ref={statusHeading} tabIndex={-1}>Device evidence is unavailable</h2><p>{activeDetailView.message}</p><div className="device-detail-error-actions"><button type="button" className="secondary-action" onClick={() => void openDetail(activeDetailView.deviceID)}>Retry evidence</button><button type="button" className="quiet-button" onClick={() => setDetailView(null)}>Back to devices</button></div></section>;
   if (!devices.configured) {
     return (
       <section className="product-card empty-product-state" aria-labelledby="devices-title">

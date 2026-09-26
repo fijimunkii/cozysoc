@@ -129,6 +129,8 @@ The validated information architecture now exposes **Overview**, **Devices**, **
 
 Changing sections moves keyboard focus to the new page heading without moving it again on evidence refresh. Device evidence loading, error and detail views take focus at their heading, and returning from detail restores focus to the device-list heading.
 
+An open device detail is tied to the scope and device in the current live list. If a fresh list changes scope or removes that device, the old detail closes and focus returns to the list. A detail response for a different scope is rejected rather than presented under the current live connection banner.
+
 Authenticated `GET /api/devices` is parameterless and read-only. It is backed by the existing controller `devices.list` method and returns only the bounded device-presence read model: configured scope, stable device ID, optional user label, first/last seen timestamps, `visible`/`uncertain` presence, and truncation. It does not expose raw observations, identity claims, database access, controller credentials, or a device mutation surface.
 
 The Overview page summarizes only the current device-presence and shared-coverage evidence. Known limits remain explicit counts and next steps rather than a protection percentage. The Devices page does not invent `offline`; absence of recent positive evidence remains `uncertain` as defined by #11.
