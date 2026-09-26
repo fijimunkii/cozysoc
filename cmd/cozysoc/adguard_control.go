@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -47,9 +48,19 @@ func (h *controllerAPIHandler) DisconnectAdGuard(ctx context.Context) (api.AdGua
 
 func adguardProjection(connection adguard.Connection) api.AdGuardConnection {
 	status := connection.Status
-	return api.AdGuardConnection{Connected: true, Endpoint: connection.Endpoint, Username: connection.Username, Version: status.Version,
+	result := api.AdGuardConnection{Connected: true, Endpoint: connection.Endpoint, Username: connection.Username, Version: status.Version,
 		Running: status.Running, ProtectionEnabled: status.ProtectionEnabled, FilteringEnabled: status.FilteringEnabled,
 		QueryLogEnabled: status.QueryLogEnabled, AnonymizedClients: status.AnonymizedClients}
+	if inventory := status.FilterInventory; inventory.Available {
+		projected := api.AdGuardFilterInventory{BlocklistTotal: inventory.BlocklistTotal, AllowlistTotal: inventory.AllowlistTotal,
+			Truncated: inventory.Truncated, Sources: make([]api.AdGuardFilterSource, 0, len(inventory.Sources))}
+		for _, source := range inventory.Sources {
+			projected.Sources = append(projected.Sources, api.AdGuardFilterSource{Kind: source.Kind, ID: strconv.FormatInt(source.ID, 10),
+				Name: source.Name, Enabled: source.Enabled, RulesCount: source.RulesCount, LastUpdated: source.LastUpdated})
+		}
+		result.FilterInventory = &projected
+	}
+	return result
 }
 
 func (h *controllerAPIHandler) CollectAdGuard(ctx context.Context, params api.AdGuardCollectParams) (api.AdGuardCollection, error) {

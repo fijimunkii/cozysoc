@@ -21,7 +21,13 @@ and reapproval path. Credentials are supplied as protected
 `secretstore.Secret` values, not URL userinfo. The client does not use proxy
 environment variables.
 
-`Probe` reads only status, filtering state and query-log configuration. It is
+`Probe` reads only status, filtering state and query-log configuration. The
+filtering response can supply bounded source metadata: up to 32 blocklists and
+32 allowlists, with reported name, ID, enablement, rule count and optional
+update time. Source URLs, local file paths and custom rule text are excluded
+from native and browser projections. Missing or malformed source metadata makes
+the inventory unavailable without turning valid service state into an outage.
+An update time is the resolver's report, not a verified list version. `Probe` is
 the validation path for a proposed connection and never retrieves query names
 or client history. `Read` calls that same probe before its bounded query-log
 read.
@@ -41,8 +47,9 @@ disabled local intent for a safe retry. All native results and errors omit
 passwords and upstream response bodies. Browser routes do not expose these
 controls. Authenticated `GET /api/adguard/status` is a separate, user-triggered
 status-only read. Its bounded browser projection omits the configured username,
-password, secret reference and query history. A deliberate admin link uses only
-the validated IP-literal origin and opens the external owner's page in a new tab
+password, secret reference, query history, source URLs and custom rule text. A
+deliberate admin link uses only the validated IP-literal origin and opens the
+external owner's page in a new tab
 without a referrer. A direct link is withheld when the resolver shares the
 web UI's hostname: browser cookies ignore ports, so that navigation could
 send Cozy SOC's HttpOnly session cookie to the other service.

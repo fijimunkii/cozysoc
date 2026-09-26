@@ -24,6 +24,16 @@ describe("AdGuard Home browser status", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "GET", credentials: "same-origin", cache: "no-store" });
   });
 
+  it("projects bounded filter source metadata without accepting malformed names or counts", () => {
+    const source = { kind: "blocklist", id: "7", name: "Example source", enabled: true, rules_count: 12, last_updated: "2026-09-25T12:00:00Z" };
+    const inventory = { blocklist_total: 1, allowlist_total: 0, truncated: false, sources: [source] };
+    expect(parseAdGuardStatus({ ...connected, filter_inventory: inventory, username: "private", user_rules: ["private.example"] }).filter_inventory).toEqual(inventory);
+    expect(parseAdGuardStatus({ ...connected, filter_inventory: { ...inventory, sources: [{ ...source, id: "-3" }] } }).filter_inventory?.sources[0]?.id).toBe("-3");
+    expect(() => parseAdGuardStatus({ ...connected, filter_inventory: { ...inventory, sources: [{ ...source, name: "masked\u202ename" }] } })).toThrow();
+    expect(() => parseAdGuardStatus({ ...connected, filter_inventory: { ...inventory, blocklist_total: 2 } })).toThrow();
+    expect(() => parseAdGuardStatus({ ...connected, filter_inventory: { ...inventory, sources: [{ ...source, id: "01" }] } })).toThrow();
+  });
+
   it("withholds direct links to services on the web session cookie host, regardless of port", () => {
     expect(adminLinkSharesWebCookieHost("http://127.0.0.1:3000", "127.0.0.1")).toBe(true);
     expect(adminLinkSharesWebCookieHost("https://[::1]:3000", "[::1]")).toBe(true);

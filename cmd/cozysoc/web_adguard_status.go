@@ -4,6 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -14,14 +18,47 @@ import (
 // The external admin origin is emitted only after the same IP-literal validation
 // used by the native connection, so it is safe to offer as a deliberate link.
 type webAdGuardStatus struct {
-	Connected         bool   `json:"connected"`
-	Endpoint          string `json:"endpoint,omitempty"`
-	Version           string `json:"version,omitempty"`
-	Running           bool   `json:"running"`
-	ProtectionEnabled bool   `json:"protection_enabled"`
-	FilteringEnabled  bool   `json:"filtering_enabled"`
-	QueryLogEnabled   bool   `json:"query_log_enabled"`
-	AnonymizedClients bool   `json:"anonymized_clients"`
+	Connected         bool                        `json:"connected"`
+	Endpoint          string                      `json:"endpoint,omitempty"`
+	Version           string                      `json:"version,omitempty"`
+	Running           bool                        `json:"running"`
+	ProtectionEnabled bool                        `json:"protection_enabled"`
+	FilteringEnabled  bool                        `json:"filtering_enabled"`
+	QueryLogEnabled   bool                        `json:"query_log_enabled"`
+	AnonymizedClients bool                        `json:"anonymized_clients"`
+	FilterInventory   *api.AdGuardFilterInventory `json:"filter_inventory,omitempty"`
+}
+
+func projectWebAdGuardFilterInventory(inventory *api.AdGuardFilterInventory) *api.AdGuardFilterInventory {
+	if inventory == nil {
+		return nil
+	}
+	if inventory.BlocklistTotal < 0 || inventory.AllowlistTotal < 0 || inventory.BlocklistTotal > 100000 || inventory.AllowlistTotal > 100000 ||
+		len(inventory.Sources) > 2*adguard.MaxFilterSources || inventory.Truncated != (inventory.BlocklistTotal > adguard.MaxFilterSources || inventory.AllowlistTotal > adguard.MaxFilterSources) {
+		return nil
+	}
+	block, allow := 0, 0
+	for _, source := range inventory.Sources {
+		if source.Kind == "blocklist" {
+			block++
+		} else if source.Kind == "allowlist" {
+			allow++
+		} else {
+			return nil
+		}
+		id, err := strconv.ParseInt(source.ID, 10, 64)
+		if err != nil || strconv.FormatInt(id, 10) != source.ID || source.Name == "" || len(source.Name) > 128 ||
+			!utf8.ValidString(source.Name) || strings.IndexFunc(source.Name, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }) >= 0 ||
+			(source.LastUpdated != nil && source.LastUpdated.IsZero()) {
+			return nil
+		}
+	}
+	if block != min(inventory.BlocklistTotal, adguard.MaxFilterSources) || allow != min(inventory.AllowlistTotal, adguard.MaxFilterSources) {
+		return nil
+	}
+	projected := *inventory
+	projected.Sources = append([]api.AdGuardFilterSource{}, inventory.Sources...)
+	return &projected
 }
 
 func projectWebAdGuardStatus(status api.AdGuardConnection) (webAdGuardStatus, bool) {
@@ -41,7 +78,7 @@ func projectWebAdGuardStatus(status api.AdGuardConnection) (webAdGuardStatus, bo
 	return webAdGuardStatus{Connected: true, Endpoint: endpoint.Scheme + "://" + endpoint.Host,
 		Version: status.Version, Running: status.Running, ProtectionEnabled: status.ProtectionEnabled,
 		FilteringEnabled: status.FilteringEnabled, QueryLogEnabled: status.QueryLogEnabled,
-		AnonymizedClients: status.AnonymizedClients}, true
+		AnonymizedClients: status.AnonymizedClients, FilterInventory: projectWebAdGuardFilterInventory(status.FilterInventory)}, true
 }
 
 func (h *webHandler) handleAdGuardStatus(w http.ResponseWriter, r *http.Request) {

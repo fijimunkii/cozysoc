@@ -16,7 +16,10 @@ test("AdGuard Home query history needs a separate bounded browser review", async
       case "/api/adguard/status":
         statusReads++;
         return reply({ connected: true, endpoint: "https://192.0.2.5:3000", version: "v0.107.79", running: true,
-          protection_enabled: true, filtering_enabled: true, query_log_enabled: true, anonymized_clients: false });
+          protection_enabled: true, filtering_enabled: true, query_log_enabled: true, anonymized_clients: false,
+          filter_inventory: { blocklist_total: 1, allowlist_total: 0, truncated: false, sources: [{ kind: "blocklist", id: "7",
+            name: "ExampleUnbrokenFilterSourceNameWithManyCharacters", enabled: true, rules_count: 12, last_updated: "2026-09-25T12:00:00Z" }] },
+          user_rules: ["private.example"], filter_url: "file:///private/household/path" });
       case "/api/adguard/collection/review":
         reviews++;
         expect(route.request().postDataJSON()).toEqual({});
@@ -43,6 +46,9 @@ test("AdGuard Home query history needs a separate bounded browser review", async
   expect(statusReads).toBe(0); expect(reviews).toBe(0); expect(runs).toBe(0);
   await page.getByRole("button", { name: "Read AdGuard Home status" }).click();
   await expect(page.getByRole("button", { name: "Review one DNS history collection" })).toBeVisible();
+  await expect(page.getByText("ExampleUnbrokenFilterSourceNameWithManyCharacters")).toBeVisible();
+  await expect(page.getByText(/12 rules/)).toBeVisible();
+  await expect(page.getByText(/private.example/)).toHaveCount(0);
   expect(statusReads).toBe(1); expect(reviews).toBe(0); expect(runs).toBe(0);
   await page.getByRole("button", { name: "Review one DNS history collection" }).click();
   await expect(page.getByRole("button", { name: "Approve one read" })).toBeVisible();

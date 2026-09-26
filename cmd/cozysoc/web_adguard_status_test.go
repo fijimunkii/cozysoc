@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/adguard"
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
@@ -65,5 +66,27 @@ func TestWebAdGuardStatusRejectsUnsafeOriginsAndRedactsFailures(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable || strings.Contains(rr.Body.String(), "private credential diagnostic") {
 		t.Fatalf("error status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestWebAdGuardStatusShowsOnlyBoundedFilterMetadata(t *testing.T) {
+	updated := time.Date(2026, time.September, 25, 12, 0, 0, 0, time.UTC)
+	h := newWebHandler("127.0.0.1:9000", t.TempDir(), "bootstrap", "session", nil)
+	h.loadAdGuardStatus = func(context.Context) (api.AdGuardConnection, error) {
+		return api.AdGuardConnection{Connected: true, Endpoint: "https://192.0.2.5:3000", Username: "private-reader", Version: adguard.SupportedVersion,
+			FilterInventory: &api.AdGuardFilterInventory{BlocklistTotal: 1, AllowlistTotal: 0, Sources: []api.AdGuardFilterSource{
+				{Kind: "blocklist", ID: "7", Name: "Example source", Enabled: true, RulesCount: 12, LastUpdated: &updated},
+			}}}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:9000/api/adguard/status", nil)
+	req.AddCookie(&http.Cookie{Name: webSessionCookie, Value: "session"})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Example source") || strings.Contains(rr.Body.String(), "private-reader") {
+		t.Fatalf("filter status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	bad := &api.AdGuardFilterInventory{BlocklistTotal: 1, Sources: []api.AdGuardFilterSource{{Kind: "blocklist", ID: "7", Name: "masked\u202ename", Enabled: true}}}
+	if projectWebAdGuardFilterInventory(bad) != nil {
+		t.Fatal("unsafe filter name was projected")
 	}
 }
