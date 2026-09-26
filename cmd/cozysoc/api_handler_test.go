@@ -32,6 +32,13 @@ type fakeDeviceStore struct {
 	setLabel       string
 	setChanged     bool
 	setErr         error
+	mergeScope     string
+	mergeSource    string
+	mergeTarget    string
+	mergeChanged   bool
+	mergeErr       error
+	unmergeSource  string
+	merges         []storage.DeviceMerge
 	activeScopes   []domain.NetworkScope
 	activeErr      error
 	enrollScope    domain.NetworkScope
@@ -59,6 +66,20 @@ func (f *fakeDeviceStore) SetDeviceLabel(_ context.Context, scopeID, deviceID, l
 	f.setDevice = deviceID
 	f.setLabel = label
 	return f.setChanged, f.setErr
+}
+
+func (f *fakeDeviceStore) MergeDevices(_ context.Context, scope, source, target string) (bool, error) {
+	f.mergeScope, f.mergeSource, f.mergeTarget = scope, source, target
+	return f.mergeChanged, f.mergeErr
+}
+
+func (f *fakeDeviceStore) UnmergeDevices(_ context.Context, scope, source string) (bool, error) {
+	f.mergeScope, f.unmergeSource = scope, source
+	return f.mergeChanged, f.mergeErr
+}
+
+func (f *fakeDeviceStore) ListDeviceMerges(context.Context, string) ([]storage.DeviceMerge, error) {
+	return f.merges, nil
 }
 
 func (f *fakeDeviceStore) ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error) {
@@ -155,7 +176,7 @@ func TestControllerAPIHandlerReturnsScopedDeviceDetailWithTemporalEvidence(t *te
 	store := &fakeDeviceStore{detail: storage.DeviceEvidenceDetail{
 		Summary: storage.DeviceEvidenceSummary{Device: domain.Device{ID: "device.one", UserLabel: "Speaker", CreatedAt: now.Add(-time.Hour)}, FirstSeen: now.Add(-time.Hour), LastSeen: now.Add(-time.Minute)},
 		Evidence: []storage.DeviceIdentityEvidence{
-			{Kind: domain.ClaimIPv4, Value: "192.168.1.20", ObservedAt: now.Add(-time.Minute), ClaimValidUntil: &currentValidUntil, ClaimConfidence: &confidence, LinkValidUntil: &currentValidUntil, LinkConfidence: &confidence, Authority: domain.LinkInferred, Reason: "device-watch:recent-mac-continuity:ip", SourceSensorID: "sensor.dw", Observation: &storage.DeviceEvidenceObservation{ID: "obs.one", SensorID: "sensor.dw", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: now.Add(-time.Minute), Attribution: "device-watch:arp-cache"}},
+			{OriginalDeviceID: "device.earlier", Kind: domain.ClaimIPv4, Value: "192.168.1.20", ObservedAt: now.Add(-time.Minute), ClaimValidUntil: &currentValidUntil, ClaimConfidence: &confidence, LinkValidUntil: &currentValidUntil, LinkConfidence: &confidence, Authority: domain.LinkInferred, Reason: "device-watch:recent-mac-continuity:ip", SourceSensorID: "sensor.dw", Observation: &storage.DeviceEvidenceObservation{ID: "obs.one", SensorID: "sensor.dw", Kind: "device-neighbor-seen", SourceStream: "device-watch-neighbors", IngestedAt: now.Add(-time.Minute), Attribution: "device-watch:arp-cache"}},
 			{Kind: domain.ClaimMAC, Value: "02:00:00:00:00:01", ObservedAt: now.Add(-10 * time.Minute), ClaimValidUntil: &oldValidUntil, LinkValidUntil: &oldValidUntil, Authority: domain.LinkInferred, Reason: "device-watch:new-mac-candidate:mac", SourceSensorID: "sensor.dw"},
 		},
 	}}
@@ -178,6 +199,9 @@ func TestControllerAPIHandlerReturnsScopedDeviceDetailWithTemporalEvidence(t *te
 	}
 	if detail.Evidence[0].Source == nil || detail.Evidence[0].Source.Attribution != "device-watch:arp-cache" {
 		t.Fatalf("missing source projection: %+v", detail.Evidence[0])
+	}
+	if detail.Evidence[0].OriginalDeviceID != "device.earlier" || detail.Evidence[1].OriginalDeviceID != "" {
+		t.Fatalf("correction provenance lost: %+v", detail.Evidence)
 	}
 }
 
@@ -282,6 +306,45 @@ func TestControllerAPIHandlerRejectsInvalidAndUnavailableLabelTargets(t *testing
 	control.scopeID = ""
 	if _, err := handler.LabelDevice(context.Background(), api.DeviceLabelParams{DeviceID: "device.one", Label: stringPtr("TV")}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
 		t.Fatalf("disabled mutation error = %v", err)
+	}
+}
+
+func TestControllerAPIHandlerScopesDeviceIdentityCorrections(t *testing.T) {
+	store := &fakeDeviceStore{mergeChanged: true, merges: []storage.DeviceMerge{{SourceDeviceID: "device.source", TargetDeviceID: "device.target", CreatedAt: time.Unix(10, 0).UTC()}}}
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := handler.MergeDevices(context.Background(), api.DeviceMergeParams{SourceDeviceID: "device.source", TargetDeviceID: "device.target"})
+	if err != nil || !result.Changed || store.mergeScope != "scope.home" || store.mergeSource != "device.source" || store.mergeTarget != "device.target" {
+		t.Fatal("merge scope", result, store, err)
+	}
+	listed, err := handler.DeviceMerges(context.Background())
+	if err != nil || !listed.Configured || listed.ScopeID != "scope.home" || len(listed.Merges) != 1 {
+		t.Fatal("merge list", listed, err)
+	}
+	result, err = handler.UnmergeDevices(context.Background(), api.DeviceUnmergeParams{SourceDeviceID: "device.source"})
+	if err != nil || !result.Changed || store.unmergeSource != "device.source" || store.mergeScope != "scope.home" {
+		t.Fatal("unmerge scope", result, store, err)
+	}
+	store.mergeErr = storage.ErrDeviceMergeConflict
+	if _, err := handler.MergeDevices(context.Background(), api.DeviceMergeParams{SourceDeviceID: "device.source", TargetDeviceID: "device.target"}); !errors.Is(err, localapi.ErrMutationConflict) {
+		t.Fatal("merge conflict", err)
+	}
+	store.mergeErr = storage.ErrDeviceNotInScope
+	if _, err := handler.MergeDevices(context.Background(), api.DeviceMergeParams{SourceDeviceID: "device.source", TargetDeviceID: "device.target"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+		t.Fatal("cross-scope merge", err)
+	}
+	store.mergeErr = nil
+	for _, params := range []api.DeviceMergeParams{{SourceDeviceID: "../bad", TargetDeviceID: "device.target"}, {SourceDeviceID: "device.same", TargetDeviceID: "device.same"}} {
+		if _, err := handler.MergeDevices(context.Background(), params); !errors.Is(err, localapi.ErrInvalidMutation) {
+			t.Fatal("invalid merge", params, err)
+		}
+	}
+	control.configured = false
+	if _, err := handler.UnmergeDevices(context.Background(), api.DeviceUnmergeParams{SourceDeviceID: "device.source"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+		t.Fatal("unconfigured unmerge", err)
 	}
 }
 

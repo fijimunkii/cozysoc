@@ -19,6 +19,9 @@ const (
 	MethodDeviceDetail        = "device.detail"
 	MethodDeviceActivity      = "device.activity"
 	MethodDeviceLabel         = "device.label"
+	MethodDeviceMerge         = "device.merge"
+	MethodDeviceUnmerge       = "device.unmerge"
+	MethodDeviceMerges        = "device.merges"
 	MethodNetworksList        = "networks.list"
 	MethodNetworkEnroll       = "network.enroll"
 	MethodDeviceWatchCoverage = "device-watch.coverage"
@@ -117,18 +120,19 @@ type DeviceEvidenceSource struct {
 }
 
 type DeviceIdentityEvidence struct {
-	Kind            string                `json:"kind"`
-	Value           string                `json:"value"`
-	ObservedAt      time.Time             `json:"observed_at"`
-	ValidUntil      *time.Time            `json:"valid_until,omitempty"`
-	LinkValidUntil  *time.Time            `json:"link_valid_until,omitempty"`
-	Current         bool                  `json:"current"`
-	ClaimConfidence *float64              `json:"claim_confidence,omitempty"`
-	LinkConfidence  *float64              `json:"link_confidence,omitempty"`
-	Authority       string                `json:"authority"`
-	Reason          string                `json:"reason"`
-	SourceSensorID  string                `json:"source_sensor_id"`
-	Source          *DeviceEvidenceSource `json:"source,omitempty"`
+	OriginalDeviceID string                `json:"original_device_id,omitempty"`
+	Kind             string                `json:"kind"`
+	Value            string                `json:"value"`
+	ObservedAt       time.Time             `json:"observed_at"`
+	ValidUntil       *time.Time            `json:"valid_until,omitempty"`
+	LinkValidUntil   *time.Time            `json:"link_valid_until,omitempty"`
+	Current          bool                  `json:"current"`
+	ClaimConfidence  *float64              `json:"claim_confidence,omitempty"`
+	LinkConfidence   *float64              `json:"link_confidence,omitempty"`
+	Authority        string                `json:"authority"`
+	Reason           string                `json:"reason"`
+	SourceSensorID   string                `json:"source_sensor_id"`
+	Source           *DeviceEvidenceSource `json:"source,omitempty"`
 }
 
 type DeviceDetail struct {
@@ -170,6 +174,33 @@ type DeviceLabelResult struct {
 	DeviceID  string `json:"device_id"`
 	UserLabel string `json:"user_label,omitempty"`
 	Changed   bool   `json:"changed"`
+}
+
+type DeviceMergeParams struct {
+	SourceDeviceID string `json:"source_device_id"`
+	TargetDeviceID string `json:"target_device_id"`
+}
+
+type DeviceUnmergeParams struct {
+	SourceDeviceID string `json:"source_device_id"`
+}
+
+type DeviceIdentityCorrectionResult struct {
+	SourceDeviceID string `json:"source_device_id"`
+	TargetDeviceID string `json:"target_device_id,omitempty"`
+	Changed        bool   `json:"changed"`
+}
+
+type DeviceMerge struct {
+	SourceDeviceID string    `json:"source_device_id"`
+	TargetDeviceID string    `json:"target_device_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type DeviceMergeList struct {
+	Configured bool          `json:"configured"`
+	ScopeID    string        `json:"scope_id,omitempty"`
+	Merges     []DeviceMerge `json:"merges"`
 }
 
 type NetworkInterface struct {

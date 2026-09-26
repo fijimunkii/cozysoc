@@ -19,6 +19,7 @@ export interface DeviceEvidenceSource {
 }
 
 export interface DeviceIdentityEvidence {
+  original_device_id?: string;
   kind: IdentityClaimKind;
   value: string;
   observed_at: string;
@@ -50,6 +51,7 @@ export function parseDeviceDetail(input: unknown): DeviceDetail {
   if (!Array.isArray(value.evidence) || value.evidence.length > maxEvidence) throw new DeviceLoadError("device detail has an invalid evidence collection");
   if (typeof value.truncated !== "boolean") throw new DeviceLoadError("device detail has an invalid truncated flag");
   const evidence = value.evidence.map((item) => parseEvidence(item, asOf));
+  if (evidence.some((item) => item.original_device_id === device.id)) throw new DeviceLoadError("corrected identity evidence repeats the displayed device id");
   return { scope_id: scopeID, as_of: asOf, device, evidence, truncated: value.truncated };
 }
 
@@ -95,6 +97,7 @@ function parseEvidence(input: unknown, asOf: string): DeviceIdentityEvidence {
   if (linkValidUntil !== undefined) result.link_valid_until = linkValidUntil;
   if (claimConfidence !== undefined) result.claim_confidence = claimConfidence;
   if (linkConfidence !== undefined) result.link_confidence = linkConfidence;
+  if (value.original_device_id !== undefined) result.original_device_id = idValue(value.original_device_id, "identity evidence original_device_id");
   if (value.source !== undefined) result.source = parseSource(value.source);
   return result;
 }

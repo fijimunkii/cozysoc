@@ -15,7 +15,26 @@ import (
 )
 
 type mutationTestHandler struct {
-	labelErr error
+	labelErr    error
+	identityErr error
+}
+
+func (h *mutationTestHandler) MergeDevices(_ context.Context, params api.DeviceMergeParams) (api.DeviceIdentityCorrectionResult, error) {
+	if h.identityErr != nil {
+		return api.DeviceIdentityCorrectionResult{}, h.identityErr
+	}
+	return api.DeviceIdentityCorrectionResult{SourceDeviceID: params.SourceDeviceID, TargetDeviceID: params.TargetDeviceID, Changed: true}, nil
+}
+
+func (h *mutationTestHandler) UnmergeDevices(_ context.Context, params api.DeviceUnmergeParams) (api.DeviceIdentityCorrectionResult, error) {
+	if h.identityErr != nil {
+		return api.DeviceIdentityCorrectionResult{}, h.identityErr
+	}
+	return api.DeviceIdentityCorrectionResult{SourceDeviceID: params.SourceDeviceID, Changed: true}, nil
+}
+
+func (*mutationTestHandler) DeviceMerges(context.Context) (api.DeviceMergeList, error) {
+	return api.DeviceMergeList{Configured: true, ScopeID: "scope.home", Merges: []api.DeviceMerge{}}, nil
 }
 
 func (*mutationTestHandler) Status() api.Status {

@@ -38,5 +38,5 @@ func (r *LegacyIdentitySnapshot) FindRecentDevicesByClaim(ctx context.Context, s
 	if r == nil || r.tx == nil {
 		return nil, fmt.Errorf("identity snapshot is unavailable")
 	}
-	return findRecentDevicesByClaim(ctx, r.tx, r.now, scopeID, kind, value, since, until)
+	return findRecentDevicesByClaim(ctx, r.tx, r.now, scopeID, kind, value, since, until, 3)
 }

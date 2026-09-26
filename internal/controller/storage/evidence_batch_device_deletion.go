@@ -11,6 +11,7 @@ const evidenceBatchDeviceDeleteMaxCandidates = 1024
 // DeleteEvidenceBatchDevice removes a global device and its legacy/batch links.
 // Original observations and claims survive. The caller must exclusively own the
 // transaction, roll it back on any error, and commit before acknowledging success.
+// An active identity correction must be undone before either device is removed.
 // This reserved-schema primitive does not expose deletion through the runtime UI.
 func DeleteEvidenceBatchDevice(ctx context.Context, tx *sql.Tx, device string) (bool, error) {
 	return deleteEvidenceBatchDevice(ctx, tx, device, evidenceBatchDeviceDeleteMaxCandidates)
@@ -25,6 +26,14 @@ func deleteEvidenceBatchDevice(ctx context.Context, tx *sql.Tx, device string, l
 	}
 	if err := requireEvidenceBatchForeignKeys(ctx, tx); err != nil {
 		return false, err
+	}
+	var corrected bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM device_identity_merges
+		WHERE source_device_id=? OR target_device_id=?)`, device, device).Scan(&corrected); err != nil {
+		return false, err
+	}
+	if corrected {
+		return false, ErrDeviceMergeConflict
 	}
 	// Global device IDs can have evidence in multiple scopes: delete every link,
 	// not just the scope that happened to select the device in the UI.

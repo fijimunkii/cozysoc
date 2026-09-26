@@ -34,4 +34,13 @@ describe("DeviceDetailPanel", () => {
     expect(screen.getByText("Uncertain at read")).toBeTruthy();
     expect(screen.getByText(/not proof the device is offline/)).toBeTruthy();
   });
+
+  it("discloses a user merge while preserving the original inferred authority", () => {
+    const corrected = detail("visible");
+    corrected.evidence[0] = { ...corrected.evidence[0]!, original_device_id: "device.earlier" };
+    render(<DeviceDetailPanel detail={corrected} onBack={() => undefined} />);
+    expect(screen.getByText("User correction")).toBeTruthy();
+    expect(screen.getByText(/Grouped from earlier device/)).toBeTruthy();
+    expect(screen.getAllByText("Inferred").length).toBeGreaterThan(0);
+  });
 });

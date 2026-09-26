@@ -176,7 +176,7 @@ The IP claim is never used by itself to reconnect a device identity, preventing 
 
 MAC continuity is treated as an inference. If exactly one device has matching retained MAC evidence within the previous seven days, the new observation extends that device's temporal evidence chain. If no device matches, Device Watch creates a new candidate Device. If multiple devices match, the current claims remain preserved but unlinked and the result stays ambiguous rather than selecting a winner.
 
-A locally administered/private MAC receives lower inference confidence than a globally administered address. User corrections and future stronger sources can still merge or split Device records without deleting the original observations or claims.
+A locally administered/private MAC receives lower inference confidence than a globally administered address. A scoped user merge can group two existing Device records for current reads and future MAC matching without deleting the original observations, claims, or inferred links. The original association remains visible in detail. Undo restores the earlier projection. Splitting observations that were inferred into one Device remains separate work.
 
 Reconciliation uses deterministic claim/link/device identifiers for crash recovery. If the controller stops after writing the raw observation but before all identity links are written, replay safely completes the same reconciliation rather than creating duplicate identity history.
 
@@ -207,12 +207,44 @@ Labels are bounded, trimmed, and reject control characters. A real change and it
 
 The mutation does not grant network, generic capability-lifecycle, process, filesystem, or arbitrary database write authority.
 
+## User identity merges
+
+The authenticated native API and CLI permit an explicit merge of two retained
+Device records in the current enrolled Device Watch scope:
+
+```text
+cozysoc device-merge --state-dir PATH SOURCE_DEVICE_ID TARGET_DEVICE_ID
+cozysoc device-merges --state-dir PATH
+cozysoc device-unmerge --state-dir PATH SOURCE_DEVICE_ID
+```
+
+The target stays in the device list and keeps its label. The source disappears
+from that current list while its retained observations and original inferred
+links stay unchanged. Device detail identifies evidence grouped from the source;
+the original link authority is not relabeled as user-confirmed. Recent MAC
+candidate lookup resolves source and target to one corrected identity, preventing
+the merge itself from creating a false future ambiguity. Activity is classified
+after grouping their observations, so address changes are evaluated in the
+corrected timeline. Undo restores the separate identities without reconstructing
+or rewriting evidence.
+
+Storage verifies both devices against retained evidence in the same active LAN
+scope in one transaction, including canonical batches. It rejects chains,
+cycles, cross-scope targets and more than 64 active source mappings per scope.
+An identical merge and a repeated undo are no-ops. Each real transition and its
+`device-identity` audit event commit together; a failed audit rolls back the
+projection. The bounded active mapping remains inspectable through
+`device-merges` after the source disappears from the list. The CLI does not
+probe, alter network configuration, or increase identity confidence. Browser
+detail shows corrected evidence provenance, while browser mutation controls are
+not yet exposed.
+
 ## Limitations and validation requirements
 
 The browser provides network selection, enable/disable, device presence, labeling and coverage views. Further work and validation include:
 
 - packaged desktop-shell support and installed-service lifecycle validation;
-- auditable merge/split correction flows for identity ambiguity;
+- a correction that splits observations incorrectly inferred into one Device;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
 - owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, ingestion lag, and write-pressure/full-volume recovery scenarios.
