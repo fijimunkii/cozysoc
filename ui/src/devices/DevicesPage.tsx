@@ -119,11 +119,24 @@ function DeviceRow({ device, labelClient, onChanged, onViewEvidence }: { device:
   const [draft, setDraft] = useState(device.user_label ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewedClearLabel, setReviewedClearLabel] = useState<string | null>(null);
+  const clearReviewRef = useRef<HTMLDivElement>(null);
+  const clearButtonRef = useRef<HTMLButtonElement>(null);
+  const labelActionsRef = useRef<HTMLTableCellElement>(null);
+  const returnToClearButton = useRef(false);
   const canEdit = labelClient !== undefined && onChanged !== undefined;
   const current = device.user_label ?? "";
   const validation = validateDeviceLabelInput(draft);
   const labelName = device.user_label ?? device.id;
   const bytes = new TextEncoder().encode(draft).length;
+
+  useEffect(() => {
+    if (reviewedClearLabel !== null) clearReviewRef.current?.focus();
+    else if (returnToClearButton.current) {
+      clearButtonRef.current?.focus();
+      returnToClearButton.current = false;
+    }
+  }, [reviewedClearLabel]);
 
   async function applyLabel(label: string): Promise<void> {
     if (!canEdit) return;
@@ -131,7 +144,9 @@ function DeviceRow({ device, labelClient, onChanged, onViewEvidence }: { device:
     setError(null);
     try {
       await labelClient.labelDevice(device.id, label);
+      if (reviewedClearLabel !== null) labelActionsRef.current?.focus();
       setEditing(false);
+      setReviewedClearLabel(null);
       onChanged();
     } catch (caught: unknown) {
       setError(deviceLabelErrorMessage(caught));
@@ -170,9 +185,19 @@ function DeviceRow({ device, labelClient, onChanged, onViewEvidence }: { device:
       <td>{formatTimestamp(device.first_seen)}</td>
       {onViewEvidence ? <td><button type="button" className="quiet-button" onClick={onViewEvidence}>View evidence</button></td> : null}
       {canEdit ? (
-        <td className="device-label-actions">
-          {!editing ? <button type="button" className="quiet-button" onClick={() => { setDraft(current); setError(null); setEditing(true); }}>{current === "" ? `Name ${device.id}` : `Rename ${current}`}</button> : null}
-          {!editing && current !== "" ? <button type="button" className="quiet-button" disabled={pending} onClick={() => void applyLabel("")}>Clear label</button> : null}
+        <td className="device-label-actions" ref={labelActionsRef} tabIndex={-1}>
+          {!editing && reviewedClearLabel === null ? <button type="button" className="quiet-button" onClick={() => { setDraft(current); setError(null); setEditing(true); }}>{current === "" ? `Name ${device.id}` : `Rename ${current}`}</button> : null}
+          {!editing && current !== "" && reviewedClearLabel === null ? <button type="button" className="quiet-button" ref={clearButtonRef} disabled={pending} onClick={() => { setError(null); setReviewedClearLabel(current); }}>Clear label</button> : null}
+          {reviewedClearLabel !== null ? <div className="device-label-clear-review" role="group" aria-label="Clear label review" ref={clearReviewRef} tabIndex={-1}>
+            <p>Clear “{reviewedClearLabel}” from this device? This leaves its identity evidence unchanged. A redacted change audit remains until audit retention ends; older audit entries may still contain past label text. Saved JSON files are unchanged.</p>
+            <div className="device-label-form-actions">
+              <button type="button" className="quiet-button" disabled={pending} onClick={() => { returnToClearButton.current = true; setReviewedClearLabel(null); setError(null); }}>Keep label</button>
+              <button type="button" className="primary-action" disabled={pending} onClick={() => {
+                if (current !== reviewedClearLabel) { returnToClearButton.current = true; setReviewedClearLabel(null); setError("The label changed. Review the current label before clearing it."); return; }
+                void applyLabel("");
+              }}>{pending ? "Clearing…" : "Confirm clear label"}</button>
+            </div>
+          </div> : null}
         </td>
       ) : null}
     </tr>

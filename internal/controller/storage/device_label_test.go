@@ -47,18 +47,37 @@ func TestSetDeviceLabelIsScopedIdempotentAndAudited(t *testing.T) {
 	}
 
 	var actor, payload string
-	if err := store.conn.QueryRowContext(ctx, `SELECT actor, payload FROM audit_events WHERE kind = 'device-label' ORDER BY occurred_at_ns DESC, id DESC LIMIT 1`).Scan(&actor, &payload); err != nil {
+	var schemaVersion int
+	if err := store.conn.QueryRowContext(ctx, `SELECT actor, schema_version, payload FROM audit_events WHERE kind = 'device-label' ORDER BY rowid DESC LIMIT 1`).Scan(&actor, &schemaVersion, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if actor != "local-os-user" {
-		t.Fatalf("audit actor = %q", actor)
+	if actor != "local-os-user" || schemaVersion != 2 {
+		t.Fatalf("audit actor/schema = %q/%d", actor, schemaVersion)
 	}
 	var details map[string]any
 	if err := json.Unmarshal([]byte(payload), &details); err != nil {
 		t.Fatal(err)
 	}
-	if details["state"] != "applied" || details["scope_id"] != scopeID || details["device_id"] != deviceID {
+	if details["state"] != "applied" || details["scope_id"] != scopeID || details["device_id"] != deviceID ||
+		details["schema_version"] != float64(2) || details["previous_label_set"] != true || details["label_set"] != false {
 		t.Fatalf("unexpected audit payload: %+v", details)
+	}
+	rows, err := store.conn.QueryContext(ctx, `SELECT payload FROM audit_events WHERE kind = 'device-label'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(raw, "Living Room TV") || strings.Contains(raw, "previous_label\"") || strings.Contains(raw, "user_label\"") {
+			t.Fatalf("audit duplicated label text: %s", raw)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 }
 

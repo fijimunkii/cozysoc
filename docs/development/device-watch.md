@@ -205,7 +205,7 @@ An empty label clears the user label. Labels are user metadata only; they do not
 
 Authorization follows the **current durable Device Watch intent**, not a scope cached at controller startup. Storage independently requires retained identity evidence for that device in the same scope before it permits the update, including evidence held in canonical batches. The scope/evidence check and label update use one transaction. A guessed device ID from another scope therefore cannot be labeled through this method.
 
-Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event.
+Labels are bounded, trimmed, and reject control characters. A real change and its `device-label` audit event commit in one SQLite transaction; an identical repeated label is an idempotent no-op and does not create another state-transition audit event. New schema-2 audit payloads record whether a label was previously set and whether one is set afterward, without copying either label's text. Clearing a label removes it from the device row but leaves identity evidence and the redacted transition audit until its audit expiry. Older schema-1 label audits can still contain prior label text until they expire. User-saved JSON exports are outside controller cleanup. The browser requires a separate clear-label review that explains these effects; it rejects a review if the displayed label changes before confirmation.
 
 The mutation does not grant network, generic capability-lifecycle, process, filesystem, or arbitrary database write authority.
 

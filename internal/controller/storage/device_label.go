@@ -90,12 +90,12 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"schema_version": 1,
-		"state":          "applied",
-		"scope_id":       scopeID,
-		"device_id":      deviceID,
-		"previous_label": previous,
-		"user_label":     label,
+		"schema_version":     2,
+		"state":              "applied",
+		"scope_id":           scopeID,
+		"device_id":          deviceID,
+		"previous_label_set": previous != "",
+		"label_set":          label != "",
 	})
 	if err != nil {
 		return false, fmt.Errorf("encode device label audit payload: %w", err)
@@ -109,7 +109,7 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 		Kind:          "device-label",
 		Actor:         "local-os-user",
 		OccurredAt:    now,
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Payload:       payload,
 		Retention:     domain.RetentionAudit,
 	}
