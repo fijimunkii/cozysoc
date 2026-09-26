@@ -78,6 +78,9 @@ A point can report multiple expected sources independently. The shared source st
 - `unknown`.
 
 `Expected` and `Observed` remain separate facts. This preserves the difference between “we expected this source but have no current evidence” and “the latest trusted evidence explicitly came from this source.”
+`current` requires an observed source and a dated evidence window. An observed
+source may later become stale or degraded, but cannot appear without its
+underlying evidence window.
 
 ## Directions
 
@@ -90,6 +93,8 @@ Traffic- or service-oriented observation points may declare only directions they
 - `service-to-client`.
 
 An empty directions list is meaningful. Device Watch deliberately reports no observed traffic directions because ARP/NDP neighbor-cache evidence does not establish packet or flow visibility.
+Verified scope dimensions and observed directions require a dated evidence
+window; configured intent alone cannot establish either.
 
 Missing directions belong in explicit gaps. A gateway packet sensor can therefore report ingress/egress while retaining `east-west` as `direction-not-observed` when local traffic can bypass the gateway.
 
@@ -130,7 +135,7 @@ Gaps are first-class because an otherwise current observation point can still be
 
 Device Watch is currently the only production producer of this shared contract.
 
-The existing authenticated `device-watch.coverage` response remains backward compatible and keeps its Device-Watch-specific fields. It now also includes a nested `coverage` report built from the same existing evidence and operational evaluators. The legacy top-level aggregate state/reason/next step are copied from that validated shared report so there is not a second independent aggregate evaluator.
+The existing authenticated `device-watch.coverage` response remains backward compatible and keeps its Device-Watch-specific fields. It also includes a nested canonical `coverage` report built from the same evidence and operational evaluators. The top-level aggregate state/reason/next step are copied from that validated shared report so there is one aggregate evaluation.
 
 The Device Watch observation point is:
 
@@ -186,7 +191,7 @@ This matrix uses deterministic in-memory fixtures only. It performs no live netw
 
 ## Validation and trust boundary
 
-The shared internal contract validates bounded counts and text, known state/dimension/direction/cadence vocabularies, unique point/source/gap identities, coherent evidence windows, and configured/verified/expected-unverified invariants.
+The shared internal contract validates bounded counts and text, known state/dimension/direction/cadence vocabularies, unique point/source/gap identities, coherent evidence windows, and configured/verified/expected-unverified invariants. A point cannot report verified scope, observed directions, or an observed/current source without a dated evidence window; a source cannot be `current` unless it was observed.
 
 Observation-point, source, gap, and reason identifiers are bounded token strings so reviewed future producers can introduce precise kinds without making arbitrary executable behavior part of the contract.
 
@@ -199,6 +204,5 @@ This shared vocabulary and transition matrix do not complete #12. Remaining work
 - real DNS/router/traffic/wireless producers and their source-specific validation;
 - source-specific permission evidence where a producer can prove it;
 - aggregation rules once a capability has more than one real observation point;
-- a generic frontend renderer for the shared contract;
 - named-workload calibration for operational thresholds; and
 - #29 owned-lab/hardware evidence for observation and failure behavior that deterministic fixtures cannot certify.

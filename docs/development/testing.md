@@ -67,7 +67,7 @@ Controller/API projection tests additionally prove both sides of the ingestion d
 
 ## Shared coverage-contract fixtures
 
-The capability-independent coverage model has its own deterministic validation suite. It proves structural invariants such as bounded identifiers/text, configured versus verified versus expected-unverified scope, coherent evidence windows, typed directions, and cadence requirements. It also rejects impossible combinations such as one dimension being both verified and expected-unverified, or a hopping observation point with no dwell.
+The capability-independent coverage model has its own deterministic validation suite. It proves structural invariants such as bounded identifiers/text, configured versus verified versus expected-unverified scope, coherent evidence windows, typed directions, and cadence requirements. It also rejects impossible combinations such as one dimension being both verified and expected-unverified, observed coverage without an evidence window, a current source without an observation, or a hopping observation point with no dwell.
 
 Representability fixtures cover:
 
