@@ -8,10 +8,11 @@ export interface ToolsPageProps {
   storage?: StorageOverview | null | undefined;
   storageError?: string | undefined;
   mode?: "live" | "demo";
+  onRetryStorage?: () => void;
   onNavigate: (page: "devices" | "activity" | "coverage") => void;
 }
 
-export function ToolsPage({ tools, storage, storageError, mode = "demo", onNavigate }: ToolsPageProps) {
+export function ToolsPage({ tools, storage, storageError, mode = "demo", onRetryStorage, onNavigate }: ToolsPageProps) {
   return (
     <div className="tools-stack">
       <section className="product-card tools-controller" aria-labelledby="controller-title">
@@ -31,7 +32,10 @@ export function ToolsPage({ tools, storage, storageError, mode = "demo", onNavig
       <section className="product-card" aria-labelledby="storage-title">
         <p className="eyebrow">Local data</p>
         <h2 id="storage-title">Storage and retention</h2>
-        {storage ? <StorageFacts storage={storage} /> : <p>{storageError ?? "Live storage information is unavailable in this view."}</p>}
+        {storage ? <StorageFacts storage={storage} /> : <>
+          <p role={mode === "live" ? "alert" : undefined}>{storageError ?? "Live storage information is unavailable in this view."}</p>
+          {mode === "live" && onRetryStorage ? <button type="button" className="primary-action" onClick={onRetryStorage}>Retry storage read</button> : null}
+        </>}
       </section>
 
       <DiagnosticsPanel mode={mode} />
