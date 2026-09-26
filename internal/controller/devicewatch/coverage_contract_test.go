@@ -2,6 +2,7 @@ package devicewatch
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -44,6 +45,31 @@ func TestDeviceWatchCoverageContractSeparatesConfiguredVerifiedAndExpectedScope(
 	}
 	if len(point.Gaps) != 3 || point.Gaps[2].ID != "no-traffic-monitoring" || len(point.Gaps[2].Directions) != 3 {
 		t.Fatalf("shared gaps = %+v", point.Gaps)
+	}
+}
+
+func TestDeviceWatchCoverageContractPreservesPermissionSource(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	sample := coverageDetailFixture(t, now.Add(-time.Minute), "partial", true, false, 0)
+	var evidence map[string]any
+	if err := json.Unmarshal(sample.Evidence, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	evidence["schema_version"] = 2
+	evidence["sources"].([]any)[1].(map[string]any)["permission_required"] = true
+	sample.SchemaVersion = 2
+	sample.Evidence, _ = json.Marshal(evidence)
+	report, err := CurrentCoverage(context.Background(), fakeCoverageReader{sample: sample, ok: true}, "scope.home", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract, err := CoverageContract(report, healthyCoverageOperational())
+	if err != nil {
+		t.Fatal(err)
+	}
+	point := contract.ObservationPoints[0]
+	if contract.State != sharedcoverage.StateDegraded || point.Sources[1].State != sharedcoverage.SourcePermissionRequired || hasSharedDimension(point.Scope.Verified, sharedcoverage.DimensionAddressFamily, "ipv6") {
+		t.Fatalf("shared permission coverage = %+v", contract)
 	}
 }
 

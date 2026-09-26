@@ -284,6 +284,8 @@ func runtimeErrorClass(err error) string {
 		return "scope-mismatch"
 	case errors.Is(err, ErrUnsupportedInterface):
 		return "unsupported-interface"
+	case errors.Is(err, ErrSnapshotPermission):
+		return "permission-required"
 	case errors.Is(err, ErrSnapshotUnavailable):
 		return "source-unavailable"
 	case errors.Is(err, ErrSnapshotTooLarge):

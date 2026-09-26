@@ -151,6 +151,8 @@ func sensorErrorNextStep(reason string) string {
 		return "Return to the enrolled network or re-enroll the intended local interface before trusting Device Watch coverage."
 	case "source-unavailable":
 		return "Check local ARP/NDP neighbor-table access on the enrolled Mac."
+	case "permission-required":
+		return "Review the local controller's permission to read this Mac's neighbor tables, then retry Device Watch collection."
 	case "source-oversized":
 		return "Inspect local neighbor-table behavior before increasing any collection limits."
 	case "canceled":

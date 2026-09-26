@@ -48,6 +48,34 @@ func TestCurrentCoverageReportsCurrentAndUnavailableSourcesIndependently(t *test
 	}
 }
 
+func TestCurrentCoveragePreservesProvenPermissionDenial(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	sample := coverageDetailFixture(t, now.Add(-time.Minute), "partial", true, false, 0)
+	var evidence map[string]any
+	if err := json.Unmarshal(sample.Evidence, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	evidence["schema_version"] = 2
+	sources := evidence["sources"].([]any)
+	sources[1].(map[string]any)["permission_required"] = true
+	sample.SchemaVersion = 2
+	sample.Evidence, _ = json.Marshal(evidence)
+	report, err := CurrentCoverage(context.Background(), fakeCoverageReader{sample: sample, ok: true}, "scope.home", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.State != CoverageDegraded || report.Sources[0].State != CoverageSourceCurrent || report.Sources[1].State != CoverageSourcePermission || !strings.Contains(report.NextStep, "permission") {
+		t.Fatalf("permission coverage = %+v", report)
+	}
+	evidence["schema_version"] = 1
+	sample.SchemaVersion = 1
+	sample.Evidence, _ = json.Marshal(evidence)
+	report, err = CurrentCoverage(context.Background(), fakeCoverageReader{sample: sample, ok: true}, "scope.home", now)
+	if err != nil || report.Reason != "invalid-evidence" {
+		t.Fatalf("v1 evidence claimed a permission diagnosis: report=%+v err=%v", report, err)
+	}
+}
+
 func TestCurrentCoverageReportsUnavailableStaleAndInvalidStates(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0).UTC()
 	tests := []struct {

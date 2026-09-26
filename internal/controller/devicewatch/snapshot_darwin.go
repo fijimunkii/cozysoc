@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -55,6 +56,8 @@ func (s *darwinSnapshotter) Snapshot(ctx context.Context, interfaceName string) 
 			snapshot.Neighbors = append(snapshot.Neighbors, neighbors...)
 			snapshot.Sources[0].Available = true
 		}
+	} else if errors.Is(arpErr, ErrSnapshotPermission) {
+		snapshot.Sources[0].PermissionRequired = true
 	}
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
@@ -70,12 +73,18 @@ func (s *darwinSnapshotter) Snapshot(ctx context.Context, interfaceName string) 
 			snapshot.Neighbors = append(snapshot.Neighbors, neighbors...)
 			snapshot.Sources[1].Available = true
 		}
+	} else if errors.Is(ndpErr, ErrSnapshotPermission) {
+		snapshot.Sources[1].PermissionRequired = true
 	}
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
 	if !snapshot.Sources[0].Available && !snapshot.Sources[1].Available {
-		return Snapshot{}, ErrSnapshotUnavailable
+		cause := ErrSnapshotUnavailable
+		if snapshot.Sources[0].PermissionRequired && snapshot.Sources[1].PermissionRequired {
+			cause = ErrSnapshotPermission
+		}
+		return Snapshot{}, &snapshotFailure{Sources: snapshot.Sources, Cause: cause}
 	}
 	if len(snapshot.Neighbors) > MaxNeighborEntries {
 		return Snapshot{}, ErrSnapshotTooLarge
@@ -96,6 +105,9 @@ func (systemCommandRunner) Run(ctx context.Context, path string, args ...string)
 		}
 		if errors.Is(err, ErrSnapshotTooLarge) {
 			return nil, ErrSnapshotTooLarge
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return nil, ErrSnapshotPermission
 		}
 		return nil, fmt.Errorf("neighbor table utility failed")
 	}

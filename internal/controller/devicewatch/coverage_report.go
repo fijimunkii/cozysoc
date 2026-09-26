@@ -25,6 +25,7 @@ type CoverageSourceState string
 
 const (
 	CoverageSourceCurrent     CoverageSourceState = "current"
+	CoverageSourcePermission  CoverageSourceState = "permission-required"
 	CoverageSourceUnavailable CoverageSourceState = "unavailable"
 	CoverageSourceStale       CoverageSourceState = "stale"
 	CoverageSourceMissing     CoverageSourceState = "missing"
@@ -66,7 +67,7 @@ type CoverageSampleReader interface {
 	LatestCoverageSample(context.Context, string, string) (domain.CoverageSample, bool, error)
 }
 
-type coverageEvidenceV1 struct {
+type coverageEvidence struct {
 	SchemaVersion              int                      `json:"schema_version"`
 	Interface                  string                   `json:"interface"`
 	Sources                    []coverageEvidenceSource `json:"sources"`
@@ -78,8 +79,9 @@ type coverageEvidenceV1 struct {
 }
 
 type coverageEvidenceSource struct {
-	Method    NeighborMethod `json:"method"`
-	Available bool           `json:"available"`
+	Method             NeighborMethod `json:"method"`
+	Available          bool           `json:"available"`
+	PermissionRequired bool           `json:"permission_required,omitempty"`
 }
 
 func CurrentCoverage(ctx context.Context, reader CoverageSampleReader, scopeID string, now time.Time) (CoverageReport, error) {
@@ -109,7 +111,7 @@ func CurrentCoverage(ctx context.Context, reader CoverageSampleReader, scopeID s
 	report.FreshUntil = report.EvidenceAt.Add(coverageFreshnessWindow)
 
 	evidence, err := decodeCoverageEvidence(sample.Evidence)
-	if err != nil || !coverageStatusConsistent(sample.Status, evidence.Sources) {
+	if err != nil || sample.SchemaVersion != evidence.SchemaVersion || !coverageStatusConsistent(sample.Status, evidence.Sources) {
 		report.State = CoverageDegraded
 		report.Reason = "invalid-evidence"
 		report.Sources = unknownCoverageSources()
@@ -147,7 +149,11 @@ func CurrentCoverage(ctx context.Context, reader CoverageSampleReader, scopeID s
 		if hasUnavailableCoverageSource(report.Sources) {
 			report.State = CoverageDegraded
 			report.Reason = "source-partial"
-			report.NextStep = "Restore the unavailable neighbor source if dual-stack device visibility matters; Device Watch remains limited even when both sources are current."
+			if hasPermissionCoverageSource(report.Sources) {
+				report.NextStep = "Review the local controller's neighbor-table permissions, then retry Device Watch collection."
+			} else {
+				report.NextStep = "Restore the unavailable neighbor source if dual-stack device visibility matters; Device Watch remains limited even when both sources are current."
+			}
 		} else {
 			report.State = CoverageActiveLimited
 			report.Reason = "fresh-limited"
@@ -156,62 +162,69 @@ func CurrentCoverage(ctx context.Context, reader CoverageSampleReader, scopeID s
 	case "unavailable":
 		report.State = CoverageDegraded
 		report.Reason = "source-unavailable"
-		report.NextStep = "Check local ARP/NDP neighbor-table access on the enrolled Mac and confirm the interface still matches the enrolled network."
+		if hasPermissionCoverageSource(report.Sources) {
+			report.NextStep = "Review the local controller's neighbor-table permissions, then retry Device Watch collection."
+		} else {
+			report.NextStep = "Check local ARP/NDP neighbor-table access on the enrolled Mac and confirm the interface still matches the enrolled network."
+		}
 	}
 	return report, nil
 }
 
-func decodeCoverageEvidence(raw json.RawMessage) (coverageEvidenceV1, error) {
-	var evidence coverageEvidenceV1
+func decodeCoverageEvidence(raw json.RawMessage) (coverageEvidence, error) {
+	var evidence coverageEvidence
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&evidence); err != nil {
-		return coverageEvidenceV1{}, fmt.Errorf("decode Device Watch coverage evidence: %w", err)
+		return coverageEvidence{}, fmt.Errorf("decode Device Watch coverage evidence: %w", err)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		if err == nil {
-			return coverageEvidenceV1{}, fmt.Errorf("Device Watch coverage evidence contains multiple JSON values")
+			return coverageEvidence{}, fmt.Errorf("Device Watch coverage evidence contains multiple JSON values")
 		}
-		return coverageEvidenceV1{}, fmt.Errorf("decode Device Watch coverage evidence trailer: %w", err)
+		return coverageEvidence{}, fmt.Errorf("decode Device Watch coverage evidence trailer: %w", err)
 	}
-	if evidence.SchemaVersion != 1 {
-		return coverageEvidenceV1{}, fmt.Errorf("unsupported Device Watch coverage evidence schema %d", evidence.SchemaVersion)
+	if evidence.SchemaVersion != 1 && evidence.SchemaVersion != 2 {
+		return coverageEvidence{}, fmt.Errorf("unsupported Device Watch coverage evidence schema %d", evidence.SchemaVersion)
 	}
 	if ValidateEnrollmentInterfaceName(evidence.Interface) != nil {
-		return coverageEvidenceV1{}, fmt.Errorf("invalid Device Watch coverage interface")
+		return coverageEvidence{}, fmt.Errorf("invalid Device Watch coverage interface")
 	}
 	if evidence.NeighborsInScope < 0 || evidence.NeighborsInScope > MaxNeighborEntries ||
 		evidence.ObservationsInserted < 0 || evidence.ObservationsInserted > MaxNeighborEntries ||
 		evidence.ObservationsDeduplicated < 0 || evidence.ObservationsDeduplicated > MaxNeighborEntries ||
 		evidence.ObservationsInserted+evidence.ObservationsDeduplicated != evidence.NeighborsInScope {
-		return coverageEvidenceV1{}, fmt.Errorf("invalid Device Watch coverage counters")
+		return coverageEvidence{}, fmt.Errorf("invalid Device Watch coverage counters")
 	}
 	if evidence.WholeNetworkTrafficVisible {
-		return coverageEvidenceV1{}, fmt.Errorf("Device Watch coverage cannot claim whole-network traffic visibility")
+		return coverageEvidence{}, fmt.Errorf("Device Watch coverage cannot claim whole-network traffic visibility")
 	}
 	if len(evidence.Limitations) == 0 || len(evidence.Limitations) > 8 {
-		return coverageEvidenceV1{}, fmt.Errorf("invalid Device Watch coverage limitations")
+		return coverageEvidence{}, fmt.Errorf("invalid Device Watch coverage limitations")
 	}
 	for _, limitation := range evidence.Limitations {
 		if limitation == "" || len(limitation) > 512 || strings.TrimSpace(limitation) != limitation {
-			return coverageEvidenceV1{}, fmt.Errorf("invalid Device Watch coverage limitation")
+			return coverageEvidence{}, fmt.Errorf("invalid Device Watch coverage limitation")
 		}
 	}
 	if len(evidence.Sources) != 2 {
-		return coverageEvidenceV1{}, fmt.Errorf("Device Watch coverage must report both neighbor sources")
+		return coverageEvidence{}, fmt.Errorf("Device Watch coverage must report both neighbor sources")
 	}
 	seen := map[NeighborMethod]bool{}
 	for _, source := range evidence.Sources {
 		if source.Method != MethodARPCache && source.Method != MethodNDPCache {
-			return coverageEvidenceV1{}, fmt.Errorf("unsupported Device Watch coverage source %q", source.Method)
+			return coverageEvidence{}, fmt.Errorf("unsupported Device Watch coverage source %q", source.Method)
 		}
 		if seen[source.Method] {
-			return coverageEvidenceV1{}, fmt.Errorf("duplicate Device Watch coverage source %q", source.Method)
+			return coverageEvidence{}, fmt.Errorf("duplicate Device Watch coverage source %q", source.Method)
+		}
+		if source.PermissionRequired && (evidence.SchemaVersion == 1 || source.Available) {
+			return coverageEvidence{}, fmt.Errorf("invalid Device Watch coverage permission state")
 		}
 		seen[source.Method] = true
 	}
 	if !seen[MethodARPCache] || !seen[MethodNDPCache] {
-		return coverageEvidenceV1{}, fmt.Errorf("Device Watch coverage is missing a required neighbor source")
+		return coverageEvidence{}, fmt.Errorf("Device Watch coverage is missing a required neighbor source")
 	}
 	return evidence, nil
 }
@@ -234,9 +247,9 @@ func coverageStatusConsistent(status string, sources []coverageEvidenceSource) b
 }
 
 func currentCoverageSources(sources []coverageEvidenceSource) []CoverageSourceDetail {
-	byMethod := make(map[NeighborMethod]bool, len(sources))
+	byMethod := make(map[NeighborMethod]coverageEvidenceSource, len(sources))
 	for _, source := range sources {
-		byMethod[source.Method] = source.Available
+		byMethod[source.Method] = source
 	}
 	return []CoverageSourceDetail{
 		coverageSourceDetail(MethodARPCache, "ipv4", byMethod[MethodARPCache], true),
@@ -258,15 +271,20 @@ func unknownCoverageSources() []CoverageSourceDetail {
 	}
 }
 
-func coverageSourceDetail(method NeighborMethod, family string, available, observed bool) CoverageSourceDetail {
+func coverageSourceDetail(method NeighborMethod, family string, source coverageEvidenceSource, observed bool) CoverageSourceDetail {
 	detail := CoverageSourceDetail{
 		ID:                    string(method),
 		AddressFamily:         family,
 		Observed:              observed,
-		AvailableAtLastSample: available,
+		AvailableAtLastSample: source.Available,
 	}
-	if available {
+	if source.Available {
 		detail.State = CoverageSourceCurrent
+		return detail
+	}
+	if source.PermissionRequired {
+		detail.State = CoverageSourcePermission
+		detail.NextStep = "Review the local controller's permission to read this Mac's neighbor table, then retry Device Watch collection."
 		return detail
 	}
 	detail.State = CoverageSourceUnavailable
@@ -280,7 +298,16 @@ func coverageSourceDetail(method NeighborMethod, family string, available, obser
 
 func hasUnavailableCoverageSource(sources []CoverageSourceDetail) bool {
 	for _, source := range sources {
-		if source.State == CoverageSourceUnavailable {
+		if source.State == CoverageSourceUnavailable || source.State == CoverageSourcePermission {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPermissionCoverageSource(sources []CoverageSourceDetail) bool {
+	for _, source := range sources {
+		if source.State == CoverageSourcePermission {
 			return true
 		}
 	}

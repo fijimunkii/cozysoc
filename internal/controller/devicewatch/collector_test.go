@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +138,53 @@ func TestCollectorRecordsUnavailableSourceWithoutInventingDepartures(t *testing.
 	}
 	if len(sink.observations) != 0 || len(sink.coverage) != 1 || sink.coverage[0].Status != "unavailable" {
 		t.Fatalf("source gap emitted incorrect evidence: observations=%+v coverage=%+v", sink.observations, sink.coverage)
+	}
+}
+
+func TestCollectorRecordsPermissionFailureWithoutRawError(t *testing.T) {
+	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
+	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.10/24")}}}
+	snapshotter := &fakeSnapshotter{err: fmt.Errorf("private path: %w", ErrSnapshotPermission)}
+	sink := &fakeEvidenceSink{}
+	collector, err := NewCollector(snapshotter, inspector, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector.now = func() time.Time { return time.Unix(1_800_000_000, 0).UTC() }
+	if _, err := collector.CollectOnce(context.Background(), "scope.home", "sensor.desktop", binding); !errors.Is(err, ErrSnapshotPermission) {
+		t.Fatalf("snapshot error = %v", err)
+	}
+	if len(sink.coverage) != 1 || sink.coverage[0].SchemaVersion != 2 || strings.Contains(string(sink.coverage[0].Evidence), "private path") {
+		t.Fatalf("permission evidence = %+v", sink.coverage)
+	}
+	var evidence coverageEvidence
+	if err := json.Unmarshal(sink.coverage[0].Evidence, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if len(evidence.Sources) != 2 || !evidence.Sources[0].PermissionRequired || !evidence.Sources[1].PermissionRequired {
+		t.Fatalf("source permission evidence = %+v", evidence.Sources)
+	}
+}
+
+func TestCollectorRetainsMixedSourceFailure(t *testing.T) {
+	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
+	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.10/24")}}}
+	snapshotter := &fakeSnapshotter{err: &snapshotFailure{Sources: []SourceStatus{{Method: MethodARPCache, PermissionRequired: true}, {Method: MethodNDPCache}}, Cause: ErrSnapshotUnavailable}}
+	sink := &fakeEvidenceSink{}
+	collector, err := NewCollector(snapshotter, inspector, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector.now = func() time.Time { return time.Unix(1_800_000_000, 0).UTC() }
+	if _, err := collector.CollectOnce(context.Background(), "scope.home", "sensor.desktop", binding); !errors.Is(err, ErrSnapshotUnavailable) {
+		t.Fatal(err)
+	}
+	var evidence coverageEvidence
+	if err := json.Unmarshal(sink.coverage[0].Evidence, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if len(evidence.Sources) != 2 || !evidence.Sources[0].PermissionRequired || evidence.Sources[1].PermissionRequired {
+		t.Fatalf("mixed source evidence = %+v", evidence.Sources)
 	}
 }
 
