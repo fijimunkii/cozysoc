@@ -152,6 +152,10 @@ select {
   border-top: 1px solid #e5e2d9;
 }
 
+.observation-points > .next-step {
+  margin: 0 30px 30px;
+}
+
 .observation-card {
   padding: 30px;
 }
@@ -339,9 +343,6 @@ select {
 }
 
 .source-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
   padding: 11px 13px;
   border-top: 1px solid #e8e6df;
   font-size: 0.82rem;
@@ -349,6 +350,13 @@ select {
 
 .source-list li:first-child {
   border-top: 0;
+}
+
+.source-list li > .source-list__heading {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .source-list li div {
@@ -360,6 +368,12 @@ select {
 .source-list li div span {
   color: #7b7e75;
   font-size: 0.75rem;
+}
+
+.source-next-step {
+  margin: 8px 0 0;
+  line-height: 1.45;
+  color: #4f544b;
 }
 
 .next-step {

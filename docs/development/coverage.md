@@ -181,6 +181,8 @@ Malformed or contradictory evidence fails closed as degraded instead of being gu
 
 Stored free-form limitation strings are not copied into the frontend contract. The controller emits curated blind spots and next steps so a corrupted or hostile stored string cannot become authoritative UI guidance.
 
+The shared frontend shows each non-current source's own next step in an expanded source section. For reports with more than one observation point, it also shows the aggregate next step separately from point-level guidance; a healthy point cannot hide an action needed for a different point.
+
 The shared contract performs an additional structural validation over observation-point identity/state, scope dimensions, source states, directions, evidence windows, cadence, and gaps. It does not replace source-specific validation: future producers must first prove the meaning of their own evidence and then map it into the common vocabulary.
 
 ## Curated Device Watch blind spots
