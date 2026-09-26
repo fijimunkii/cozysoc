@@ -56,7 +56,7 @@ func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) 
 	if result, err := queuedObservation(t, i, o, &cp); err == nil || result.Inserted {
 		t.Fatal("failed transaction acknowledged", result, err)
 	}
-	for _, table := range []string{"evidence_batches", "evidence_batch_lookup", "devices", "ingestion_checkpoints"} {
+	for _, table := range []string{"evidence_batches", "evidence_batch_lookup", "devices", "findings", "ingestion_checkpoints"} {
 		legacyRowCount(t, db, table, 0)
 	}
 	if _, err := db.Exec("DROP TRIGGER reject_batch_checkpoint"); err != nil {
@@ -64,6 +64,15 @@ func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) 
 	}
 	if result, err := queuedObservation(t, i, o, &cp); err != nil || !result.Inserted {
 		t.Fatal(result, err)
+	}
+	var category, severity, payload string
+	if err := db.QueryRow(`SELECT category,severity,payload FROM findings`).Scan(&category, &severity, &payload); err != nil || category != "new-device" || severity != "informational" ||
+		payload != `{"identity_authority":"inferred","interpretation":"newly-observed-identity"}` {
+		t.Fatal(category, severity, payload, err)
+	}
+	var evidenceID string
+	if err := db.QueryRow(`SELECT observation_id FROM finding_evidence`).Scan(&evidenceID); err != nil || evidenceID != o.ID {
+		t.Fatal(evidenceID, err)
 	}
 	var raw []byte
 	if err := db.QueryRow("SELECT data FROM evidence_batches").Scan(&raw); err != nil {
@@ -94,6 +103,7 @@ func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) 
 	}
 	legacyRowCount(t, db, "observations", 1)
 	legacyRowCount(t, db, "evidence_batch_lookup", 1)
+	legacyRowCount(t, db, "findings", 1)
 	collision := o
 	collision.Kind = "other-observation-kind"
 	collision.SourceKey = "different.source.key"
@@ -112,6 +122,41 @@ func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) 
 	defer reopened.Close()
 	legacyRowCount(t, reopened, "evidence_batches", 1)
 	legacyRowCount(t, reopened, "devices", 1)
+	legacyRowCount(t, reopened, "findings", 1)
+}
+
+func TestBatchArrivalFindingFailureRollsBackObservationAndDevice(t *testing.T) {
+	s, db, original := legacyRepairFixture(t)
+	i := newBatchQueue(t, s)
+	if _, err := db.Exec(`CREATE TRIGGER reject_arrival BEFORE INSERT ON findings BEGIN SELECT RAISE(ABORT,'injected finding failure'); END;`); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := queuedObservation(t, i, newQueuedObservation(original), nil); err == nil || result.Inserted {
+		t.Fatal("failed finding write acknowledged observation", result, err)
+	}
+	for _, table := range []string{"evidence_batches", "evidence_batch_lookup", "devices", "findings", "finding_evidence"} {
+		legacyRowCount(t, db, table, 0)
+	}
+}
+
+func TestBatchArrivalFindingIsNotRepeatedForRecentMACContinuity(t *testing.T) {
+	s, db, original := legacyRepairFixture(t)
+	i := newBatchQueue(t, s)
+	first := newQueuedObservation(original)
+	if result, err := queuedObservation(t, i, first, nil); err != nil || !result.Inserted {
+		t.Fatal(result, err)
+	}
+	second := first
+	second.ID = "obs.second.batch"
+	second.SourceKey = "source.second.batch"
+	second.SourceTime = nil
+	second.IngestedAt = first.IngestedAt.Add(time.Minute)
+	if result, err := queuedObservation(t, i, second, nil); err != nil || !result.Inserted {
+		t.Fatal(result, err)
+	}
+	legacyRowCount(t, db, "evidence_batch_lookup", 2)
+	legacyRowCount(t, db, "devices", 1)
+	legacyRowCount(t, db, "findings", 1)
 }
 
 func TestBatchQueueLegacyDispatchAndOtherObservationFallback(t *testing.T) {

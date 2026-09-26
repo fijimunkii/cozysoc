@@ -295,5 +295,19 @@ func PlanBatchEvidence(ctx context.Context, reader *storage.MixedIdentitySnapsho
 	if err != nil {
 		return storage.EvidenceBatchPlan{}, err
 	}
-	return storage.EvidenceBatchPlan{NewDevice: plan.NewDevice, Claims: plan.Claims, Links: plan.Links}, nil
+	result := storage.EvidenceBatchPlan{NewDevice: plan.NewDevice, Claims: plan.Claims, Links: plan.Links}
+	if plan.NewDevice != nil {
+		// A new inferred identity can reflect MAC rotation or an observation
+		// gap. It is evidence for an inbox, not a security verdict or a reason
+		// to send a desktop notification on its own.
+		result.ArrivalFinding = &domain.Finding{
+			ID:      "finding.dw.arrival." + stableDigest("arrival-v1", observation.ScopeID, observation.ID, plan.NewDevice.ID),
+			ScopeID: observation.ScopeID, DetectorID: "device-watch-arrival", DetectorVersion: "1",
+			Category: "new-device", Severity: "informational",
+			ObservedAt: plan.NewDevice.CreatedAt, CreatedAt: observation.IngestedAt,
+			SchemaVersion: 1, Payload: []byte(`{"identity_authority":"inferred","interpretation":"newly-observed-identity"}`),
+			EvidenceObservationIDs: []string{observation.ID}, Retention: observation.Retention,
+		}
+	}
+	return result, nil
 }

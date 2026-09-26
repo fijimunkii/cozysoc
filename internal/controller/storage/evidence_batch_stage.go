@@ -17,6 +17,9 @@ type EvidenceBatchPlan struct {
 	NewDevice *domain.Device
 	Claims    []domain.IdentityClaim
 	Links     []domain.DeviceClaimLink
+	// ArrivalFinding is an informational result of a newly observed Device
+	// Watch identity, committed with its source observation and device.
+	ArrivalFinding *domain.Finding
 }
 type EvidenceBatchPlanner func(context.Context, *MixedIdentitySnapshot, domain.Observation) (EvidenceBatchPlan, error)
 
@@ -143,6 +146,19 @@ func (s *EvidenceBatchStager) Stage(ctx context.Context, tx *sql.Tx, o domain.Ob
 	// the trusted planner wrote unexpectedly; require rollback of all its changes.
 	if !inserted {
 		return empty, false, ErrEvidenceBatchData
+	}
+	if plan.ArrivalFinding != nil {
+		f := *plan.ArrivalFinding
+		if plan.NewDevice == nil || f.Category != "new-device" || f.Severity != "informational" ||
+			f.Confidence != nil || f.ScopeID != o.ScopeID || f.Retention != o.Retention ||
+			len(f.EvidenceObservationIDs) != 1 || f.EvidenceObservationIDs[0] != o.ID ||
+			!f.ObservedAt.Equal(plan.NewDevice.CreatedAt) || !f.CreatedAt.Equal(o.IngestedAt) ||
+			domain.ValidateFinding(f) != nil {
+			return empty, false, ErrEvidenceBatchData
+		}
+		if err := insertFindingTx(ctx, tx, f, expiry.UnixNano()); err != nil {
+			return empty, false, err
+		}
 	}
 	return record, true, nil
 }
