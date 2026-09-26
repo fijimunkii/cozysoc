@@ -145,7 +145,7 @@ Usage:
   cozysoc https-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-history [--state-dir PATH] [RUN_ID]
   cozysoc resolver-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)
-  cozysoc https-check [--state-dir PATH] SELECTION_ID (interactive macOS client; execution unavailable)
+  cozysoc https-check [--state-dir PATH] SELECTION_ID (experimental, interactive macOS only)
   cozysoc resolver-list [--state-dir PATH]
   cozysoc resolver-retire [--state-dir PATH] SELECTION_ID
   cozysoc resolver-plan [--state-dir PATH] SELECTION_ID

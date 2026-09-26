@@ -83,7 +83,7 @@ requires the experimental macOS opt-in and foreground one-shot consent described
 in [the consent protocol](https-consent.md).
 
 Tests cover exact-field and authority rejection, authenticated socket/CLI round
-trips, unavailable enrollment, retirement, and absent browser routes. A real
+trips, unavailable enrollment, retirement, and rejection of generic browser routes. A real
 controller-process test saves settings, restarts, lists and retires them while
 checking that no observation or gateway/resolver run audit was created and no
 private settings reached controller logs. Review tests additionally exercise

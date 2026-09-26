@@ -1,9 +1,9 @@
-# Native HTTPS consent protocol
+# Experimental HTTPS consent protocol
 
 Related issues: #14 and #29. A macOS controller started explicitly with
 `cozysoc serve --experimental-https-checks` exposes the typed HTTPS session.
 Ordinary controllers return unavailable before preparing a review. Unsupported
-platforms reject this opt-in before creating state. There is no browser execution
+platforms reject this opt-in before creating state. There is no generic browser execution
 route or scheduler. Starting the controller does not itself authorize traffic.
 
 The native isolated lab runs the actual controller and `https-check` command,
@@ -99,3 +99,21 @@ HTTPS audit phases survive controller shutdown. It checks the full real startup
 quiet interval and confirms no observations or coverage samples were created.
 The owned fixture uses normal system trust and verifies revocation afterward.
 These cases do not certify in-flight cancellation on physical networks.
+
+## Local browser review and approval
+
+The authenticated local browser can explicitly load saved HTTPS selections through
+`GET /api/network-quality/https/selections`. It projects only the opaque selection
+reference and private target settings for local display. `POST /api/network-quality/https/review`
+previews one saved selection without sending traffic and displays the exact HTTP
+request bytes, numeric endpoint, TLS identity, expected status, source/interface,
+route observation/freshness, fixed policy and all byte/call/time limits and privacy
+notes. A separate `POST /api/network-quality/https/run` decision consumes that
+short-lived web review before entering the connection-bound native session.
+Approval proceeds only if the controller's fresh native review still matches the
+selected settings, source/interface/prefixes, request bytes, TLS policy, privacy
+notes and traffic budget. Route evidence may refresh, but must remain fresh and
+consistent with the displayed binding. Native credentials, ticket and challenge
+never enter the browser. After an uncertain response to approval, inspect saved
+history; the browser does not retry. It cannot save or retire HTTPS settings or
+schedule checks.
