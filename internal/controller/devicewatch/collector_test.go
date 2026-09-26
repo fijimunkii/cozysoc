@@ -140,8 +140,8 @@ func TestCollectorRecordsUnavailableSourceWithoutInventingDepartures(t *testing.
 }
 
 func TestCollectorBlocksChangedNetworkBeforeSnapshot(t *testing.T) {
-	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
-	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.10/24")}}}
+	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24", "fe80::/64"}}
+	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.10/24"), netip.MustParsePrefix("fe80::1234/64")}}}
 	snapshotter := &fakeSnapshotter{}
 	collector, err := NewCollector(snapshotter, inspector, &fakeEvidenceSink{})
 	if err != nil {

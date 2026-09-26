@@ -56,14 +56,38 @@ func TestCaptureAndValidateScopeBinding(t *testing.T) {
 }
 
 func TestScopeChangeRequiresRevalidation(t *testing.T) {
+	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24", "fe80::/64"}}
+	for _, test := range []struct {
+		name     string
+		prefixes []netip.Prefix
+	}{
+		{name: "different network with common link-local", prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.2/24"), netip.MustParsePrefix("fe80::1234/64")}},
+		{name: "additional network prefix", prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.42/24"), netip.MustParsePrefix("10.0.0.2/24"), netip.MustParsePrefix("fe80::1234/64")}},
+		{name: "only link-local remains", prefixes: []netip.Prefix{netip.MustParsePrefix("fe80::1234/64")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			changed := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: test.prefixes}}
+			if _, err := ValidateCurrentScope(context.Background(), changed, binding); !errors.Is(err, ErrScopeMismatch) {
+				t.Fatalf("scope change error = %v", err)
+			}
+		})
+	}
+}
+
+func TestScopeBindingRejectsLinkLocalOnlyEnrollment(t *testing.T) {
+	for _, prefix := range []string{"fe80::1234/64", "169.254.2.4/16"} {
+		inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix(prefix)}}}
+		if _, err := CaptureScopeBinding(context.Background(), inspector, "en0"); !errors.Is(err, ErrUnsupportedInterface) {
+			t.Fatalf("link-local-only %s enrollment error = %v", prefix, err)
+		}
+	}
+}
+
+func TestScopeBindingDeduplicatesCurrentPrefixAddresses(t *testing.T) {
 	binding := ScopeBinding{InterfaceName: "en0", InterfaceIndex: 7, Prefixes: []string{"192.168.1.0/24"}}
-	changed := fakeInspector{state: InterfaceState{
-		Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast,
-		Prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.2/24")},
-	}}
-	_, err := ValidateCurrentScope(context.Background(), changed, binding)
-	if !errors.Is(err, ErrScopeMismatch) {
-		t.Fatalf("scope change error = %v", err)
+	inspector := fakeInspector{state: InterfaceState{Name: "en0", Index: 7, Flags: net.FlagUp | net.FlagBroadcast, Prefixes: []netip.Prefix{netip.MustParsePrefix("192.168.1.42/24"), netip.MustParsePrefix("192.168.1.43/24")}}}
+	if _, err := ValidateCurrentScope(context.Background(), inspector, binding); err != nil {
+		t.Fatalf("same prefix across two addresses was rejected: %v", err)
 	}
 }
 

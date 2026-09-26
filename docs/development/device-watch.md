@@ -26,7 +26,7 @@ A real enrollment and its durable `network-scope-enroll` audit event commit in o
 
 **Enrollment alone does not enable Device Watch.** It creates only the durable authorization object.
 
-Before every collection, the current interface must still be up, retain the enrolled name/index, and share at least one enrolled prefix. A mismatch blocks collection with a scope-revalidation error rather than silently following the machine onto a new network. Neighbors are filtered again against the enrolled prefixes before persistence; newly encountered prefixes are not silently added to scope.
+Before every collection, the current interface must still be up, retain the enrolled name/index, and present the same canonical usable prefix set that was reviewed at enrollment. A common IPv6 link-local prefix alone cannot keep an enrollment valid after the other prefixes change. Link-local-only interfaces cannot be newly enrolled. A mismatch blocks collection with a scope-revalidation error rather than silently following the machine onto a new network. Neighbors are filtered again against the enrolled prefixes before persistence; newly encountered prefixes are not silently added to scope. As with any address-based check, an unrelated network using the same interface and prefixes cannot be distinguished by this evidence alone.
 
 ## Explicit enable / disable
 
