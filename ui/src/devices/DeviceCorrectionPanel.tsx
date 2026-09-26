@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { SetupRequestError, type DeviceCorrectionClient, type DeviceMergeList } from "../setup/setup";
 import type { DevicePresence } from "./devices";
@@ -20,6 +20,12 @@ export function DeviceCorrectionPanel({ scopeID, devices, client, loadMerges, on
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (review !== null) reviewHeading.current?.focus();
+  }, [review]);
 
   useEffect(() => {
     let active = true;
@@ -58,6 +64,7 @@ export function DeviceCorrectionPanel({ scopeID, devices, client, loadMerges, on
       setReview(null);
       setSourceID("");
       setTargetID("");
+      heading.current?.focus();
       onChanged();
       setLoadVersion((version) => version + 1);
     } catch (cause: unknown) {
@@ -69,7 +76,7 @@ export function DeviceCorrectionPanel({ scopeID, devices, client, loadMerges, on
 
   return (
     <section className="product-card device-correction-card" aria-labelledby="device-correction-title">
-      <header className="section-header"><div><p className="eyebrow">Identity corrections</p><h2 id="device-correction-title">Group duplicate devices</h2><p>If two records describe one device, review both IDs before grouping them. This changes current device views and future matching; original observations and associations remain intact. You can undo a merge.</p></div></header>
+      <header className="section-header"><div><p className="eyebrow">Identity corrections</p><h2 id="device-correction-title" ref={heading} tabIndex={-1}>Group duplicate devices</h2><p>If two records describe one device, review both IDs before grouping them. This changes current device views and future matching; original observations and associations remain intact. You can undo a merge.</p></div></header>
       {merges.status === "loading" ? <p className="device-correction-status" role="status">Reading current corrections…</p> : null}
       {merges.status === "error" ? <div className="device-correction-status" role="alert"><p>{merges.message}</p><button type="button" className="quiet-button" onClick={() => setLoadVersion((version) => version + 1)}>Retry corrections</button></div> : null}
       {merges.status === "ready" ? (
@@ -80,7 +87,7 @@ export function DeviceCorrectionPanel({ scopeID, devices, client, loadMerges, on
           </div>
           <div className="device-correction-actions"><button type="button" className="secondary-action" disabled={!canReview || pending} onClick={() => { setError(null); setReview({ action: "merge", sourceID, targetID }); }}>Review merge</button><button type="button" className="quiet-button" disabled={pending} onClick={() => setLoadVersion((version) => version + 1)}>Refresh corrections</button></div>
           <div className="device-correction-active"><h3>Current merges</h3>{list?.merges.length === 0 ? <p>No device identities are currently grouped.</p> : <ul>{list?.merges.map((item) => <li key={item.source_device_id}><span><code>{item.source_device_id}</code> grouped into <code>{item.target_device_id}</code></span><button type="button" className="quiet-button" disabled={pending} onClick={() => setReview({ action: "undo", sourceID: item.source_device_id, targetID: item.target_device_id })}>Review undo</button></li>)}</ul>}</div>
-          {review ? <div className="device-correction-review" role="group" aria-label="Review device correction"><strong>{review.action === "merge" ? "Confirm identity merge" : "Confirm identity undo"}</strong><p>{review.action === "merge" ? <>Group <code>{review.sourceID}</code> into <code>{review.targetID}</code>. The first ID disappears from the current list; its evidence stays available under the second ID.</> : <>Restore <code>{review.sourceID}</code> as a separate device from <code>{review.targetID}</code>. Original evidence determines each restored view.</>}</p><div><button type="button" className="quiet-button" disabled={pending} onClick={() => setReview(null)}>Cancel</button><button type="button" className="primary-action" disabled={pending || (review.action === "merge" && !canReview) || (review.action === "undo" && !list?.merges.some((item) => item.source_device_id === review.sourceID && item.target_device_id === review.targetID))} onClick={() => void apply()}>{pending ? "Applying…" : review.action === "merge" ? "Confirm merge" : "Confirm undo"}</button></div></div> : null}
+          {review ? <div className="device-correction-review" role="group" aria-label="Review device correction"><h3 ref={reviewHeading} tabIndex={-1}>{review.action === "merge" ? "Confirm identity merge" : "Confirm identity undo"}</h3><p>{review.action === "merge" ? <>Group <code>{review.sourceID}</code> into <code>{review.targetID}</code>. The first ID disappears from the current list; its evidence stays available under the second ID.</> : <>Restore <code>{review.sourceID}</code> as a separate device from <code>{review.targetID}</code>. Original evidence determines each restored view.</>}</p><div><button type="button" className="quiet-button" disabled={pending} onClick={() => { setReview(null); heading.current?.focus(); }}>Cancel</button><button type="button" className="primary-action" disabled={pending || (review.action === "merge" && !canReview) || (review.action === "undo" && !list?.merges.some((item) => item.source_device_id === review.sourceID && item.target_device_id === review.targetID))} onClick={() => void apply()}>{pending ? "Applying…" : review.action === "merge" ? "Confirm merge" : "Confirm undo"}</button></div></div> : null}
           {error ? <p className="device-correction-error" role="alert">{error}</p> : null}
         </div>
       ) : null}

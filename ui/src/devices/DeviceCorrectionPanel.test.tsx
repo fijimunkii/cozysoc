@@ -25,10 +25,12 @@ describe("DeviceCorrectionPanel", () => {
     fireEvent.change(screen.getByLabelText("Device to keep"), { target: { value: "device.b" } });
     fireEvent.click(screen.getByRole("button", { name: "Review merge" }));
     expect(mergeDevices).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Confirm identity merge" }));
     expect(screen.getByText(/original observations and associations remain intact/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Confirm merge" }));
     await waitFor(() => expect(mergeDevices).toHaveBeenCalledWith("device.a", "device.b"));
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Group duplicate devices" }));
   });
 
   it("reviews undo against the active mapping", async () => {

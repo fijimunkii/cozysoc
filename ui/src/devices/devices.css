@@ -57,6 +57,7 @@
 .device-correction-active li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid #ebe8df; padding: 10px 0; }
 .device-correction-active code, .device-correction-review code { overflow-wrap: anywhere; }
 .device-correction-review { max-width: 750px; padding: 16px; border: 1px solid #d9ccb0; border-radius: 12px; background: #faf6ea; }
+.device-correction-review h3 { margin: 0; font-size: 1rem; }
 .device-correction-review p { line-height: 1.5; }
 .device-correction-review div { display: flex; flex-wrap: wrap; gap: 8px; }
 .device-correction-error { color: #85483f; }
