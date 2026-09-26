@@ -199,11 +199,16 @@ func TestDisconnectFailureLeavesDisabledRetryableReference(t *testing.T) {
 
 func TestConnectAuditFailureLeavesNoCredentialOrIntent(t *testing.T) {
 	c, manager, audit, _, secrets, _ := newConnectionFixture(t)
+	probes := 0
+	c.probe = func(string, string, secretstore.Secret, []byte) (serviceProbe, error) {
+		probes++
+		return connectionProbe{status: Status{Version: SupportedVersion}}, nil
+	}
 	audit.fail = "requested"
 	if _, err := c.Connect(context.Background(), "https://192.168.1.1", "private-api-key", secretstore.NewSecret([]byte("private-api-secret")), []byte("private-certificate")); err == nil {
 		t.Fatal("audit failure accepted")
 	}
-	if _, ok := manager.Capability(CapabilityID); ok || len(secrets.values) != 0 {
+	if _, ok := manager.Capability(CapabilityID); ok || len(secrets.values) != 0 || probes != 0 {
 		t.Fatalf("audit failure left connection: %v %v", ok, secrets.values)
 	}
 }

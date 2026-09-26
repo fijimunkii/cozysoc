@@ -84,18 +84,21 @@ func (c *Connections) Connect(ctx context.Context, endpoint, key string, secret 
 	if _, exists := c.config.Capability(CapabilityID); exists {
 		return Connection{}, ErrAlreadyConnected
 	}
+	if err := c.recordAudit(ctx, "requested"); err != nil {
+		return Connection{}, err
+	}
 	client, err := c.probe(endpoint, key, secret, trustPEM)
 	if err != nil {
+		_ = c.recordAudit(context.Background(), "failed")
 		return Connection{}, err
 	}
 	status, err := client.Probe(ctx)
 	if err != nil {
+		_ = c.recordAudit(context.Background(), "failed")
 		return Connection{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return Connection{}, err
-	}
-	if err := c.recordAudit(ctx, "requested"); err != nil {
+		_ = c.recordAudit(context.Background(), "failed")
 		return Connection{}, err
 	}
 	secrets, err := c.secretStore()
