@@ -1,0 +1,17 @@
+import { describe, expect, it } from "vitest";
+import { parseDiagnosticPreview } from "./diagnostics";
+import { diagnosticFixture } from "./diagnostics-fixtures.test-helper";
+
+describe("diagnostic preview parsing", () => {
+  it("keeps only reviewed fields", () => {
+    const parsed = parseDiagnosticPreview({ ...diagnosticFixture, private_path: "/Users/name/secret", controller: { ...diagnosticFixture.controller, raw_error: "token=abc" } });
+    expect(JSON.stringify(parsed)).not.toContain("secret");
+    expect(parsed.coverage[0]?.failure_category).toBe("sensor");
+  });
+
+  it("rejects unreviewed versions, URLs, and arbitrary failure text", () => {
+    expect(() => parseDiagnosticPreview({ ...diagnosticFixture, schema_version: 2 })).toThrow();
+    expect(() => parseDiagnosticPreview({ ...diagnosticFixture, controller: { ...diagnosticFixture.controller, build_version: "https://private.invalid/?token=abc" } })).toThrow();
+    expect(() => parseDiagnosticPreview({ ...diagnosticFixture, coverage: [{ capability_id: "device-watch", state: "degraded", failure_category: "private-path" }] })).toThrow();
+  });
+});

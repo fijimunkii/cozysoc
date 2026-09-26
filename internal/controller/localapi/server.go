@@ -44,6 +44,10 @@ type StorageOverviewHandler interface {
 	StorageOverview(context.Context) (api.StorageOverview, error)
 }
 
+type DiagnosticsPreviewHandler interface {
+	DiagnosticsPreview(context.Context) (api.DiagnosticPreview, error)
+}
+
 type DeviceHandler interface {
 	Devices(context.Context) (api.DeviceList, error)
 }
@@ -307,6 +311,24 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = overview
+	case api.MethodDiagnosticsPreview:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		previewHandler, ok := s.handler.(DiagnosticsPreviewHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		preview, previewErr := previewHandler.DiagnosticsPreview(requestCtx)
+		cancel()
+		if previewErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDiagnosticsPreview)
+			s.writeError(conn, request.ID, "internal_error", "unable to build diagnostic preview")
+			return
+		}
+		result = preview
 	case api.MethodCapabilitiesList:
 		if s.rejectUnexpectedParams(conn, request) {
 			return
