@@ -310,6 +310,16 @@ func (s *Store) InsertFinding(ctx context.Context, finding domain.Finding) error
 		return fmt.Errorf("begin finding transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if err := insertFindingTx(ctx, tx, finding, expiresAt); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return wrapWrite("commit finding", err)
+	}
+	return nil
+}
+
+func insertFindingTx(ctx context.Context, tx *sql.Tx, finding domain.Finding, expiresAt int64) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO findings
 		(id, scope_id, detector_id, detector_version, category, severity, confidence, observed_at_ns,
 		 created_at_ns, schema_version, payload, retention_class, expires_at_ns)
@@ -323,9 +333,6 @@ func (s *Store) InsertFinding(ctx context.Context, finding domain.Finding) error
 		if _, err := tx.ExecContext(ctx, `INSERT INTO finding_evidence (finding_id, observation_id) VALUES (?, ?)`, finding.ID, observationID); err != nil {
 			return wrapWrite("insert finding evidence", err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return wrapWrite("commit finding", err)
 	}
 	return nil
 }
