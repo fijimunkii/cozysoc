@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/capability"
 )
 
 const e2eUIDirEnv = "COZYSOC_E2E_UI_DIR"
@@ -56,6 +58,12 @@ type processWebCapability struct {
 		Measurement string `json:"measurement"`
 		Profile     string `json:"profile"`
 	} `json:"resources"`
+	DataHandling struct {
+		Activation string   `json:"activation"`
+		Sources    []string `json:"sources"`
+		Stored     []string `json:"stored"`
+		Excluded   []string `json:"excluded"`
+	} `json:"data_handling"`
 	DeepLinkCount int `json:"deep_link_count"`
 }
 
@@ -293,7 +301,7 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	if err := json.Unmarshal(capabilitiesBody, &webCapabilities); err != nil {
 		t.Fatalf("decode web capabilities: %v: %s", err, capabilitiesBody)
 	}
-	if webCapabilities.CatalogSchemaVersion != 1 || len(webCapabilities.Capabilities) != 1 {
+	if webCapabilities.CatalogSchemaVersion != capability.SchemaVersion || len(webCapabilities.Capabilities) != 1 {
 		t.Fatalf("unexpected web capability list: %+v", webCapabilities)
 	}
 	deviceWatch := webCapabilities.Capabilities[0]
@@ -302,6 +310,9 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	}
 	if len(deviceWatch.Targets) != 1 || deviceWatch.Targets[0].OS != "darwin" || deviceWatch.Targets[0].Arch != "arm64" || deviceWatch.Targets[0].Support != "candidate" {
 		t.Fatalf("unexpected Device Watch support projection: %+v", deviceWatch.Targets)
+	}
+	if !strings.Contains(deviceWatch.DataHandling.Activation, "separate Device Watch enablement") || len(deviceWatch.DataHandling.Sources) != 1 || len(deviceWatch.DataHandling.Stored) != 3 || len(deviceWatch.DataHandling.Excluded) != 2 {
+		t.Fatalf("unexpected Device Watch data handling projection: %+v", deviceWatch.DataHandling)
 	}
 
 	detailResponse, err := client.Get(rootURL + "api/devices/detail?device_id=device.missing")

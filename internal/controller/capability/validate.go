@@ -95,6 +95,9 @@ func Validate(m Manifest) error {
 	if err := validateHealth(m.Health); err != nil {
 		return err
 	}
+	if err := validateDataHandling(m.DataHandling); err != nil {
+		return err
+	}
 	if err := validateOutputs(m.Outputs); err != nil {
 		return err
 	}
@@ -328,6 +331,35 @@ func validateHealth(h HealthContract) error {
 			return fmt.Errorf("duplicate verification signal %q", signal)
 		}
 		seen[signal] = true
+	}
+	return nil
+}
+
+func validateDataHandling(data DataHandlingContract) error {
+	if err := validateText("data handling activation", data.Activation, 240); err != nil {
+		return err
+	}
+	for _, section := range []struct {
+		name   string
+		values []string
+	}{
+		{"sources", data.Sources},
+		{"stored", data.Stored},
+		{"excluded", data.Excluded},
+	} {
+		if len(section.values) == 0 || len(section.values) > 8 {
+			return fmt.Errorf("data handling %s must contain 1 to 8 items", section.name)
+		}
+		seen := map[string]bool{}
+		for _, value := range section.values {
+			if err := validateText("data handling "+section.name, value, 240); err != nil {
+				return err
+			}
+			if seen[value] {
+				return fmt.Errorf("duplicate data handling %s item", section.name)
+			}
+			seen[value] = true
+		}
 	}
 	return nil
 }

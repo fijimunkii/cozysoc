@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "device-watch",
   "display_name": "Device Watch",
   "summary": "Find devices visible from an enrolled home network and track presence without claiming whole-network traffic visibility.",
@@ -61,6 +61,19 @@
       "storage-health"
     ],
     "coverage_requires_verification": true
+  },
+  "data_handling": {
+    "activation": "Collection starts only after network enrollment and separate Device Watch enablement. Device Watch sends no discovery probes or scans.",
+    "sources": ["Local macOS ARP and IPv6 neighbor caches for the enrolled network interface."],
+    "stored": [
+      "Observed IP and MAC addresses with source and time.",
+      "Temporal device associations and presence evidence; labels when you add them.",
+      "Coverage, health, and control audit records."
+    ],
+    "excluded": [
+      "Packet payloads and browsing history.",
+      "Responses from active discovery probes or scans."
+    ]
   },
   "outputs": [
     {"kind": "device-observation", "schema_version": 1},

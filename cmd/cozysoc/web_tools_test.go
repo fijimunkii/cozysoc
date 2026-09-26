@@ -103,9 +103,9 @@ func TestWebCapabilitiesProjectsOnlyToolPresentationFields(t *testing.T) {
 	handler := newWebHandler(host, testUIDir(t), testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) { return testCoverageEnvelope(), nil })
 	handler.loadCapabilities = func(context.Context) (api.CapabilityList, error) {
 		calls++
-		return api.CapabilityList{CatalogSchemaVersion: 1, Capabilities: []capability.Instance{{
+		return api.CapabilityList{CatalogSchemaVersion: capability.SchemaVersion, Capabilities: []capability.Instance{{
 			Manifest: capability.Manifest{
-				SchemaVersion: 1, ID: "device-watch", DisplayName: "Device Watch", Summary: "Visible devices only.", Release: "v0.1",
+				SchemaVersion: capability.SchemaVersion, ID: "device-watch", DisplayName: "Device Watch", Summary: "Visible devices only.", Release: "v0.1",
 				Ownership:    []capability.OwnershipMode{capability.OwnershipBuiltin},
 				Targets:      []capability.Target{{OS: "darwin", Arch: "arm64", MinVersion: "13.0", Support: capability.SupportCandidate, Evidence: "private/path.md"}},
 				Inputs:       []capability.InputRequirement{{ID: "hidden-input", Required: true, Description: "not browser presentation"}},
@@ -115,6 +115,7 @@ func TestWebCapabilitiesProjectsOnlyToolPresentationFields(t *testing.T) {
 				Resources:    capability.ResourceBudget{Measurement: capability.MeasurementUnmeasured, Profile: "desktop-base", Evidence: "Measurements remain release-gated."},
 				Provenance:   capability.Provenance{Kind: "first-party", License: "MIT", Source: "https://secret.invalid/source", VersionPolicy: "Ships with the controller."},
 				Health:       capability.HealthContract{ProcessRequired: false, VerificationSignals: []string{"observation-freshness"}, CoverageRequiresVerification: true},
+				DataHandling: capability.DataHandlingContract{Activation: "Only after enablement.", Sources: []string{"Local neighbor cache."}, Stored: []string{"Observed addresses."}, Excluded: []string{"Packet payloads."}},
 				DeepLinks:    []capability.DeepLink{{ID: "declared-link", AllowedContexts: []string{"device"}}},
 				Lifecycle:    []capability.LifecycleAction{capability.ActionPreflight, capability.ActionEnable, capability.ActionVerify, capability.ActionDisable},
 			},
@@ -132,7 +133,7 @@ func TestWebCapabilitiesProjectsOnlyToolPresentationFields(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/capabilities", nil))
 	body := response.Body.String()
-	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(body, `"display_name":"Device Watch"`) || !strings.Contains(body, `"deep_link_count":1`) {
+	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(body, `"display_name":"Device Watch"`) || !strings.Contains(body, `"deep_link_count":1`) || !strings.Contains(body, `"activation":"Only after enablement."`) {
 		t.Fatalf("capabilities response status=%d calls=%d body=%s", response.Code, calls, body)
 	}
 	for _, forbidden := range []string{`"config"`, `"dependencies"`, `"inputs"`, "hidden-runtime", "hidden-input", "secret_ref", "private/path.md", "https://secret.invalid/source", testBootstrapToken, testSessionToken} {

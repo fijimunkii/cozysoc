@@ -37,6 +37,13 @@ export interface ToolCapabilityResources {
   evidence?: string;
 }
 
+export interface ToolDataHandling {
+  activation: string;
+  sources: string[];
+  stored: string[];
+  excluded: string[];
+}
+
 export interface ToolCapability {
   id: string;
   display_name: string;
@@ -54,6 +61,7 @@ export interface ToolCapability {
   resources: ToolCapabilityResources;
   provenance: { kind: string; license: string; version_policy: string };
   health: { process_required: boolean; verification_signals: string[]; coverage_requires_verification: boolean };
+  data_handling: ToolDataHandling;
   lifecycle: string[];
   deep_link_count: number;
 }
@@ -84,6 +92,7 @@ export function parseToolsSnapshot(statusRaw: unknown, capabilitiesRaw: unknown)
     transport: literal(status.transport, new Set(["unix"]), "controller transport") as "unix",
   };
   const catalogSchemaVersion = positiveInt(capabilities.catalog_schema_version, "catalog schema version", 1_000_000);
+  if (catalogSchemaVersion !== 2) throw new Error("Unsupported capability catalog version.");
   const rawCapabilities = array(capabilities.capabilities, "capabilities", 64);
   const ids = new Set<string>();
   const parsedCapabilities = rawCapabilities.map((raw, index) => parseCapability(raw, index, ids));
@@ -141,9 +150,32 @@ function parseCapability(raw: unknown, index: number, ids: Set<string>): ToolCap
       verification_signals: verificationSignals,
       coverage_requires_verification: bool(health.coverage_requires_verification, `capability ${id} coverage verification`),
     },
+    data_handling: parseDataHandling(value.data_handling, id),
     lifecycle,
     deep_link_count: nonNegativeInt(value.deep_link_count, `capability ${id} deep link count`, 32),
   };
+}
+
+function parseDataHandling(raw: unknown, id: string): ToolDataHandling {
+  const value = object(raw, `capability ${id} data handling`);
+  return {
+    activation: displayText(value.activation, `${id} data activation`),
+    sources: dataClaims(value.sources, `${id} data sources`),
+    stored: dataClaims(value.stored, `${id} stored data`),
+    excluded: dataClaims(value.excluded, `${id} excluded data`),
+  };
+}
+
+function dataClaims(raw: unknown, label: string): string[] {
+  const values = array(raw, label, 8).map((claim, index) => displayText(claim, `${label} ${index}`));
+  if (values.length === 0 || new Set(values).size !== values.length) throw new Error(`${label} is incomplete or duplicated`);
+  return values;
+}
+
+function displayText(raw: unknown, label: string): string {
+  const value = text(raw, label, 240);
+  if (/[\x00-\x1f\x7f-\x9f]/u.test(value)) throw new Error(`${label} contains control characters`);
+  return value;
 }
 
 function parseTarget(raw: unknown, label: string): ToolCapabilityTarget {
