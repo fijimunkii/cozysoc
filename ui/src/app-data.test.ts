@@ -69,6 +69,17 @@ describe("loadAppDataFromWeb", () => {
     expect(result.tools_error).toBe("capability projection unavailable");
   });
 
+  it("keeps coverage live but marks current presence unknown when the device read fails", async () => {
+    vi.mocked(loadDevicesFromWeb).mockRejectedValue(new Error("private device diagnostic"));
+    const result = await loadAppDataFromWeb();
+    expect(result.coverage).toBe(coverage);
+    expect(result.devices).toBeNull();
+    expect(result.devices_error).toBe("Device evidence is temporarily unavailable.");
+    expect(result.activity).not.toBeNull();
+    expect(result.networks).toBe(networks);
+    expect(JSON.stringify(result)).not.toContain("private device diagnostic");
+  });
+
   it("keeps the capability catalog available when storage is unavailable", async () => {
     vi.mocked(loadStorageOverviewFromWeb).mockRejectedValue(new Error("private database path"));
     const result = await loadAppDataFromWeb();

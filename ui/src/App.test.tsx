@@ -34,6 +34,22 @@ const liveData: AppData = {
 };
 
 describe("App product navigation", () => {
+  it("keeps coverage visible while a failed device projection makes presence and setup unavailable", async () => {
+    const partial: AppData = { ...liveData, devices: null, devices_error: "Device evidence is temporarily unavailable." };
+    const loadData = vi.fn().mockResolvedValueOnce(partial).mockResolvedValue(liveData);
+    render(<App loadData={loadData} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    expect(screen.getByText("Unavailable", { selector: "strong" })).toBeTruthy();
+    expect(screen.getByText(/Current presence is unknown; coverage is shown separately/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Device status is unavailable" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pause Device Watch" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    expect(screen.getByRole("heading", { name: "Device evidence is temporarily unavailable" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry device evidence" }));
+    await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Living Room TV")).toBeTruthy();
+  });
+
   it("opens guided setup directly from unconfigured Devices", async () => {
     const unconfigured: AppData = {
       ...liveData,
@@ -67,7 +83,7 @@ describe("App product navigation", () => {
       configured: true,
       scope_id: "scope.home",
       as_of: "2026-09-10T01:01:00Z",
-      devices: [...liveData.devices.devices, { id: "device.two", first_seen: "2026-09-10T01:01:00Z", last_seen: "2026-09-10T01:01:00Z", state: "visible" }],
+      devices: [...liveData.devices!.devices, { id: "device.two", first_seen: "2026-09-10T01:01:00Z", last_seen: "2026-09-10T01:01:00Z", state: "visible" }],
       truncated: false,
     }) };
     const loadData = vi.fn().mockResolvedValueOnce(liveData).mockResolvedValue(updated);
@@ -105,7 +121,7 @@ describe("App product navigation", () => {
         scope_id: "scope.home",
         as_of: "2026-09-10T01:01:00Z",
         devices: [
-          ...liveData.devices.devices,
+          ...liveData.devices!.devices,
           { id: "device.two", first_seen: "2026-09-10T01:01:00Z", last_seen: "2026-09-10T01:01:00Z", state: "visible" },
         ],
         truncated: false,

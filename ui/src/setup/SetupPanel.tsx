@@ -18,18 +18,18 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   const [error, setError] = useState<{ action: SetupAction; message: string } | null>(null);
 
   const enrolled = data.networks.enrolled;
-  const enabled = enrolled !== undefined && data.devices.configured;
+  const enabled = enrolled !== undefined && data.devices?.configured === true;
   const selectedNetwork = data.networks.candidates.find((candidate) => candidate.interface_name === selected);
   const reviewMatches = reviewedNetwork !== null && selectedNetwork !== undefined && sameNetwork(reviewedNetwork, selectedNetwork);
-  const canAuthorize = reviewMatches && !reviewInvalidated && data.network_error === undefined;
-  const stage = data.network_error !== undefined ? "unavailable" : enrolled === undefined ? "choose" : enabled ? "verify" : "enable";
+  const canAuthorize = reviewMatches && !reviewInvalidated && data.network_error === undefined && data.devices !== null;
+  const stage = data.network_error !== undefined || data.devices === null ? "unavailable" : enrolled === undefined ? "choose" : enabled ? "verify" : "enable";
   const heading = useRef<HTMLHeadingElement>(null);
   const pauseHeading = useRef<HTMLHeadingElement>(null);
   const enrollmentReviewHeading = useRef<HTMLHeadingElement>(null);
   const disableReviewHeading = useRef<HTMLHeadingElement>(null);
   const reviewSelectionButton = useRef<HTMLButtonElement>(null);
   const pauseDeviceWatchButton = useRef<HTMLButtonElement>(null);
-  const panel = dismissed ? "paused" : data.network_error !== undefined ? "stage" : reviewedNetwork !== null && enrolled === undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
+  const panel = dismissed ? "paused" : data.network_error !== undefined || data.devices === null ? "stage" : reviewedNetwork !== null && enrolled === undefined ? "enrollment-review" : confirmingDisable && enabled ? "disable-review" : "stage";
   const previousPanel = useRef(panel);
   const previousRead = useRef(data);
   const previousStage = useRef(stage);
@@ -44,8 +44,8 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
   }, [data, stage]);
 
   useEffect(() => {
-    if (reviewedNetwork !== null && (data.network_error !== undefined || !reviewMatches)) setReviewInvalidated(true);
-  }, [data.network_error, reviewedNetwork, reviewMatches]);
+    if (reviewedNetwork !== null && (data.network_error !== undefined || data.devices === null || !reviewMatches)) setReviewInvalidated(true);
+  }, [data.network_error, data.devices, reviewedNetwork, reviewMatches]);
 
   useEffect(() => {
     if (enrolled !== undefined && reviewedNetwork !== null) setReviewedNetwork(null);
@@ -80,14 +80,14 @@ export function SetupPanel({ data, client, onChanged, onReviewCoverage }: { data
     );
   }
 
-  if (data.network_error !== undefined) {
+  if (data.network_error !== undefined || data.devices === null) {
     return (
       <section className="product-card setup-panel" aria-labelledby="setup-title">
         <header className="setup-header">
           <div>
             <p className="eyebrow">Setup</p>
-            <h2 ref={heading} id="setup-title" tabIndex={-1}>Network setup information is unavailable</h2>
-            <p>{data.network_error} Existing device and coverage evidence remains available; no network authorization is changed.</p>
+            <h2 ref={heading} id="setup-title" tabIndex={-1}>{data.network_error !== undefined ? "Network setup information is unavailable" : "Device status is unavailable"}</h2>
+            <p>{data.network_error ?? "Current Device Watch state could not be read."} {data.devices === null ? "Coverage remains available; setup actions are paused so monitoring intent is not guessed." : "Existing device and coverage evidence remains available; no network authorization is changed."}</p>
           </div>
         </header>
         <div className="setup-actions setup-actions--end setup-body">

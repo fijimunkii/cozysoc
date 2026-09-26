@@ -108,6 +108,7 @@ The root UI establishes or reuses its local web session and then attempts the sa
 - Returning from demo to live coverage is explicit and retries the authenticated local endpoint.
 - While a live tab is visible, read-only evidence refreshes automatically once per minute; the user can also request an immediate read. Hidden tabs do not poll, and returning to a tab marks the prior snapshot out of date until a new read succeeds.
 - If a later refresh fails, the last successful read time remains visible with an out-of-date warning. Prior device, activity, coverage and tool data are withheld until a live read succeeds again, so old presence is not described as current. Setup, label and network-quality actions are also withheld. Neither a failed refresh nor tab resume starts an active network check.
+- If only the device projection fails while a fresh coverage read succeeds, Overview keeps that coverage and other successful views available. Presence becomes explicitly unknown, the Devices page offers a retry, and setup controls pause because the current Device Watch intent cannot be inferred from missing device data. An empty device list is never synthesized from a failed read.
 
 Demo data remains source code only; it is not written into controller storage or mixed with real observations/findings.
 
