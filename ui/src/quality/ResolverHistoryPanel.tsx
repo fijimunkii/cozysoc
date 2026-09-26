@@ -65,7 +65,7 @@ function LiveHistoryPanel({ load }: { load: ResolverHistoryLoader }) {
     <button type="button" className="primary-action" disabled={view.kind === "loading"} onClick={() => { void readHistory(); }}>
       {view.kind === "error" ? "Retry DNS history read" : view.kind === "history" ? "Refresh DNS history list" : "Read DNS history"}
     </button>
-    <p className="gateway-history-limits">These records describe one selected resolver and question at the original sample time. A DNS error reply is a response, not packet loss. A timeout or one resolver failure does not prove an internet outage, current DNS health, security, or monitoring coverage. Creating a check requires the separate experimental native command and one-shot approval.</p>
+    <p className="gateway-history-limits">These records describe one selected resolver and question at the original sample time. A DNS error reply is a response, not packet loss. A timeout or one resolver failure does not prove an internet outage, current DNS health, security, or monitoring coverage. Creating a check requires the experimental controller opt-in and a separate one-shot approval.</p>
   </section>;
 }
 function HistoryDetails({ data }: { data: ResolverHistory }) {

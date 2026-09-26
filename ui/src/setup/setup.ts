@@ -1,4 +1,5 @@
 import { parseGatewayCheckResult, parseGatewayCheckReview, type GatewayCheckClient } from "../quality/gateway-check";
+import { parseResolverSelections, parseResolverReview, parseResolverResult, type ResolverCheckClient, type ResolverSelection } from "../quality/resolver-check";
 
 const maxCandidates = 64;
 const maxPrefixes = 64;
@@ -154,6 +155,11 @@ export async function loadNetworksFromWeb(): Promise<NetworkList> {
   return parseNetworkList(await readJSON(response, "Live network response"));
 }
 
+export async function loadResolverSelectionsFromWeb(): Promise<ResolverSelection[]> {
+  const response = await request("/api/network-quality/resolver/selections", { method: "GET" });
+  return parseResolverSelections(await readJSON(response, "Saved resolver selections"));
+}
+
 export async function loadDeviceMergesFromWeb(): Promise<DeviceMergeList> {
   const response = await request("/api/devices/merges", { method: "GET" });
   return parseDeviceMergeList(await readJSON(response, "Device correction response"));
@@ -164,7 +170,7 @@ export async function loadDeviceSplitsFromWeb(): Promise<DeviceSplitList> {
   return parseDeviceSplitList(await readJSON(response, "Device split response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient {
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient & ResolverCheckClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -259,6 +265,16 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Device
     async decideGateway(reviewID: string, approve: boolean) {
       if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "Gateway review is invalid or expired.");
       return parseGatewayCheckResult(await mutate("/api/network-quality/gateway/run", { review_id: reviewID, approve }));
+    },
+    async reviewResolver(selectionID: string) {
+      if (!/^selection\.[0-9a-f]{32}$/.test(selectionID)) throw new SetupRequestError("invalid_request", "Choose a saved resolver selection.");
+      const review = parseResolverReview(await mutate("/api/network-quality/resolver/review", { selection_id: selectionID }));
+      if (review.selection_id !== selectionID) throw new SetupRequestError("invalid_response", "Resolver review changed selection.");
+      return review;
+    },
+    async decideResolver(reviewID: string, approve: boolean) {
+      if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "Resolver review is invalid or expired.");
+      return parseResolverResult(await mutate("/api/network-quality/resolver/run", { review_id: reviewID, approve }));
     },
   };
 }

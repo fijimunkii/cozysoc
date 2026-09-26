@@ -1,4 +1,4 @@
-# Experimental native resolver consent
+# Experimental resolver consent
 
 Related issues: #14 and #29. A separately started macOS controller may opt in to
 one-shot selected-resolver checks:
@@ -15,7 +15,7 @@ state creation on unsupported platforms. The existing controller-owned singleton
 keeps a real one-minute startup quiet interval and one-minute admission interval;
 settings updates, previews and new connections cannot reset it.
 
-The check command requires normal-user foreground macOS terminal input and output.
+The native check command requires normal-user foreground macOS terminal input and output.
 It refuses pipes, redirection, unattended flags, arbitrary endpoints and URLs
 before loading controller credentials or dialing. Each review discloses the exact
 numeric endpoint, query name/type and expectation, family, destination policy,
@@ -25,7 +25,7 @@ at an enrolled resolver. DNS byte limits exclude lower-layer and server-side tra
 
 After disclosure, the command flushes type-ahead and asks for exactly
 `check SELECTION_ID`. Anything else declines. There is no `--yes`, raw terminal
-mode, automatic retry, execution through web, or persisted approval. The shared
+mode, automatic retry, generic web execution, or persisted approval. The shared
 terminal implementation checks deadlines before and after input; output/flush/
 input failures prevent approval. Losing a result after approval remains uncertain.
 
@@ -80,11 +80,26 @@ completed normalized positive response. The existing gateway terminal-expiry gat
 and shared-terminal unit checks also remain mandatory. The evidence parser rejects
 missing, skipped or failed native cases.
 
-This remains experimental native Terminal support. Virtual feth networking is not
-physical Wi-Fi/NIC, VPN, packaged Local Network permission, sleep/resume or whole-home
-coverage certification. Resolver frontend history, external corroboration and
-conservative combined diagnosis remain outstanding; #14 and #29 stay open.
+This remains experimental macOS support. Virtual feth networking is not physical
+Wi-Fi/NIC, VPN, packaged Local Network permission, sleep/resume or whole-home
+coverage certification. #14 and #29 stay open for broader network-quality work.
 
 [Retained resolver history](resolver-history.md) is now available through the
 native read API and `resolver-history [RUN_ID]`, including after configuration
 retirement. Inspecting retained results sends no new query and restores no consent.
+
+## Local browser review and approval
+
+The authenticated local browser can load saved selections on explicit request, then
+review one selected check. Its fixed API routes are `GET /api/network-quality/resolver/selections`,
+`POST /api/network-quality/resolver/review` and `POST /api/network-quality/resolver/run`.
+The selection list projects only the opaque ID and saved endpoint/question settings;
+it does not expose native credentials, scope IDs, controller tickets or challenges.
+A review projects the exact question, endpoint, destination policy, current source,
+interface/prefixes, forwarding caveat, all DNS ceilings and a 30-second expiry.
+It sends no DNS traffic. The browser requires a separate approval, consumes its
+review before the native call and rejects a fresh native review if the selected
+settings, binding, source, forwarding flag or budget changed. Controller admission
+and auditing remain authoritative. If a response is lost after approval, traffic
+may have been sent; inspect retained history and do not automatically retry.
+The browser cannot save/retire settings or schedule checks.
