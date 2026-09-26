@@ -18,6 +18,9 @@ class BundleChecksumTests(unittest.TestCase):
         (self.root / "ui" / "dist").mkdir(parents=True)
         (self.root / "cozysoc").write_bytes(b"executable")
         (self.root / "BUILD-INFO.txt").write_text("unsigned developer bundle\n")
+        (self.root / "LICENSE.txt").write_text("first-party license\n")
+        (self.root / "SBOM.json").write_text("{}\n")
+        (self.root / "THIRD-PARTY-NOTICES.txt").write_text("notices\n")
         (self.root / "ui" / "dist" / "index.html").write_text("<html></html>\n")
 
     def run_checker(self, operation):

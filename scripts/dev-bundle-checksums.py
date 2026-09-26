@@ -8,7 +8,10 @@ import sys
 
 MANIFEST = "CHECKSUMS.json"
 MAX_MANIFEST_BYTES = 1024 * 1024
-REQUIRED_FILES = {"cozysoc", "BUILD-INFO.txt", "ui/dist/index.html"}
+REQUIRED_FILES = {
+    "cozysoc", "BUILD-INFO.txt", "LICENSE.txt", "SBOM.json",
+    "THIRD-PARTY-NOTICES.txt", "ui/dist/index.html",
+}
 
 
 def inventory(root: pathlib.Path) -> list[dict[str, object]]:
