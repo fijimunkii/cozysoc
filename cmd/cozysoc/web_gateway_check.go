@@ -136,7 +136,7 @@ func (h *webHandler) handleGatewayReview(w http.ResponseWriter, r *http.Request)
 	var input struct {
 		Target string `json:"target"`
 	}
-	if !decodeWebGatewayBody(w, r, &input) {
+	if !decodeWebCheckBody(w, r, &input, "gateway") {
 		return
 	}
 	if networkquality.ValidateGatewayPreviewTarget(input.Target) != nil {
@@ -192,7 +192,7 @@ func (h *webHandler) handleGatewayRun(w http.ResponseWriter, r *http.Request) {
 		ReviewID string `json:"review_id"`
 		Approve  *bool  `json:"approve"`
 	}
-	if !decodeWebGatewayBody(w, r, &input) {
+	if !decodeWebCheckBody(w, r, &input, "gateway") {
 		return
 	}
 	if !webGatewayReviewIDPattern.MatchString(input.ReviewID) || input.Approve == nil {
@@ -248,13 +248,13 @@ func (h *webHandler) handleGatewayRun(w http.ResponseWriter, r *http.Request) {
 	writeWebJSON(w, http.StatusOK, projected)
 }
 
-func decodeWebGatewayBody(w http.ResponseWriter, r *http.Request, target any) bool {
+func decodeWebCheckBody(w http.ResponseWriter, r *http.Request, target any, check string) bool {
 	if r.URL.RawQuery != "" || r.URL.ForceQuery {
-		writeWebError(w, http.StatusBadRequest, "query_not_allowed", "gateway requests take no query parameters")
+		writeWebError(w, http.StatusBadRequest, "query_not_allowed", check+" requests take no query parameters")
 		return false
 	}
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		writeWebError(w, http.StatusUnsupportedMediaType, "content_type_required", "gateway requests require JSON")
+		writeWebError(w, http.StatusUnsupportedMediaType, "content_type_required", check+" requests require JSON")
 		return false
 	}
 	limited := http.MaxBytesReader(w, r.Body, maxWebMutationBodyBytes)
@@ -262,7 +262,7 @@ func decodeWebGatewayBody(w http.ResponseWriter, r *http.Request, target any) bo
 	decoder := json.NewDecoder(limited)
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(target) != nil || ensureJSONEOF(decoder) != nil {
-		writeWebError(w, http.StatusBadRequest, "invalid_request", "gateway request is invalid")
+		writeWebError(w, http.StatusBadRequest, "invalid_request", check+" request is invalid")
 		return false
 	}
 	return true

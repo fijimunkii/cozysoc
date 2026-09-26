@@ -5,7 +5,8 @@
 .local-quality-facts dd { margin: .35rem 0 0; overflow-wrap: anywhere; }
 .local-quality-limits { margin-top: 1rem; line-height: 1.6; }
 .gateway-check { padding: 1.5rem; }
-.gateway-check form { display: grid; gap: .5rem; justify-items: start; }
+.gateway-check form { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; justify-items: start; }
 .gateway-check input { display: block; width: 100%; min-width: 0; padding: .5rem; border: 1px solid #858c80; border-radius: 8px; }
+.gateway-check select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: .5rem; border: 1px solid #858c80; border-radius: 8px; }
 .gateway-check button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .gateway-check .primary-action { margin: .5rem 0; }

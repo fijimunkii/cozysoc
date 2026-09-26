@@ -3,7 +3,7 @@
 Related work: #14 and #29. The controller now owns one resolver run coordinator
 and exposes narrow authenticated native settings and preview methods.
 [Experimental native execution](resolver-consent.md) requires a separate
-controller opt-in and an interactive one-shot approval. There is no browser route. Neither controller startup nor a
+controller opt-in and one-shot approval through the native command or the authenticated local browser. Neither controller startup nor a
 settings operation creates consent or sends traffic. Device Watch enablement is
 independent; only its explicitly enrolled network binding is used.
 
@@ -49,8 +49,7 @@ fail without fallback. Settings storage remains usable on Linux.
 All four UDS methods require a verified kernel peer UID, rotating session secret
 and API version. Parameter fields are exact, unique and bounded. Caller-supplied
 scope/source/interface/budget/reference IDs on save and any approval field are
-rejected. Only the selected reference can enter preview. No browser API or generic
-proxy exposes these methods. Errors never include raw database or route details.
+rejected. Only the selected reference can enter preview. The browser has fixed, authenticated saved-selection and review routes with explicit narrow projections; it cannot call arbitrary native methods. Errors never include raw database or route details.
 
 One inert coordinator is installed only after the controller owns its socket.
 Installation has no settings read, route lookup or probe side effect. It cannot be
@@ -76,7 +75,7 @@ retire journey, with a synthetic route inspector and no DNS traffic. Regressions
 cover exact-field rejection, missing/unsupported peer identity, private errors,
 retirement during route inspection and between review/admission, scope changes,
 stale evidence, startup quiet interval, singleton ownership, shutdown joining and
-absent browser/execution routes. The native route/sender lab remains a separate
+rejection of generic browser/execution routes. The native route/sender lab remains a separate
 macOS gate; these tests do not certify physical networking or packaged permissions.
 
 The [connection-bound native consent protocol](resolver-consent.md) and interactive

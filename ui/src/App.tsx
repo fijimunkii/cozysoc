@@ -23,6 +23,8 @@ import { ResolverHistoryPanel } from "./quality/ResolverHistoryPanel";
 import { loadResolverHistoryFromWeb, type ResolverHistoryLoader } from "./quality/resolver-history";
 import { GatewayHistoryPanel } from "./quality/GatewayHistoryPanel";
 import { GatewayCheckPanel } from "./quality/GatewayCheckPanel";
+import { ResolverCheckPanel } from "./quality/ResolverCheckPanel";
+import { type ResolverCheckClient } from "./quality/resolver-check";
 import { type GatewayCheckClient } from "./quality/gateway-check";
 import { loadGatewayHistoryFromWeb, type GatewayHistoryLoader } from "./quality/gateway-history";
 import { LocalConnectionPanel } from "./quality/LocalConnectionPanel";
@@ -74,6 +76,7 @@ export interface AppProps {
   deviceSplitClient?: DeviceSplitClient;
   loadDeviceSplits?: () => Promise<DeviceSplitList>;
   gatewayCheckClient?: GatewayCheckClient;
+  resolverCheckClient?: ResolverCheckClient;
   loadLocalQuality?: LocalQualityLoader;
   loadGatewayHistory?: GatewayHistoryLoader;
   loadHTTPSHistory?: HTTPSHistoryLoader;
@@ -89,7 +92,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, deviceCorrectionClient, loadDeviceMerges = loadDeviceMergesFromWeb, deviceSplitClient, loadDeviceSplits = loadDeviceSplitsFromWeb, gatewayCheckClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, deviceCorrectionClient, loadDeviceMerges = loadDeviceMergesFromWeb, deviceSplitClient, loadDeviceSplits = loadDeviceSplitsFromWeb, gatewayCheckClient, resolverCheckClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -103,6 +106,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
   const liveDeviceCorrectionClient = deviceCorrectionClient ?? defaultMutationClient;
   const liveDeviceSplitClient = deviceSplitClient ?? defaultMutationClient;
   const liveGatewayCheckClient = gatewayCheckClient ?? defaultMutationClient;
+  const liveResolverCheckClient = resolverCheckClient ?? defaultMutationClient;
 
   useEffect(() => {
     if (previousPage.current !== page) {
@@ -201,6 +205,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
             <OverviewPage data={activeData} onNavigate={setPage} />
             <LocalConnectionPanel key={view.mode} mode={view.mode === "live" ? "live" : "demo"} load={loadLocalQuality} />
             <GatewayCheckPanel key={`gateway-check-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} client={liveGatewayCheckClient} />
+            <ResolverCheckPanel key={`resolver-check-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} client={liveResolverCheckClient} />
             <QualityDiagnosisPanel key={`diagnosis-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadQualityDiagnosis} />
             <HTTPSHistoryPanel key={`https-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadHTTPSHistory} />
             <ResolverHistoryPanel key={`resolver-history-${view.mode}`} mode={view.mode === "live" ? "live" : "demo"} load={loadResolverHistory} />
