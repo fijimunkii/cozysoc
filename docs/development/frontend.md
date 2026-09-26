@@ -6,7 +6,7 @@ The [product roadmap](../roadmap.md) specifies one user-facing **`cozysoc` execu
 
 ## Workspace
 
-The shared UI lives in `ui/` and uses pinned React, TypeScript, Vite, and Vitest dependencies with a committed npm lockfile. Normal CI runs type checking, component/unit tests, a production build, and a real-process web/controller E2E in addition to the existing Go/controller gates.
+The shared UI lives in `ui/` and uses pinned React, TypeScript, Vite, Vitest, Playwright, and axe dependencies with a committed npm lockfile. Normal CI runs type checking, component/unit tests, a production build, a rendered Chromium setup/accessibility journey, and a real-process web/controller E2E in addition to the existing Go/controller gates.
 
 The Vite development server still binds to `127.0.0.1`. It is a frontend developer convenience and is not a Cozy SOC management endpoint.
 
@@ -141,9 +141,11 @@ This slice does not add Tauri or Wails. ADR 0004 remains Proposed until #5 prove
 
 ## Next steps
 
+The Chromium setup journey checks keyboard focus through authorization and enablement, semantic labels and automated WCAG A/AA rules at choose/review/verified states, and 320-pixel reduced-motion layout at 200% root text size. It uses typed API fixtures, so real controller authority remains covered by process E2E and human screen-reader/usability validation remains separate.
+
 Useful #13 follow-ons are:
 
-1. add browser-level accessibility, keyboard, scaling, and responsive tests around the first complete journey;
+1. extend real-browser accessibility coverage to device, activity, coverage, and tool details, including human screen-reader and usability sessions;
 2. add validated external deep-link handling only when a capability actually declares a safe destination/context contract; and
 3. let #28 choose the production static-asset packaging path without changing controller lifetime ownership.
 

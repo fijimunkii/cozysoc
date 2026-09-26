@@ -10,8 +10,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit --pretty false && vite build",
-    "typecheck": "tsc --noEmit --pretty false",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit --pretty false && tsc --noEmit --pretty false -p tsconfig.browser.json",
     "test": "vitest run",
+    "test:browser": "playwright test",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
@@ -19,6 +21,8 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.3",
     "@types/node": "24.13.3",

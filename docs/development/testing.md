@@ -4,15 +4,19 @@ Cozy SOC uses several different test layers. A passing fixture is not treated as
 
 ## Normal pull-request CI
 
-The default GitHub Actions workflow runs on the Linux reference runner and currently includes:
+The default GitHub Actions workflow runs native macOS jobs and Linux checks and currently includes:
 
 - repository hygiene and conventional-commit checks;
 - Go formatting, `go vet`, and package/unit/integration tests;
+- frontend type checking, component tests, and a production build;
+- a Chromium browser setup journey with keyboard-focus, semantic-label/contrast, reduced-motion, narrow-viewport, and enlarged-text checks;
 - a black-box controller process E2E suite;
 - macOS arm64 cgo-free cross-compilation for the controller and Darwin-specific packages; and
 - Foundation feasibility harness tests.
 
 The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the real `cozysoc` executable and runs the E2E package separately so the black-box step is visible as its own gate.
+
+The browser journey uses mocked typed API responses and a production Vite build. From `ui/`, run `npx playwright install --only-shell chromium` once, then `npm run test:browser`. It verifies rendered setup behavior and automated WCAG A/AA checks, but does not validate a real controller session, screen-reader use, or a usability session; process E2E and user testing own those separate claims.
 
 ## Controller process E2E boundary
 

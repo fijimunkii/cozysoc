@@ -21,3 +21,5 @@ node_modules/
 tmp/
 dist/
 coverage/
+ui/playwright-report/
+ui/test-results/
