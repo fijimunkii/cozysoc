@@ -117,6 +117,7 @@ jobs:
       - name: Run repository checks
         run: |
           bash scripts/check-repo.sh
+          python3 scripts/test-dev-bundle-checksums.py
           python3 scripts/test-check-macos-lab.py
           python3 scripts/test-macos-lab-runner.py
           python3 scripts/test-macos-lab-trust.py
@@ -149,6 +150,7 @@ jobs:
       - name: Run process E2E smoke
         run: |
           bash scripts/build-dev-bundle.sh "${RUNNER_TEMP}/cozysoc-dev-bundle"
+          python3 scripts/dev-bundle-checksums.py verify "${RUNNER_TEMP}/cozysoc-dev-bundle"
           COZYSOC_E2E_BINARY="${RUNNER_TEMP}/cozysoc-dev-bundle/cozysoc" \
           COZYSOC_E2E_UI_DIR="${RUNNER_TEMP}/cozysoc-dev-bundle/ui/dist" \
             go test -v -count=1 ./tests/e2e

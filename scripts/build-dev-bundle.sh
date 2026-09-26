@@ -41,6 +41,8 @@ Source tree: $source_state
 Platform: $(go env GOOS)/$(go env GOARCH)
 Release support: none
 EOF
+python3 scripts/dev-bundle-checksums.py create "$stage"
+python3 scripts/dev-bundle-checksums.py verify "$stage"
 
 if [[ -e $destination || -L $destination ]]; then
   echo "destination appeared during build: $destination" >&2
