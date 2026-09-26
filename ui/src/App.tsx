@@ -217,7 +217,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         {activeData && page === "activity" ? (
           activeData.activity === null
             ? <section className="product-card empty-product-state" aria-labelledby="activity-unavailable-title"><h2 id="activity-unavailable-title">Activity is temporarily unavailable</h2><p>{activeData.activity_error ?? "The local activity projection could not be read. Existing device and coverage evidence remains available."}</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry activity</button> : null}</section>
-            : <ActivityPage activity={activeData.activity} />
+            : <ActivityPage activity={activeData.activity} mode={view.mode === "live" ? "live" : "demo"} />
         ) : null}
         {activeData && page === "coverage" && activeData.coverage.reports.length === 0 ? (
           <section className="product-card empty-product-state"><h2>No coverage reports yet</h2><p>The controller is reachable, but no capability has reported a coverage contract.</p></section>

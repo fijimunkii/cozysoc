@@ -130,6 +130,8 @@ Current typed device read surfaces:
 - `GET /api/devices/detail?device_id=...` — bounded current-scope identity evidence and retained source provenance for one device; raw observation payloads are not exposed.
 - `GET /api/activity` — bounded low-noise Device Watch activity derived from retained normalized evidence; no raw payloads or inferred departures.
 
+Live Activity offers an explicit preview and local JSON download of its current bounded 24-hour view. The versioned file contains only the validated activity projection, including the original window, read time and truncation flag. It can include labels, IP/MAC addresses and source identifiers. It does not include unobserved devices or a complete history, and Cozy SOC neither rereads the controller nor uploads data at save time. Synthetic demo Activity has no export action. Broader history export, deletion and restore remain #30 work.
+
 The validated information architecture now exposes **Overview**, **Devices**, **Activity**, **Coverage**, and **Tools**. Tools is backed by the real capability catalog rather than an empty navigation placeholder; broader Settings stays deferred until there are additional user-facing configuration choices.
 
 Changing sections moves keyboard focus to the new page heading without moving it again on evidence refresh. Device evidence loading, error and detail views take focus at their heading, and returning from detail restores focus to the device-list heading.

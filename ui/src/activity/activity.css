@@ -17,4 +17,9 @@
 .activity-facts div { display: flex; min-width: 0; flex-wrap: wrap; gap: .4rem; align-items: baseline; overflow-wrap: anywhere; }
 .activity-facts dt { color: #777c72; font-size: .82rem; }
 .activity-facts dd { margin: 0; font-size: .86rem; }
+.activity-export { padding: 24px 28px; }
+.activity-export h3 { margin: 0; }
+.activity-export p { max-width: 760px; line-height: 1.6; color: #62675e; }
+.activity-export-preview { max-height: 24rem; max-width: 100%; padding: 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 12px; background: #f4f2ea; }
+.activity-export-preview:focus-visible { outline: 3px solid rgba(72, 91, 65, 0.25); outline-offset: 2px; }
 @media (max-width: 720px) { .activity-heading { display: block; } .activity-heading time { display: block; margin-top: .45rem; } .activity-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: .4rem; } }

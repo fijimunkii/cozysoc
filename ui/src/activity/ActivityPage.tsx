@@ -1,7 +1,19 @@
-import type { DeviceActivityItem, DeviceActivityList } from "./activity";
+import { useEffect, useState } from "react";
+import { activityHistoryExportJSON, type DeviceActivityItem, type DeviceActivityList } from "./activity";
 import "./activity.css";
 
-export function ActivityPage({ activity }: { activity: DeviceActivityList }) {
+export function ActivityPage({ activity, mode }: { activity: DeviceActivityList; mode: "live" | "demo" }) {
+  const [exportJSON, setExportJSON] = useState<string | null>(null);
+  useEffect(() => setExportJSON(null), [activity, mode]);
+  const saveExport = () => {
+    if (exportJSON === null || mode !== "live") return;
+    const url = URL.createObjectURL(new Blob([exportJSON], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "cozysoc-device-activity.json";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
   if (!activity.configured) {
     return <section className="product-card empty-product-state" aria-labelledby="activity-title"><p className="eyebrow">Activity</p><h2 id="activity-title">Device activity is not configured</h2><p>Authorize a home network and enable Device Watch to build a local evidence timeline.</p><p className="quiet-note">Cozy SOC does not create departure events from silence. Missing recent evidence appears as uncertainty on Devices.</p></section>;
   }
@@ -19,6 +31,15 @@ export function ActivityPage({ activity }: { activity: DeviceActivityList }) {
           <ol className="activity-list">{activity.items.map((item) => <ActivityItemView key={item.id} item={item} />)}</ol>
         )}
       </div>
+      {mode === "live" ? <div className="product-card activity-export">
+        <h3>Save this activity window</h3>
+        <p>This is the bounded 24-hour view shown above, with at most 100 positive events. It can include device labels, IP/MAC addresses and source identifiers. It does not include unobserved devices or a complete history. Cozy SOC does not upload it; choose a safe place to save it.</p>
+        <button type="button" className="secondary-action" onClick={() => setExportJSON(activityHistoryExportJSON(activity))}>Review JSON before saving</button>
+        {exportJSON !== null ? <>
+          <pre className="activity-export-preview" aria-label="Activity history export preview" tabIndex={0}>{exportJSON}</pre>
+          <button type="button" className="secondary-action" onClick={saveExport}>Save reviewed JSON</button>
+        </> : null}
+      </div> : null}
     </section>
   );
 }

@@ -37,6 +37,12 @@ export interface DeviceActivityList {
   truncated: boolean;
 }
 
+// A saved activity window contains only the fields admitted by the browser's
+// bounded contract, even if a response gains unexpected fields later.
+export function activityHistoryExportJSON(activity: DeviceActivityList): string {
+  return JSON.stringify({ format: "cozysoc-device-activity", version: 1, snapshot: parseDeviceActivity(activity) }, null, 2) + "\n";
+}
+
 export class ActivityLoadError extends Error {
   constructor(message: string) {
     super(message);
