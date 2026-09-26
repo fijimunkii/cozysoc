@@ -176,7 +176,7 @@ The IP claim is never used by itself to reconnect a device identity, preventing 
 
 MAC continuity is treated as an inference. If exactly one device has matching retained MAC evidence within the previous seven days, the new observation extends that device's temporal evidence chain. If no device matches, Device Watch creates a new candidate Device. If multiple devices match, the current claims remain preserved but unlinked and the result stays ambiguous rather than selecting a winner.
 
-A locally administered/private MAC receives lower inference confidence than a globally administered address. A scoped user merge can group two existing Device records for current reads and future MAC matching without deleting the original observations, claims, or inferred links. The original association remains visible in detail. Undo restores the earlier projection. Splitting observations that were inferred into one Device remains separate work.
+A locally administered/private MAC receives lower inference confidence than a globally administered address. Scoped user corrections can group two Device records or separate one retained neighbor observation that was inferred into the wrong Device. Neither correction deletes the original observations, claims, or inferred links. The original association remains visible in detail, and undo restores the earlier projection. A shared MAC after a split stays ambiguous for future automatic matching.
 
 Reconciliation uses deterministic claim/link/device identifiers for crash recovery. If the controller stops after writing the raw observation but before all identity links are written, replay safely completes the same reconciliation rather than creating duplicate identity history.
 
@@ -240,12 +240,46 @@ other mutations, plus a separate review of both Device IDs before merge or
 undo. Neither surface probes, alters network configuration, or increases
 identity confidence. Browser detail shows corrected evidence provenance.
 
+## User observation splits
+
+The authenticated native API, CLI, and local browser can separate one reviewed,
+retained `device-neighbor-seen` observation from its inferred Device identity:
+
+```text
+cozysoc device-split --state-dir PATH SOURCE_DEVICE_ID OBSERVATION_ID [TARGET_DEVICE_ID]
+cozysoc device-splits --state-dir PATH
+cozysoc device-unsplit --state-dir PATH OBSERVATION_ID
+```
+
+Without a target ID, Cozy SOC creates a separate Device. An existing Device in
+the same enrolled scope can be selected instead, including one created by an
+earlier split. The browser shows the observation ID, time, and retained claim
+values in a separate review before applying the change. The selected
+observation's retained links move together in current device detail, presence,
+scope membership, and activity views; its original inferred links remain
+unchanged and visible as provenance. First/last-seen and address-change
+classification use the corrected evidence. Undo restores the original
+projection without reconstructing the observation; an empty Device created
+only for the split is removed after its last active split is undone.
+
+Storage checks the current LAN scope and the selected observation's retained
+inferred links in one transaction. A real transition and its `device-identity`
+audit event commit together; a failed audit rolls back the new Device and
+mapping. Repeated split/undo requests are idempotent. At most 64 active
+observation splits, with at most four retained links each, can exist per scope.
+The review must use a still-retained source observation; once its source
+metadata has expired, a new split cannot be selected, though an existing split
+continues to project any surviving claim links. A whole-device merge cannot
+involve a Device with an active split. A MAC seen on both sides of a split
+remains an ambiguous future identity candidate instead of silently attaching
+new evidence to the old Device. Split corrections neither probe nor change the
+network and do not raise inference confidence.
+
 ## Limitations and validation requirements
 
 The browser provides network selection, enable/disable, device presence, labeling and coverage views. Further work and validation include:
 
 - packaged desktop-shell support and installed-service lifecycle validation;
-- a correction that splits observations incorrectly inferred into one Device;
 - optional service-discovery enrichment where justified;
 - conservative, consented active probes only if passive evidence proves insufficient; and
 - owned-lab evidence across IPv4-only, dual-stack, isolation, sleep/resume, address changes, enrollment changes, enable/disable, labeling, permission/source failures, runtime disconnection, ingestion lag, and write-pressure/full-volume recovery scenarios.

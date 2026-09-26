@@ -18,7 +18,7 @@ const evidenceBatchDeviceListMaxCandidates = 1024
 // snapshot. It preserves device-ID pagination and derives last-seen from original
 // claims, never a routing bound or an inferred continuous presence interval.
 func (s *MixedIdentitySnapshot) ListDeviceEvidence(ctx context.Context, query DeviceEvidenceQuery) (DeviceEvidencePage, error) {
-	return s.listMergedDeviceEvidence(ctx, query)
+	return s.listCorrectedDeviceEvidence(ctx, query)
 }
 
 func (s *MixedIdentitySnapshot) listOriginalDeviceEvidence(ctx context.Context, query DeviceEvidenceQuery) (DeviceEvidencePage, error) {

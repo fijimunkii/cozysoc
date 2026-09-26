@@ -39,6 +39,13 @@ type fakeDeviceStore struct {
 	mergeErr       error
 	unmergeSource  string
 	merges         []storage.DeviceMerge
+	splitScope     string
+	splitSource    string
+	splitObs       string
+	splitTarget    string
+	splitChanged   bool
+	splitErr       error
+	splits         []storage.DeviceSplit
 	activeScopes   []domain.NetworkScope
 	activeErr      error
 	enrollScope    domain.NetworkScope
@@ -80,6 +87,23 @@ func (f *fakeDeviceStore) UnmergeDevices(_ context.Context, scope, source string
 
 func (f *fakeDeviceStore) ListDeviceMerges(context.Context, string) ([]storage.DeviceMerge, error) {
 	return f.merges, nil
+}
+
+func (f *fakeDeviceStore) SplitDeviceObservation(_ context.Context, scope, source, observation, target string) (string, bool, error) {
+	f.splitScope, f.splitSource, f.splitObs, f.splitTarget = scope, source, observation, target
+	if target == "" {
+		target = "device.created"
+	}
+	return target, f.splitChanged, f.splitErr
+}
+
+func (f *fakeDeviceStore) UndoDeviceSplitObservation(_ context.Context, scope, observation string) (bool, error) {
+	f.splitScope, f.splitObs = scope, observation
+	return f.splitChanged, f.splitErr
+}
+
+func (f *fakeDeviceStore) ListDeviceSplits(context.Context, string) ([]storage.DeviceSplit, error) {
+	return f.splits, nil
 }
 
 func (f *fakeDeviceStore) ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error) {
@@ -345,6 +369,44 @@ func TestControllerAPIHandlerScopesDeviceIdentityCorrections(t *testing.T) {
 	control.configured = false
 	if _, err := handler.UnmergeDevices(context.Background(), api.DeviceUnmergeParams{SourceDeviceID: "device.source"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
 		t.Fatal("unconfigured unmerge", err)
+	}
+}
+
+func TestControllerAPIHandlerScopesDeviceSplits(t *testing.T) {
+	store := &fakeDeviceStore{splitChanged: true, splits: []storage.DeviceSplit{{ObservationID: "obs.one", SourceDeviceID: "device.source", TargetDeviceID: "device.created"}}}
+	control := &fakeDeviceWatchAPIControl{scopeID: "scope.home", configured: true}
+	handler, err := newControllerAPIHandler(core.New("test", 1, time.Second, nil), store, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := handler.SplitDeviceObservation(context.Background(), api.DeviceSplitParams{SourceDeviceID: "device.source", ObservationID: "obs.one"})
+	if err != nil || !result.Changed || result.TargetDeviceID != "device.created" || store.splitScope != "scope.home" || store.splitSource != "device.source" || store.splitObs != "obs.one" {
+		t.Fatal("split scope", result, store, err)
+	}
+	listed, err := handler.DeviceSplits(context.Background())
+	if err != nil || !listed.Configured || listed.ScopeID != "scope.home" || len(listed.Splits) != 1 {
+		t.Fatal("split list", listed, err)
+	}
+	result, err = handler.UnsplitDeviceObservation(context.Background(), api.DeviceUnsplitParams{ObservationID: "obs.one"})
+	if err != nil || !result.Changed || store.splitScope != "scope.home" || store.splitObs != "obs.one" {
+		t.Fatal("unsplit scope", result, store, err)
+	}
+	store.splitErr = storage.ErrDeviceSplitConflict
+	if _, err := handler.SplitDeviceObservation(context.Background(), api.DeviceSplitParams{SourceDeviceID: "device.source", ObservationID: "obs.one"}); !errors.Is(err, localapi.ErrMutationConflict) {
+		t.Fatal("conflict mapping", err)
+	}
+	store.splitErr = storage.ErrDeviceNotInScope
+	if _, err := handler.SplitDeviceObservation(context.Background(), api.DeviceSplitParams{SourceDeviceID: "device.source", ObservationID: "obs.one"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+		t.Fatal("scope mapping", err)
+	}
+	for _, params := range []api.DeviceSplitParams{{SourceDeviceID: "../bad", ObservationID: "obs.one"}, {SourceDeviceID: "device.source", ObservationID: "../bad"}} {
+		if _, err := handler.SplitDeviceObservation(context.Background(), params); !errors.Is(err, localapi.ErrInvalidMutation) {
+			t.Fatal("invalid params", params, err)
+		}
+	}
+	control.configured = false
+	if _, err := handler.SplitDeviceObservation(context.Background(), api.DeviceSplitParams{SourceDeviceID: "device.source", ObservationID: "obs.one"}); !errors.Is(err, localapi.ErrMutationTargetNotFound) {
+		t.Fatal("disabled scope", err)
 	}
 }
 

@@ -165,6 +165,15 @@ func (s *Store) MergeDevices(ctx context.Context, scopeID, sourceID, targetID st
 	if len(merges.bySource) >= MaxDeviceMergesPerScope {
 		return false, ErrDeviceMergeLimit
 	}
+	splits, err := loadDeviceSplits(ctx, tx, scopeID)
+	if err != nil {
+		return false, err
+	}
+	for _, id := range []string{sourceID, targetID} {
+		if len(splits.bySource[id]) != 0 || len(splits.byTarget[id]) != 0 {
+			return false, ErrDeviceMergeConflict
+		}
+	}
 	view, err := NewMixedIdentitySnapshot(tx, now)
 	if err != nil {
 		return false, err
@@ -239,14 +248,18 @@ func (s *Store) UnmergeDevices(ctx context.Context, scopeID, sourceID string) (b
 	return true, nil
 }
 
-func appendDeviceIdentityAudit(ctx context.Context, tx *sql.Tx, action, scopeID, sourceID, targetID string, now time.Time, expiresAt int64) error {
-	payload, err := json.Marshal(map[string]any{
+func appendDeviceIdentityAudit(ctx context.Context, tx *sql.Tx, action, scopeID, sourceID, targetID string, now time.Time, expiresAt int64, observationID ...string) error {
+	fields := map[string]any{
 		"schema_version":   1,
 		"action":           action,
 		"scope_id":         scopeID,
 		"source_device_id": sourceID,
 		"target_device_id": targetID,
-	})
+	}
+	if len(observationID) > 0 {
+		fields["observation_id"] = observationID[0]
+	}
+	payload, err := json.Marshal(fields)
 	if err != nil {
 		return err
 	}

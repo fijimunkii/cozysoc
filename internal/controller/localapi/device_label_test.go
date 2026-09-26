@@ -37,6 +37,24 @@ func (*mutationTestHandler) DeviceMerges(context.Context) (api.DeviceMergeList, 
 	return api.DeviceMergeList{Configured: true, ScopeID: "scope.home", Merges: []api.DeviceMerge{}}, nil
 }
 
+func (h *mutationTestHandler) SplitDeviceObservation(_ context.Context, params api.DeviceSplitParams) (api.DeviceSplitResult, error) {
+	if h.identityErr != nil {
+		return api.DeviceSplitResult{}, h.identityErr
+	}
+	return api.DeviceSplitResult{SourceDeviceID: params.SourceDeviceID, ObservationID: params.ObservationID, TargetDeviceID: "device.created", Changed: true}, nil
+}
+
+func (h *mutationTestHandler) UnsplitDeviceObservation(_ context.Context, params api.DeviceUnsplitParams) (api.DeviceSplitResult, error) {
+	if h.identityErr != nil {
+		return api.DeviceSplitResult{}, h.identityErr
+	}
+	return api.DeviceSplitResult{ObservationID: params.ObservationID, Changed: true}, nil
+}
+
+func (*mutationTestHandler) DeviceSplits(context.Context) (api.DeviceSplitList, error) {
+	return api.DeviceSplitList{Configured: true, ScopeID: "scope.home", Splits: []api.DeviceSplit{}}, nil
+}
+
 func (*mutationTestHandler) Status() api.Status {
 	return api.Status{APIVersion: api.Version, ControllerVersion: "test", Transport: "unix"}
 }

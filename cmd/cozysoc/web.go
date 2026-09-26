@@ -73,6 +73,9 @@ type webHandler struct {
 	loadDeviceMerges     deviceMergeLoader
 	mergeDevice          deviceMergeMutator
 	unmergeDevice        deviceUnmergeMutator
+	loadDeviceSplits     deviceSplitLoader
+	splitDevice          deviceSplitMutator
+	unsplitDevice        deviceUnsplitMutator
 	loadNetworks         networkLoader
 	enrollNetwork        networkEnrollMutator
 	enableDeviceWatch    deviceWatchMutator
@@ -181,6 +184,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	}
 	configureWebDeviceLabel(handler, dir)
 	configureWebDeviceIdentity(handler, dir)
+	configureWebDeviceSplits(handler, dir)
 	configureWebLocalQuality(handler, dir)
 	configureWebGatewayHistory(handler, dir)
 	configureWebResolverHistory(handler, dir)
@@ -333,6 +337,12 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDeviceMerge(w, r)
 	case "/api/devices/unmerge":
 		h.handleDeviceUnmerge(w, r)
+	case "/api/devices/splits":
+		h.handleDeviceSplits(w, r)
+	case "/api/devices/split":
+		h.handleDeviceSplit(w, r)
+	case "/api/devices/unsplit":
+		h.handleDeviceUnsplit(w, r)
 	case "/api/network-quality/diagnosis":
 		h.handleQualityDiagnosis(w, r)
 	case "/api/network-quality/https-history":

@@ -14,7 +14,7 @@ import (
 // snapshot. It does not commit, open storage, or fall back on reserved-schema or
 // corrupt-data errors. Runtime readers must own a separate read connection.
 func (s *MixedIdentitySnapshot) GetDeviceEvidenceDetail(ctx context.Context, query DeviceEvidenceDetailQuery) (DeviceEvidenceDetail, error) {
-	return s.getMergedDeviceEvidenceDetail(ctx, query)
+	return s.getCorrectedDeviceEvidenceDetail(ctx, query)
 }
 
 func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceDetail(ctx context.Context, query DeviceEvidenceDetailQuery) (DeviceEvidenceDetail, error) {
@@ -29,16 +29,41 @@ func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceDetailBudget(ctx contex
 	if err != nil {
 		return DeviceEvidenceDetail{}, err
 	}
-	legacy, err := getLegacyDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q)
-	if err != nil && !errors.Is(err, ErrDeviceEvidenceNotFound) {
-		return DeviceEvidenceDetail{}, err
-	}
-	batch, err := getBatchDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q, false, remaining)
+	rows, err := s.getOriginalDeviceEvidenceRowsBudget(ctx, q, remaining)
 	if err != nil {
 		return DeviceEvidenceDetail{}, err
 	}
+	return rows.page(q.Limit), nil
+}
+
+func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceRowsBudget(ctx context.Context, query DeviceEvidenceDetailQuery, remaining *int) (deviceEvidenceDetailRows, error) {
+	if s == nil || s.legacy == nil {
+		return deviceEvidenceDetailRows{}, ErrEvidenceBatchData
+	}
+	q, err := normalizeDeviceDetailQuery(query, s.legacy.now)
+	if err != nil {
+		return deviceEvidenceDetailRows{}, err
+	}
+	return s.getOriginalDeviceEvidenceRowsLimited(ctx, q, remaining)
+}
+
+// The split projection may need to inspect links displaced from the first
+// public page before it can form that page. Callers supply a normalized query
+// and an explicit bounded expanded limit; public requests still cap at 100.
+func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceRowsLimited(ctx context.Context, q DeviceEvidenceDetailQuery, remaining *int) (deviceEvidenceDetailRows, error) {
+	if s == nil || s.legacy == nil || q.Limit < 1 || q.Limit > MaxDeviceDetailEvidence+MaxDeviceSplitsPerScope*4 {
+		return deviceEvidenceDetailRows{}, ErrEvidenceBatchQueryLimit
+	}
+	legacy, err := getLegacyDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q)
+	if err != nil && !errors.Is(err, ErrDeviceEvidenceNotFound) {
+		return deviceEvidenceDetailRows{}, err
+	}
+	batch, err := getBatchDeviceEvidenceDetail(ctx, s.legacy.tx, s.legacy.now, q, false, remaining)
+	if err != nil {
+		return deviceEvidenceDetailRows{}, err
+	}
 	if len(legacy.Evidence) == 0 && len(batch.Evidence) == 0 {
-		return DeviceEvidenceDetail{}, ErrDeviceEvidenceNotFound
+		return deviceEvidenceDetailRows{}, ErrDeviceEvidenceNotFound
 	}
 	result := legacy
 	if len(result.Evidence) == 0 {
@@ -52,12 +77,12 @@ func (s *MixedIdentitySnapshot) getOriginalDeviceEvidenceDetailBudget(ctx contex
 	seen := map[string]bool{}
 	for _, row := range result.Evidence {
 		if seen[row.LinkID] {
-			return DeviceEvidenceDetail{}, ErrEvidenceBatchData
+			return deviceEvidenceDetailRows{}, ErrEvidenceBatchData
 		}
 		seen[row.LinkID] = true
 	}
 	sortDeviceEvidenceRows(result.Evidence)
-	return result.page(q.Limit), nil
+	return result, nil
 }
 
 func sortDeviceEvidenceRows(rows []deviceEvidenceRow) {
@@ -103,7 +128,11 @@ func getBatchDeviceEvidenceDetail(ctx context.Context, tx *sql.Tx, now time.Time
 		if err != nil {
 			return deviceEvidenceDetailRows{}, err
 		}
-		if inspected >= evidenceBatchIdentityMaxCandidates {
+		maxCandidates := evidenceBatchIdentityMaxCandidates
+		if remaining != nil {
+			maxCandidates = splitProjectionBatchBudget
+		}
+		if inspected >= maxCandidates {
 			return deviceEvidenceDetailRows{}, ErrEvidenceBatchQueryLimit
 		}
 		if remaining != nil {

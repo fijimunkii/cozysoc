@@ -28,7 +28,7 @@ import { loadGatewayHistoryFromWeb, type GatewayHistoryLoader } from "./quality/
 import { LocalConnectionPanel } from "./quality/LocalConnectionPanel";
 import { loadLocalQualityFromWeb, type LocalQualityLoader } from "./quality/local-quality";
 import { SetupPanel } from "./setup/SetupPanel";
-import { createWebSetupClient, loadDeviceMergesFromWeb, parseNetworkList, type DeviceCorrectionClient, type DeviceLabelClient, type DeviceMergeList, type SetupClient } from "./setup/setup";
+import { createWebSetupClient, loadDeviceMergesFromWeb, loadDeviceSplitsFromWeb, parseNetworkList, type DeviceCorrectionClient, type DeviceLabelClient, type DeviceMergeList, type DeviceSplitClient, type DeviceSplitList, type SetupClient } from "./setup/setup";
 import { ToolsPage } from "./tools/ToolsPage";
 import { parseToolsSnapshot } from "./tools/tools";
 
@@ -71,6 +71,8 @@ export interface AppProps {
   deviceLabelClient?: DeviceLabelClient;
   deviceCorrectionClient?: DeviceCorrectionClient;
   loadDeviceMerges?: () => Promise<DeviceMergeList>;
+  deviceSplitClient?: DeviceSplitClient;
+  loadDeviceSplits?: () => Promise<DeviceSplitList>;
   gatewayCheckClient?: GatewayCheckClient;
   loadLocalQuality?: LocalQualityLoader;
   loadGatewayHistory?: GatewayHistoryLoader;
@@ -87,7 +89,7 @@ const pageCopy: Record<Page, { eyebrow: string; title: string; detail: string }>
   tools: { eyebrow: "Tools", title: "What Cozy SOC can run", detail: "Capability ownership, operating state, support evidence, and resource limits without turning a running process into a protection claim." },
 };
 
-export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, deviceCorrectionClient, loadDeviceMerges = loadDeviceMergesFromWeb, gatewayCheckClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
+export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelClient, deviceCorrectionClient, loadDeviceMerges = loadDeviceMergesFromWeb, deviceSplitClient, loadDeviceSplits = loadDeviceSplitsFromWeb, gatewayCheckClient, loadLocalQuality = loadLocalQualityFromWeb, loadGatewayHistory = loadGatewayHistoryFromWeb, loadResolverHistory = loadResolverHistoryFromWeb, loadHTTPSHistory = loadHTTPSHistoryFromWeb, loadQualityDiagnosis = loadQualityDiagnosisFromWeb }: AppProps) {
   const [attempt, setAttempt] = useState(0);
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<DataView>({ mode: "loading" });
@@ -99,6 +101,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
   const liveSetupClient = setupClient ?? defaultMutationClient;
   const liveDeviceLabelClient = deviceLabelClient ?? defaultMutationClient;
   const liveDeviceCorrectionClient = deviceCorrectionClient ?? defaultMutationClient;
+  const liveDeviceSplitClient = deviceSplitClient ?? defaultMutationClient;
   const liveGatewayCheckClient = gatewayCheckClient ?? defaultMutationClient;
 
   useEffect(() => {
@@ -208,7 +211,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           activeData.devices === null
             ? <section className="product-card empty-product-state device-read-unavailable" aria-labelledby="devices-unavailable-title"><h2 id="devices-unavailable-title">Device evidence is temporarily unavailable</h2><p>Current presence is unknown. Coverage and other local evidence can still be read.</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry device evidence</button> : null}</section>
             : view.mode === "live"
-            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} correctionClient={liveDeviceCorrectionClient} loadMerges={loadDeviceMerges} onChanged={retryLive} onNavigate={setPage} loadDetail={loadDeviceDetailFromWeb} />
+            ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} correctionClient={liveDeviceCorrectionClient} loadMerges={loadDeviceMerges} splitClient={liveDeviceSplitClient} loadSplits={loadDeviceSplits} onChanged={retryLive} onNavigate={setPage} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
         ) : null}
         {activeData && page === "activity" ? (
