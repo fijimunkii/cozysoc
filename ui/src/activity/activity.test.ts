@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ActivityLoadError, parseDeviceActivity } from "./activity";
+import { ActivityLoadError, activityHistoryExportJSON, parseDeviceActivity, type DeviceActivityList } from "./activity";
 
 const fixture = {
   configured: true,
@@ -30,5 +30,13 @@ describe("parseDeviceActivity", () => {
     expect(() => parseDeviceActivity({ ...fixture, items: [{ ...first, source: { ...first.source, source_stream: "raw-packets" } }] })).toThrow(ActivityLoadError);
     expect(() => parseDeviceActivity({ ...fixture, items: [{ ...first, at: "2026-09-08T11:00:00Z" }] })).toThrow(ActivityLoadError);
     expect(() => parseDeviceActivity({ ...fixture, items: [first, { ...first, id: "obs.two", at: "2026-09-10T11:30:00Z", source: { ...first.source, observation_id: "obs.two" } }] })).toThrow(ActivityLoadError);
+  });
+  it("exports only the validated activity window and source fields", () => {
+    const first = fixture.items[0];
+    if (first === undefined) throw new Error("activity fixture is missing its first item");
+    const untrusted = { ...fixture, credential: "hidden root field", items: [{ ...first, credential: "hidden item field", source: { ...first.source, credential: "hidden source field" } }] };
+    const saved = JSON.parse(activityHistoryExportJSON(untrusted as unknown as DeviceActivityList));
+    expect(saved).toEqual({ format: "cozysoc-device-activity", version: 1, snapshot: parseDeviceActivity(fixture) });
+    expect(JSON.stringify(saved)).not.toContain("credential");
   });
 });
