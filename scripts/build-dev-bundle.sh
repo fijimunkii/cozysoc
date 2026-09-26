@@ -28,6 +28,7 @@ npm --prefix ui run build
 CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$stage/cozysoc" ./cmd/cozysoc
 mkdir -p "$stage/ui/dist"
 cp -R ui/dist/. "$stage/ui/dist/"
+cp LICENSE "$stage/LICENSE.txt"
 
 source_commit=$(git rev-parse HEAD)
 source_state=clean
@@ -41,6 +42,7 @@ Source tree: $source_state
 Platform: $(go env GOOS)/$(go env GOARCH)
 Release support: none
 EOF
+python3 scripts/dev-bundle-metadata.py "$stage/cozysoc" ui/package-lock.json ui/node_modules "$stage"
 python3 scripts/dev-bundle-checksums.py create "$stage"
 python3 scripts/dev-bundle-checksums.py verify "$stage"
 
