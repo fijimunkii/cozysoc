@@ -2,15 +2,14 @@
 
 Issue #17 selects OPNsense as the first read-only router reference. The Go
 candidate targets the exact 26.7.4 API shape. A native, foreground-only
-`cozysoc opnsense-connect` command can now enroll a status-only external
-connection. `opnsense-status` makes a fresh version read, and
+`cozysoc opnsense-connect` command can now enroll an external connection.
+`opnsense-status` makes a fresh version read, and
 `opnsense-disconnect` disables local intent before removing the protected
-credential. There is no browser setup, background polling, neighbor import,
+credential. `opnsense-collect ENROLLED_SCOPE_ID` permits one separately approved
+ARP/NDP read. There is no browser setup, background polling,
 network-changing operation, or supported-router claim. An owned 26.7.4 lab
 must verify response schema, TLS enrollment, effective privileges, failures,
-and recovery before the adapter can be listed as supported. Any later neighbor
-import must bind each read to an enrolled network and revalidate endpoint and
-scope before taking a sample.
+and recovery before the adapter can be listed as supported.
 
 The native connection accepts only a private IP-literal HTTPS origin. Setup
 asks for foreground approval before reading the API key and secret with terminal
@@ -25,6 +24,29 @@ leaves the connection durably disabled for a retry. Native IPC requires an
 authenticated, verified same-user OS peer and returns fixed, redacted failures.
 The status result contains only connected state, approved origin and the exact
 supported version. It does not return router hostname or neighbor data.
+
+Before a neighbor read, the native command displays the currently approved
+router origin, selected enrolled scope and its prefixes, limit of 256 rows per
+address family, privacy impact, and coverage limits. The user must type
+`collect <scope-id>` in a foreground terminal for that single read. The request
+carries the reviewed origin and exact enrolled interface binding. The
+controller checks the active scope and current interface before the read,
+holds the connection lock during the read, then checks the scope and interface
+again before storage. A changed endpoint, retired scope, changed binding,
+failed audit, or missing protected credential blocks collection. The collection
+audit stores counts and phase, never neighbor addresses or credentials. If
+storage or the completion audit fails, the caller receives a partial/unknown
+outcome and must inspect local health before an explicit retry.
+
+Only validated neighbor IP, MAC, interface and address family inside the
+selected prefixes enter local ephemeral evidence with a 24-hour retention
+target. Out-of-scope rows are counted and discarded. The source kind is
+`router-neighbor-reported`, separate from Device Watch's local-neighbor kind;
+it does not create verified device identities or a coverage heartbeat. The
+native command returns bounded counts and truncation flags, not household
+addresses. Router reports may include stale ARP/NDP entries, omit other VLANs
+or east-west traffic, and show addresses affected by NAT. A zero-row result
+cannot prove absence or complete visibility.
 
 The client accepts one private IP-literal HTTPS origin with no URL credentials,
 path, query, or fragment. It uses OS certificate roots plus an optional

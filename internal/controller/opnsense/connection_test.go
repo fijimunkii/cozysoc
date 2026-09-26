@@ -88,6 +88,9 @@ func (s *connectionSecrets) Backend() secretstore.BackendInfo {
 type connectionProbe struct{ status Status }
 
 func (p connectionProbe) Probe(context.Context) (Status, error) { return p.status, nil }
+func (p connectionProbe) ReadNeighbors(context.Context) (Snapshot, error) {
+	return Snapshot{Status: p.status}, nil
+}
 
 func newConnectionFixture(t *testing.T) (*Connections, *config.Manager, *connectionAudit, *connectionLifecycle, *connectionSecrets, string) {
 	t.Helper()

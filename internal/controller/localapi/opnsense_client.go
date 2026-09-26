@@ -24,6 +24,22 @@ func (c *Client) DisconnectOPNsense(ctx context.Context) (api.OPNsenseConnection
 	return c.opnsenseCall(ctx, api.MethodOPNsenseDisconnect, nil)
 }
 
+func (c *Client) CollectOPNsense(ctx context.Context, params api.OPNsenseCollectParams) (api.OPNsenseCollection, error) {
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		return api.OPNsenseCollection{}, fmt.Errorf("encode OPNsense collection request: %w", err)
+	}
+	raw, err := c.callWithTimeout(ctx, api.MethodOPNsenseCollect, encoded, opnsenseCollectTimeout)
+	if err != nil {
+		return api.OPNsenseCollection{}, err
+	}
+	var result api.OPNsenseCollection
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return api.OPNsenseCollection{}, fmt.Errorf("decode OPNsense collection response: %w", err)
+	}
+	return result, nil
+}
+
 func (c *Client) opnsenseCall(ctx context.Context, method string, params json.RawMessage) (api.OPNsenseConnection, error) {
 	raw, err := c.callWithTimeout(ctx, method, params, opnsenseRequestTimeout)
 	if err != nil {
