@@ -369,7 +369,111 @@ func TestWebProcessReadsCoverageWithoutOwningController(t *testing.T) {
 	stopWithInterrupt(t, controller)
 }
 
+func TestWebProcessUsesBundledUIOutsideRepository(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("web process E2E currently targets the Linux CI reference runner")
+	}
+	binary, uiDir := os.Getenv(e2eBinaryEnv), os.Getenv(e2eUIDirEnv)
+	if binary == "" || uiDir == "" {
+		t.Skipf("set %s and %s to run process E2E", e2eBinaryEnv, e2eUIDirEnv)
+	}
+	absoluteBinary, err := filepath.Abs(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	absoluteUI, err := filepath.Abs(uiDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(t.TempDir(), "bundle")
+	if err := os.Mkdir(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundledBinary := filepath.Join(bundle, "cozysoc")
+	source, err := os.Open(absoluteBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	target, err := os.OpenFile(bundledBinary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(target, source); err != nil {
+		_ = target.Close()
+		t.Fatal(err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.CopyFS(filepath.Join(bundle, "ui", "dist"), os.DirFS(absoluteUI)); err != nil {
+		t.Fatal(err)
+	}
+
+	stateDir := filepath.Join(t.TempDir(), "state")
+	controller := startController(t, bundledBinary, stateDir)
+	waitForReady(t, bundledBinary, stateDir, controller)
+	controllerSecret := readSecret(t, stateDir)
+	web := startWebWithWorkDir(t, bundledBinary, stateDir, "", t.TempDir())
+	rootURL, origin, bootstrap := parseWebReadyURL(t, waitForWebReady(t, web))
+	client := &http.Client{Timeout: 3 * time.Second}
+	root, err := client.Get(rootURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootBody, err := io.ReadAll(root.Body)
+	_ = root.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root.StatusCode != http.StatusOK || !strings.Contains(string(rootBody), `id="root"`) {
+		t.Fatalf("bundled UI root: status=%d body=%s error=%v", root.StatusCode, rootBody, err)
+	}
+	request, err := http.NewRequest(http.MethodPost, rootURL+"api/session", strings.NewReader(`{"bootstrap":"`+bootstrap+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", origin)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNoContent || len(response.Cookies()) != 1 {
+		t.Fatalf("bundled UI session: status=%d cookies=%d", response.StatusCode, len(response.Cookies()))
+	}
+	request, err = http.NewRequest(http.MethodGet, rootURL+"api/coverage", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.AddCookie(response.Cookies()[0])
+	coverage, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coverageBody, err := io.ReadAll(coverage.Body)
+	_ = coverage.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverage.StatusCode != http.StatusOK || strings.Contains(string(coverageBody), controllerSecret) || strings.Contains(string(coverageBody), bootstrap) || strings.Contains(string(coverageBody), response.Cookies()[0].Value) {
+		t.Fatalf("bundled UI coverage: status=%d body=%s error=%v", coverage.StatusCode, coverageBody, err)
+	}
+	stopWithInterrupt(t, web)
+	status := runCLIJSON[controllerStatus](t, bundledBinary, stateDir, "status")
+	if status.PID != controller.cmd.Process.Pid {
+		t.Fatalf("stopping bundled web affected controller: %+v", status)
+	}
+	stopWithInterrupt(t, controller)
+}
+
 func startWeb(t *testing.T, binary, stateDir, uiDir string) *runningController {
+	return startWebWithWorkDir(t, binary, stateDir, uiDir, "")
+}
+
+func startWebWithWorkDir(t *testing.T, binary, stateDir, uiDir, workDir string) *runningController {
 	t.Helper()
 	logDir := t.TempDir()
 	stdoutPath := filepath.Join(logDir, "web-stdout.log")
@@ -383,7 +487,12 @@ func startWeb(t *testing.T, binary, stateDir, uiDir string) *runningController {
 		_ = stdout.Close()
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "web", "--state-dir", stateDir, "--listen", "127.0.0.1:0", "--ui-dir", uiDir)
+	args := []string{"web", "--state-dir", stateDir, "--listen", "127.0.0.1:0"}
+	if uiDir != "" {
+		args = append(args, "--ui-dir", uiDir)
+	}
+	cmd := exec.Command(binary, args...)
+	cmd.Dir = workDir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {

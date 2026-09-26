@@ -14,7 +14,7 @@ The default GitHub Actions workflow runs native macOS jobs and Linux checks and 
 - macOS arm64 cgo-free cross-compilation for the controller and Darwin-specific packages; and
 - Foundation feasibility harness tests.
 
-The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the real `cozysoc` executable and runs the E2E package separately so the black-box step is visible as its own gate.
+The process E2E tests live under `tests/e2e`. Ordinary `go test ./...` skips them unless `COZYSOC_E2E_BINARY` points to a built controller binary. CI builds the unsigned developer bundle with `scripts/build-dev-bundle.sh`, then runs the E2E package against its executable and UI assets so the black-box step is visible as its own gate. The web process test also launches a relocated copy without `--ui-dir` from an unrelated working directory and checks session/credential separation and controller survival when web exits.
 
 The browser journeys use mocked typed API responses or the explicitly synthetic demo and a production Vite build. From `ui/`, run `npx playwright install --only-shell chromium` once, then `npm run test:browser`. They verify rendered setup/navigation/device-detail behavior and automated WCAG A/AA checks, but do not validate a real controller session, screen-reader use, or a usability session; process E2E and user testing own those separate claims.
 

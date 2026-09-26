@@ -33,6 +33,43 @@ func TestValidateLoopbackListen(t *testing.T) {
 	}
 }
 
+func TestDefaultWebAssetsPrefersBundleAndFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	executable := filepath.Join(root, "cozysoc")
+	if err := os.WriteFile(executable, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := defaultWebAssets(executable); err != nil || got != defaultWebUIDir {
+		t.Fatalf("unbundled UI = %q, %v; want %q", got, err, defaultWebUIDir)
+	}
+	if err := os.Mkdir(filepath.Join(root, "ui"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := defaultWebAssets(executable)
+	if err != nil || got != filepath.Join(root, "ui", "dist") {
+		t.Fatalf("bundled UI = %q, %v", got, err)
+	}
+	if err := validateUIDir(got); err == nil {
+		t.Fatal("incomplete bundled UI unexpectedly passed validation")
+	}
+	if err := os.Mkdir(got, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(got, "index.html"), []byte("<div id=\"root\"></div>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateUIDir(got); err != nil {
+		t.Fatalf("complete bundled UI failed validation: %v", err)
+	}
+	link := filepath.Join(t.TempDir(), "cozysoc")
+	if err := os.Symlink(executable, link); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := defaultWebAssets(link); err != nil || got != filepath.Join(root, "ui", "dist") {
+		t.Fatalf("symlinked executable UI = %q, %v", got, err)
+	}
+}
+
 func TestWebHandlerSessionBootstrapIsOneTimeAndHttpOnly(t *testing.T) {
 	uiDir := testUIDir(t)
 	const host = "127.0.0.1:43821"

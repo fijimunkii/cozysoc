@@ -42,6 +42,8 @@ go run ./cmd/cozysoc dev
 
 Open the authenticated loopback URL printed by the command. `dev` can start a temporary controller and stops only the controller it owns when it exits. Use separate `serve` and `web` processes when exercising independent lifetimes; this is not an installer or proof of reboot/sleep behavior. Starting the UI does not enable Device Watch or authorize active checks. See the [command guide](docs/development/unified-cli.md) and [controller guide](docs/development/controller.md) for explicit enrollment and capability commands.
 
+To build a relocatable **unsigned developer bundle**, run `bash scripts/build-dev-bundle.sh /path/to/new/bundle`. The destination must not already exist. It contains `cozysoc`, the built `ui/dist/` assets, and `BUILD-INFO.txt`. Run `/path/to/new/bundle/cozysoc web` from any working directory to connect to an independently running controller; `--ui-dir` still selects a specific asset directory. This bundle is for local development and does not register a service or establish platform release support.
+
 ## A core design rule: coverage must be honest
 
 Discovery is not the same as traffic visibility, and a running sensor is not proof that it can see everything.
