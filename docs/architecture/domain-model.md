@@ -151,6 +151,17 @@ A user-facing correlation of related findings/observations.
 
 Correlation must record **why** items were grouped. Uncertain relationships remain separate rather than being merged for a cleaner UI.
 
+The controller's current correlation primitive accepts normalized findings with
+an explicit identity authority and source family. It can group `new-device`,
+`suspicious-connection`, and `tripwire` findings only when they share a
+user-confirmed device, network scope, and 15-minute UTC window. Its stable ID
+survives replay and late arrival within that window; source evidence is retained
+by reference. Inferred identity and other categories stay separate. Correlated
+severity is the maximum input severity; confidence is never added across sources
+and remains unknown if any grouped input has unknown confidence. This primitive
+does not yet persist incidents, deliver notifications, or establish that any
+finding represents a compromise.
+
 An incident answers:
 
 1. what happened;
