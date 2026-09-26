@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadDeviceDetailFromWeb, parseDeviceDetail } from "./detail";
+import { deviceEvidenceExportJSON, loadDeviceDetailFromWeb, parseDeviceDetail, type DeviceDetail } from "./detail";
 
 const fixture = {
   scope_id: "scope.home", as_of: "2026-09-10T13:00:00Z", truncated: false,
@@ -29,6 +29,22 @@ describe("device detail contract", () => {
 	expect(corrected.evidence[0]?.original_device_id).toBe("device.earlier");
 	expect(() => parseDeviceDetail({ ...fixture, evidence: [{ ...fixture.evidence[0], original_device_id: "../outside" }] })).toThrow();
 	expect(() => parseDeviceDetail({ ...fixture, evidence: [{ ...fixture.evidence[0], original_device_id: "device.one" }] })).toThrow();
+  });
+
+  it("exports only the validated bounded snapshot, with its original read time", () => {
+    const untrusted = {
+      ...fixture,
+      credential: "hidden root field",
+      device: { ...fixture.device, credential: "hidden device field" },
+      evidence: [{ ...fixture.evidence[0], credential: "hidden evidence field", source: { ...fixture.evidence[0]!.source, credential: "hidden source field" } }],
+    };
+    const detail = parseDeviceDetail(untrusted);
+    const json = deviceEvidenceExportJSON(untrusted as unknown as DeviceDetail);
+    expect(json).not.toContain("credential");
+    const exported = JSON.parse(json);
+    expect(exported).toEqual({ format: "cozysoc-device-evidence", version: 1, snapshot: detail });
+    expect(exported.snapshot.as_of).toBe("2026-09-10T13:00:00Z");
+    expect(exported.snapshot.truncated).toBe(false);
   });
 
   it("requests only the device id and maps scoped 404", async () => {

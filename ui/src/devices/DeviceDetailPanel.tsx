@@ -1,12 +1,23 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { DeviceDetail, DeviceIdentityEvidence } from "./detail";
+import { deviceEvidenceExportJSON, type DeviceDetail, type DeviceIdentityEvidence } from "./detail";
 
 export function DeviceDetailPanel({ detail, onBack }: { detail: DeviceDetail; onBack: () => void }) {
   const label = detail.device.user_label ?? "Unlabeled device";
   const heading = useRef<HTMLHeadingElement>(null);
+  const [exportJSON, setExportJSON] = useState<string | null>(null);
 
   useEffect(() => { heading.current?.focus(); }, []);
+
+  const saveExport = () => {
+    if (exportJSON === null) return;
+    const url = URL.createObjectURL(new Blob([exportJSON], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "cozysoc-device-evidence.json";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   return (
     <section className="device-detail" aria-labelledby="device-detail-title">
@@ -34,6 +45,16 @@ export function DeviceDetailPanel({ detail, onBack }: { detail: DeviceDetail; on
             {detail.evidence.map((item, index) => <EvidenceItem key={`${item.kind}-${item.value}-${item.observed_at}-${index}`} item={item} />)}
           </ul>
         )}
+      </div>
+
+      <div className="product-card device-evidence-export">
+        <h3>Save this evidence snapshot</h3>
+        <p>This is the evidence shown for one device at the recorded read time, limited to the most recent 100 identity records. It can include your device label, addresses and source identifiers. Cozy SOC does not upload it; choose a safe place to save it. It is not a backup or complete history.</p>
+        <button type="button" className="secondary-action" onClick={() => setExportJSON(deviceEvidenceExportJSON(detail))}>Review JSON before saving</button>
+        {exportJSON !== null ? <>
+          <pre className="device-evidence-export-preview" aria-label="Device evidence export preview" tabIndex={0}>{exportJSON}</pre>
+          <button type="button" className="secondary-action" onClick={saveExport}>Save reviewed JSON</button>
+        </> : null}
       </div>
     </section>
   );
