@@ -50,3 +50,17 @@ func adguardProjection(connection adguard.Connection) api.AdGuardConnection {
 		Running: status.Running, ProtectionEnabled: status.ProtectionEnabled, FilteringEnabled: status.FilteringEnabled,
 		QueryLogEnabled: status.QueryLogEnabled, AnonymizedClients: status.AnonymizedClients}
 }
+
+func (h *controllerAPIHandler) CollectAdGuard(ctx context.Context, params api.AdGuardCollectParams) (api.AdGuardCollection, error) {
+	if h.adguardCollector == nil {
+		return api.AdGuardCollection{}, errors.New("AdGuard Home collection is unavailable")
+	}
+	result, err := h.adguardCollector.Collect(ctx, params.ScopeID)
+	if err != nil {
+		return api.AdGuardCollection{}, err
+	}
+	return api.AdGuardCollection{ScopeID: result.ScopeID, QueryLogEnabled: result.QueryLogEnabled,
+		Read: result.Read, Inserted: result.Inserted, Deduplicated: result.Deduplicated + result.Skipped.Duplicate,
+		SkippedOutsideScope: result.Skipped.OutsideScope, SkippedWithoutClientIP: result.Skipped.WithoutClientIP,
+		SkippedOutsideWindow: result.Skipped.OutsideWindow, LimitReached: result.LimitReached}, nil
+}

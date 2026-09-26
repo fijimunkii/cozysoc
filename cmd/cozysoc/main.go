@@ -59,6 +59,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runAdGuardStatusCommand(ctx, args[1:], stdout, stderr)
 	case "adguard-disconnect":
 		return runAdGuardDisconnectCommand(ctx, args[1:], stdout, stderr)
+	case "adguard-collect":
+		return runAdGuardCollectCommand(ctx, args[1:], stdout, stderr)
 	case "status":
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
@@ -140,6 +142,7 @@ Usage:
   cozysoc adguard-connect [--state-dir PATH] --endpoint IP_ORIGIN [--username USER] (interactive macOS only)
   cozysoc adguard-status [--state-dir PATH]
   cozysoc adguard-disconnect [--state-dir PATH] (interactive macOS only)
+  cozysoc adguard-collect [--state-dir PATH] ENROLLED_SCOPE_ID (interactive macOS only)
   cozysoc status [--state-dir PATH]
   cozysoc health [--state-dir PATH]
   cozysoc capabilities [--state-dir PATH]
@@ -290,6 +293,11 @@ func runServe(ctx context.Context, args []string, stdout, stderr *os.File) error
 		return fmt.Errorf("initialize AdGuard Home connection: %w", err)
 	}
 	apiHandler.adguardConnections = adguardConnections
+	adguardCollector, err := adguard.NewCollector(adguardConnections, store, ingestor, devicewatch.NewSystemInterfaceInspector())
+	if err != nil {
+		return fmt.Errorf("initialize AdGuard Home observation: %w", err)
+	}
+	apiHandler.adguardCollector = adguardCollector
 	apiHandler.gatewayChecksEnabled = *experimentalGateway
 	apiHandler.httpsChecksEnabled = *experimentalHTTPS
 	apiHandler.resolverChecksEnabled = *experimentalResolver

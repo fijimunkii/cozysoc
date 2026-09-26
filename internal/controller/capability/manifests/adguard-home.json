@@ -32,12 +32,12 @@
   },
   "health": {"process_required": false, "verification_signals": ["endpoint-authenticated", "version-supported", "observation-freshness"], "coverage_requires_verification": true},
   "data_handling": {
-    "activation": "Connection setup reads service state after deliberate approval; it does not start DNS collection or change external settings.",
-    "sources": ["Approved external AdGuard Home status, filtering and query-log configuration GET endpoints."],
-    "stored": ["External ownership, approved origin, credential reference and control audit records."],
-    "excluded": ["Credentials in config or diagnostics, DNS query history during setup, and all external service configuration changes."]
+    "activation": "Connection setup reads service state after deliberate approval. A separate exact-scope terminal approval reads up to 100 recent queries once; there is no background polling or external settings change.",
+    "sources": ["Approved external AdGuard Home status, filtering and query-log configuration GET endpoints.", "Separately approved bounded query-log GET for the selected enrolled network scope."],
+    "stored": ["External ownership, approved origin, credential reference and control audit records.", "Scoped client-IP DNS observations with ephemeral 24-hour retention and content-free collection audits after separate approval."],
+    "excluded": ["Credentials in config or diagnostics, DNS query history during setup, unmatched or anonymized clients, and all external service configuration changes."]
   },
-  "outputs": [{"kind": "integration-status", "schema_version": 1}],
+  "outputs": [{"kind": "integration-status", "schema_version": 1}, {"kind": "dns-query-observation", "schema_version": 1}],
   "deep_links": [],
   "lifecycle": ["preflight", "connect", "verify", "disconnect"]
 }

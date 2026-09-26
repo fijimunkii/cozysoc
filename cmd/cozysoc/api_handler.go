@@ -64,6 +64,10 @@ type adguardConnectionControl interface {
 	Disconnect(context.Context) error
 }
 
+type adguardCollectionControl interface {
+	Collect(context.Context, string) (adguard.CollectionResult, error)
+}
+
 type controllerAPIHandler struct {
 	controller             *core.Controller
 	gatewayRuns            gatewayRunLifecycle
@@ -81,6 +85,7 @@ type controllerAPIHandler struct {
 	networkInspector       devicewatch.InterfaceInspector
 	listScopeCandidates    scopeCandidateLister
 	adguardConnections     adguardConnectionControl
+	adguardCollector       adguardCollectionControl
 	now                    func() time.Time
 }
 

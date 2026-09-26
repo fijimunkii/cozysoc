@@ -25,6 +25,75 @@ type adguardCommandClient interface {
 	DisconnectAdGuard(context.Context) (api.AdGuardConnection, error)
 }
 
+type adguardCollectionClient interface {
+	CollectAdGuard(context.Context, string) (api.AdGuardCollection, error)
+}
+
+var errAdGuardTerminal = errors.New("AdGuard Home commands require a normal-user foreground macOS terminal; pipes and unattended approval are unavailable")
+
+func runAdGuardCollectCommand(ctx context.Context, args []string, stdout, stderr *os.File) (err error) {
+	fs := flag.NewFlagSet("adguard-collect", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	stateDir := fs.String("state-dir", "", "controller state directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 || !deviceIDPattern.MatchString(fs.Arg(0)) {
+		return errors.New("usage: cozysoc adguard-collect [--state-dir PATH] ENROLLED_SCOPE_ID")
+	}
+	terminal, err := openGatewayTerminal(os.Stdin, stdout)
+	if err != nil {
+		return errAdGuardTerminal
+	}
+	defer func() {
+		if closeErr := terminal.Close(); closeErr != nil && err == nil {
+			err = errors.New("terminal cleanup could not be confirmed")
+		}
+	}()
+	dir, err := resolveStateDir(*stateDir)
+	if err != nil {
+		return err
+	}
+	return performAdGuardCollect(ctx, localapi.NewClient(dir), terminal, fs.Arg(0))
+}
+
+func performAdGuardCollect(ctx context.Context, client adguardCollectionClient, terminal gatewayCheckTerminal, scopeID string) error {
+	if !deviceIDPattern.MatchString(scopeID) {
+		return errors.New("invalid enrolled network scope")
+	}
+	decisionCtx, cancel := adguardCommandDeadline(ctx)
+	defer cancel()
+	disclosure := fmt.Sprintf("\nRead up to 100 recent AdGuard Home DNS queries for enrolled scope %s?\nOnly requests whose visible client IP is inside the scope's current enrolled prefixes will be stored as local evidence for 24 hours. DNS names are private browsing data. Missing/anonymized and out-of-scope clients are skipped. This does not identify a device, prove all clients use this resolver, or change DNS settings. The newest 100-query API limit may leave a history gap.\n", scopeID)
+	if err := terminal.Write(decisionCtx, disclosure); err != nil {
+		return err
+	}
+	if err := terminal.FlushInput(); err != nil {
+		return err
+	}
+	if err := terminal.Write(decisionCtx, "Type collect "+scopeID+" to approve this one read. Anything else declines.\nApproval (default: decline): "); err != nil {
+		return err
+	}
+	line, err := terminal.ReadLine(decisionCtx)
+	if err != nil {
+		return err
+	}
+	if err := gatewayPromptContext(decisionCtx); err != nil {
+		return err
+	}
+	if line != "collect "+scopeID+"\n" {
+		return errors.New("AdGuard Home collection declined")
+	}
+	result, err := client.CollectAdGuard(decisionCtx, scopeID)
+	if err != nil {
+		return adguardCommandError(err)
+	}
+	encoded, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return errors.New("unable to show AdGuard Home collection result")
+	}
+	return terminal.Write(decisionCtx, string(encoded)+"\n")
+}
+
 func runAdGuardStatusCommand(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	fs := flag.NewFlagSet("adguard-status", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -62,7 +131,7 @@ func runAdGuardConnectCommand(ctx context.Context, args []string, stdout, stderr
 	}
 	terminal, err := openAdGuardTerminal(os.Stdin, stdout)
 	if err != nil {
-		return err
+		return errAdGuardTerminal
 	}
 	defer func() {
 		if closeErr := terminal.Close(); closeErr != nil && err == nil {
@@ -88,7 +157,7 @@ func runAdGuardDisconnectCommand(ctx context.Context, args []string, stdout, std
 	}
 	terminal, err := openAdGuardTerminal(os.Stdin, stdout)
 	if err != nil {
-		return err
+		return errAdGuardTerminal
 	}
 	defer func() {
 		if closeErr := terminal.Close(); closeErr != nil && err == nil {

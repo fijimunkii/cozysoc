@@ -12,12 +12,16 @@ import (
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
 
-const adguardRequestTimeout = 20 * time.Second
+const (
+	adguardRequestTimeout = 20 * time.Second
+	adguardCollectTimeout = 45 * time.Second
+)
 
 type adguardHandler interface {
 	ConnectAdGuard(context.Context, api.AdGuardConnectParams) (api.AdGuardConnection, error)
 	AdGuardStatus(context.Context) (api.AdGuardConnection, error)
 	DisconnectAdGuard(context.Context) (api.AdGuardConnection, error)
+	CollectAdGuard(context.Context, api.AdGuardCollectParams) (api.AdGuardCollection, error)
 }
 
 func (s *Server) handleAdGuard(ctx context.Context, conn net.Conn, request api.Request) {
@@ -27,18 +31,28 @@ func (s *Server) handleAdGuard(ctx context.Context, conn net.Conn, request api.R
 		return
 	}
 	var params api.AdGuardConnectParams
+	var collectParams api.AdGuardCollectParams
 	if request.Method == api.MethodAdGuardConnect {
 		if err := decodeRequiredParams(request.Params, &params); err != nil || params.Endpoint == "" || (params.Username == "") != (params.Password == "") {
 			s.writeError(conn, request.ID, "invalid_request", "invalid AdGuard Home connection parameters")
 			return
 		}
+	} else if request.Method == api.MethodAdGuardCollect {
+		if err := decodeRequiredParams(request.Params, &collectParams); err != nil || collectParams.ScopeID == "" {
+			s.writeError(conn, request.ID, "invalid_request", "invalid AdGuard Home collection scope")
+			return
+		}
 	} else if s.rejectUnexpectedParams(conn, request) {
 		return
 	}
-	_ = conn.SetDeadline(time.Now().Add(adguardRequestTimeout))
-	requestCtx, cancel := context.WithTimeout(ctx, adguardRequestTimeout)
+	timeout := adguardRequestTimeout
+	if request.Method == api.MethodAdGuardCollect {
+		timeout = adguardCollectTimeout
+	}
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var result api.AdGuardConnection
+	var result any
 	var err error
 	switch request.Method {
 	case api.MethodAdGuardConnect:
@@ -47,6 +61,8 @@ func (s *Server) handleAdGuard(ctx context.Context, conn net.Conn, request api.R
 		result, err = handler.AdGuardStatus(requestCtx)
 	case api.MethodAdGuardDisconnect:
 		result, err = handler.DisconnectAdGuard(requestCtx)
+	case api.MethodAdGuardCollect:
+		result, err = handler.CollectAdGuard(requestCtx, collectParams)
 	}
 	if err != nil {
 		s.writeAdGuardError(conn, request.ID, err)
@@ -72,6 +88,14 @@ func (s *Server) writeAdGuardError(conn net.Conn, id string, err error) {
 		s.writeError(conn, id, "precondition_failed", "AdGuard Home version is unsupported")
 	case errors.Is(err, adguard.ErrNotRunning):
 		s.writeError(conn, id, "precondition_failed", "AdGuard Home is not running")
+	case errors.Is(err, adguard.ErrNotConnected):
+		s.writeError(conn, id, "precondition_failed", "AdGuard Home is not connected")
+	case errors.Is(err, adguard.ErrObservationScope):
+		s.writeError(conn, id, "precondition_failed", "enrolled network scope is unavailable or changed")
+	case errors.Is(err, adguard.ErrObservationIngestion):
+		s.writeError(conn, id, "unavailable", "AdGuard Home collection may be partial; check storage health before an explicit retry")
+	case errors.Is(err, adguard.ErrObservationAudit):
+		s.writeError(conn, id, "audit_unconfirmed", "AdGuard Home collection audit could not be confirmed; read or storage outcome may be partial")
 	case errors.Is(err, secretstore.ErrLocked), errors.Is(err, secretstore.ErrAccessDenied), errors.Is(err, secretstore.ErrUnavailable), errors.Is(err, secretstore.ErrUnsupported), errors.Is(err, secretstore.ErrNotFound):
 		s.writeError(conn, id, "precondition_failed", "protected credential storage is unavailable")
 	case errors.Is(err, adguard.ErrUnavailable), errors.Is(err, adguard.ErrResponse):
