@@ -105,6 +105,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runDeviceSplitsCommand(ctx, args[1:], stdout, stderr)
 	case "network-enroll":
 		return runNetworkEnrollCommand(ctx, args[1:], stdout, stderr)
+	case "network-retire":
+		return runNetworkRetireCommand(ctx, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(stdout, usageText())
 		return nil
@@ -158,6 +160,7 @@ Usage:
   cozysoc device-unsplit [--state-dir PATH] OBSERVATION_ID
   cozysoc device-splits [--state-dir PATH]
   cozysoc network-enroll [--state-dir PATH] INTERFACE
+  cozysoc network-retire [--state-dir PATH] SCOPE_ID
 
 The controller mode uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.
 

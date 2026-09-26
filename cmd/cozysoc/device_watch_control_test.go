@@ -115,6 +115,40 @@ func TestDeviceWatchControlPersistsLiveEnableDisableAndAudit(t *testing.T) {
 	}
 }
 
+func TestDeviceWatchRetirementRequiresStoppedIntentAndFreshScope(t *testing.T) {
+	control, _, driver, store := newDeviceWatchControlHarness(t, true)
+	ctx := context.Background()
+	scopes, err := store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil || len(scopes) != 1 {
+		t.Fatalf("fixture scopes=%+v err=%v", scopes, err)
+	}
+	id := scopes[0].ID
+	if _, err := control.Enable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.RetireScope(ctx, id); !errors.Is(err, localapi.ErrMutationPrecondition) {
+		t.Fatalf("retirement while enabled: %v", err)
+	}
+	if _, err := control.Disable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	driver.active = true
+	if _, err := control.RetireScope(ctx, id); !errors.Is(err, localapi.ErrMutationPrecondition) {
+		t.Fatalf("retirement while runtime active: %v", err)
+	}
+	driver.active = false
+	if _, err := control.RetireScope(ctx, "scope.other"); !errors.Is(err, localapi.ErrMutationConflict) {
+		t.Fatalf("stale retirement: %v", err)
+	}
+	retired, err := control.RetireScope(ctx, id)
+	if err != nil || !retired.Changed || retired.ScopeID != id {
+		t.Fatalf("retirement=%+v err=%v", retired, err)
+	}
+	if _, err := control.Enable(ctx); !errors.Is(err, localapi.ErrMutationPrecondition) {
+		t.Fatalf("old scope re-enabled: %v", err)
+	}
+}
+
 func TestDeviceWatchControlBlockedEnableDoesNotPersistIntent(t *testing.T) {
 	control, manager, driver, store := newDeviceWatchControlHarness(t, false)
 	_, err := control.Enable(context.Background())

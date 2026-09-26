@@ -62,6 +62,9 @@ describe("createWebSetupClient", () => {
           changed: true,
         });
       }
+      if (path === "/api/networks/retire") {
+        return jsonResponse({ scope_id: "scope.home", changed: true });
+      }
       if (path === "/api/device-watch/enable") {
         return jsonResponse({
           scope_id: "scope.home",
@@ -76,16 +79,18 @@ describe("createWebSetupClient", () => {
 
     const client = createWebSetupClient();
     await client.enrollNetwork(networkResponse.candidates[0]!);
+    await client.retireNetwork("scope.home");
     await client.enableDeviceWatch();
 
     expect(calls.filter((call) => call.path === "/api/session")).toHaveLength(1);
     const mutations = calls.filter((call) => call.path !== "/api/session");
-    expect(mutations).toHaveLength(2);
+    expect(mutations).toHaveLength(3);
     for (const call of mutations) {
       expect(new Headers(call.init?.headers).get("X-Cozy-CSRF")).toBe("ccccccccccccccccccccccccccccccccccccccccccc");
       expect(call.init?.credentials).toBe("same-origin");
     }
     expect(JSON.parse(String(mutations[0]?.init?.body))).toEqual({ interface_name: "en0", expected: networkResponse.candidates[0] });
+    expect(JSON.parse(String(mutations[1]?.init?.body))).toEqual({ scope_id: "scope.home" });
   });
 
   it("preserves typed browser mutation errors", async () => {

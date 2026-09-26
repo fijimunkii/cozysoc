@@ -31,6 +31,11 @@ export interface NetworkEnrollResult extends EnrolledNetwork {
   changed: boolean;
 }
 
+export interface NetworkRetireResult {
+  scope_id: string;
+  changed: boolean;
+}
+
 export interface DeviceWatchControlResult {
   scope_id?: string;
   changed: boolean;
@@ -44,6 +49,7 @@ export interface DeviceWatchControlResult {
 
 export interface SetupClient {
   enrollNetwork(reviewed: NetworkInterface): Promise<NetworkEnrollResult>;
+  retireNetwork(scopeID: string): Promise<NetworkRetireResult>;
   enableDeviceWatch(): Promise<DeviceWatchControlResult>;
   disableDeviceWatch(): Promise<DeviceWatchControlResult>;
 }
@@ -196,6 +202,12 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Device
         throw new SetupRequestError("invalid_request", "Review a valid local network interface before authorizing it.");
       }
       return parseNetworkEnrollResult(await mutate("/api/networks/enroll", { interface_name: expected.interface_name, expected }));
+    },
+    async retireNetwork(scopeID: string) {
+      if (!idPattern.test(scopeID)) throw new SetupRequestError("invalid_request", "Review the current network authorization before retiring it.");
+      const value = objectValue(await mutate("/api/networks/retire", { scope_id: scopeID }), "network retirement response");
+      if (value.scope_id !== scopeID || typeof value.changed !== "boolean") throw new SetupRequestError("invalid_response", "Network retirement response did not match the reviewed scope.");
+      return { scope_id: scopeID, changed: value.changed };
     },
     async enableDeviceWatch() {
       return parseDeviceWatchControl(await mutate("/api/device-watch/enable"));

@@ -51,6 +51,66 @@ func TestEnrollDeviceWatchScopeIsIdempotentAuditedAndConflictSafe(t *testing.T) 
 	}
 }
 
+func TestRetireDeviceWatchScopeAuditsAndAllowsFreshEnrollment(t *testing.T) {
+	store, err := Open(t.TempDir(), DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	first, _, err := store.EnrollDeviceWatchScope(ctx, json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.1.0/24"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RetireDeviceWatchScope(ctx, "scope.other"); !errors.Is(err, ErrDeviceWatchScopeChanged) {
+		t.Fatalf("stale retirement: %v", err)
+	}
+	if changed, err := store.RetireDeviceWatchScope(ctx, first.ID); err != nil || !changed {
+		t.Fatalf("retirement changed=%v err=%v", changed, err)
+	}
+	if changed, err := store.RetireDeviceWatchScope(ctx, first.ID); err != nil || changed {
+		t.Fatalf("retry changed=%v err=%v", changed, err)
+	}
+	var count int
+	if err := store.conn.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE kind = 'network-scope-retire' AND json_extract(payload, '$.scope_id') = ?`, first.ID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("retirement audit count=%d err=%v", count, err)
+	}
+	second, changed, err := store.EnrollDeviceWatchScope(ctx, json.RawMessage(`{"device_watch":{"interface_name":"en1","interface_index":8,"prefixes":["10.0.0.0/24"]}}`))
+	if err != nil || !changed || second.ID == first.ID {
+		t.Fatalf("new enrollment scope=%+v changed=%v err=%v", second, changed, err)
+	}
+	if _, err := store.RetireDeviceWatchScope(ctx, first.ID); !errors.Is(err, ErrDeviceWatchScopeChanged) {
+		t.Fatalf("retirement after replacement: %v", err)
+	}
+	active, err := store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil || len(active) != 1 || active[0].ID != second.ID {
+		t.Fatalf("active scopes=%+v err=%v", active, err)
+	}
+}
+
+func TestRetireDeviceWatchScopeRollsBackWhenAuditFails(t *testing.T) {
+	store, err := Open(t.TempDir(), DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	scope, _, err := store.EnrollDeviceWatchScope(ctx, json.RawMessage(`{"device_watch":{"interface_name":"en0","interface_index":7,"prefixes":["192.168.1.0/24"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.conn.ExecContext(ctx, `CREATE TRIGGER reject_network_retirement_audit BEFORE INSERT ON audit_events WHEN NEW.kind = 'network-scope-retire' BEGIN SELECT RAISE(ABORT, 'fixture audit failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := store.RetireDeviceWatchScope(ctx, scope.ID); err == nil || changed {
+		t.Fatalf("audit failure changed=%v err=%v", changed, err)
+	}
+	active, err := store.ListActiveDeviceWatchScopes(ctx)
+	if err != nil || len(active) != 1 || active[0].ID != scope.ID {
+		t.Fatalf("retirement committed without audit: %+v err=%v", active, err)
+	}
+}
+
 func TestEnrollDeviceWatchScopeSerializesConcurrentAuthorization(t *testing.T) {
 	store, err := Open(t.TempDir(), DefaultLimits())
 	if err != nil {

@@ -78,6 +78,7 @@ type webHandler struct {
 	unsplitDevice        deviceUnsplitMutator
 	loadNetworks         networkLoader
 	enrollNetwork        networkEnrollMutator
+	retireNetwork        networkRetireMutator
 	enableDeviceWatch    deviceWatchMutator
 	disableDeviceWatch   deviceWatchMutator
 	csrfToken            string
@@ -395,6 +396,8 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleNetworks(w, r)
 	case "/api/networks/enroll":
 		h.handleNetworkEnroll(w, r)
+	case "/api/networks/retire":
+		h.handleNetworkRetire(w, r)
 	case "/api/device-watch/enable":
 		h.handleDeviceWatchEnable(w, r)
 	case "/api/device-watch/disable":

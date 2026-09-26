@@ -15,8 +15,79 @@ import (
 
 var (
 	ErrActiveDeviceWatchScopeExists = errors.New("an active Device Watch network scope already exists")
+	ErrDeviceWatchScopeChanged      = errors.New("the active Device Watch network scope changed")
 	deviceWatchEnrollmentMu         sync.Mutex
 )
+
+// RetireDeviceWatchScope withdraws one reviewed authorization without deleting
+// its historical evidence. The caller must stop Device Watch before invoking it.
+// The expected ID makes a stale review fail closed; retries of an already
+// retired ID are idempotent only while no replacement is active.
+func (s *Store) RetireDeviceWatchScope(ctx context.Context, expectedID string) (bool, error) {
+	if s == nil || s.conn == nil {
+		return false, fmt.Errorf("storage is unavailable")
+	}
+	if err := validateQueryID("network scope id", expectedID); err != nil {
+		return false, err
+	}
+	deviceWatchEnrollmentMu.Lock()
+	defer deviceWatchEnrollmentMu.Unlock()
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin network retirement transaction: %w", err)
+	}
+	defer tx.Rollback()
+	active, err := listActiveDeviceWatchScopesTx(ctx, tx, 2)
+	if err != nil {
+		return false, err
+	}
+	if len(active) > 1 || len(active) == 1 && active[0].ID != expectedID {
+		return false, ErrDeviceWatchScopeChanged
+	}
+	if len(active) == 0 {
+		var retiredAt sql.NullInt64
+		err := tx.QueryRowContext(ctx, `SELECT retired_at_ns FROM network_scopes WHERE id = ? AND json_type(metadata, '$.device_watch') = 'object'`, expectedID).Scan(&retiredAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNetworkScopeNotFound
+		}
+		if err != nil {
+			return false, fmt.Errorf("resolve retired network scope: %w", err)
+		}
+		if !retiredAt.Valid {
+			return false, ErrDeviceWatchScopeChanged
+		}
+		return false, nil
+	}
+	now := s.now().UTC()
+	if _, err := tx.ExecContext(ctx, `UPDATE network_scopes SET retired_at_ns = ? WHERE id = ? AND retired_at_ns IS NULL`, unixNanos(now), expectedID); err != nil {
+		return false, wrapWrite("retire Device Watch network scope", err)
+	}
+	auditID, err := randomID("audit.network-scope")
+	if err != nil {
+		return false, err
+	}
+	expiresAt, err := s.expiry(domain.RetentionAudit)
+	if err != nil {
+		return false, err
+	}
+	payload, err := json.Marshal(map[string]any{"schema_version": 1, "state": "applied", "scope_id": expectedID})
+	if err != nil {
+		return false, err
+	}
+	event := domain.AuditEvent{ID: auditID, Kind: "network-scope-retire", Actor: "local-os-user", OccurredAt: now, SchemaVersion: 1, Payload: payload, Retention: domain.RetentionAudit}
+	if err := domain.ValidateAuditEvent(event); err != nil {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_events
+		(id, kind, actor, occurred_at_ns, schema_version, payload, retention_class, expires_at_ns)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, event.ID, event.Kind, event.Actor, unixNanos(event.OccurredAt), event.SchemaVersion, string(event.Payload), event.Retention, expiresAt); err != nil {
+		return false, wrapWrite("insert network retirement audit event", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, wrapWrite("commit network retirement transaction", err)
+	}
+	return true, nil
+}
 
 // EnrollDeviceWatchScope creates the single active v0.1 Device Watch scope and
 // its durable audit event atomically. Re-enrolling the exact same metadata is

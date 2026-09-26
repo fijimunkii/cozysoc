@@ -9,7 +9,7 @@ Issue #7 introduced the first production-oriented Cozy SOC process: an independe
 - a versioned configuration file in a private state directory;
 - an independent long-running process with graceful signal shutdown;
 - versioned local read methods including `status`, `health`, `capabilities.list`, `devices.list`, `networks.list`, and `device-watch.coverage`;
-- explicitly allowlisted, controller-authorized mutations (`device.label`, `network.enroll`, `device-watch.enable`, and `device-watch.disable`) rather than a generic write surface;
+- explicitly allowlisted, controller-authorized mutations (`device.label`, `network.enroll`, `network.retire`, `device-watch.enable`, and `device-watch.disable`) rather than a generic write surface;
 - a permissioned Unix-domain socket rather than a TCP/localhost controller listener;
 - single-instance protection through the local socket;
 - bounded request size, deadline, and concurrent-client count;
@@ -47,6 +47,15 @@ go run ./cmd/cozysoc network-enroll --state-dir /tmp/cozysoc-dev INTERFACE
 ```
 
 Enrollment captures the interface name, interface index, and current usable IPv4/IPv6 prefixes at execution time. Loopback, down, and point-to-point/tunnel interfaces fail closed. v0.1 permits one active Device Watch network scope: re-enrolling the exact same binding is an idempotent no-op, while trying to enroll a different network returns a conflict instead of silently replacing authorization.
+
+To change networks, disable Device Watch and then retire the current authorization using the scope ID from `cozysoc networks`:
+
+```bash
+go run ./cmd/cozysoc device-watch-disable --state-dir /tmp/cozysoc-dev
+go run ./cmd/cozysoc network-retire --state-dir /tmp/cozysoc-dev SCOPE_ID
+```
+
+Retirement keeps historical evidence and writes an audit event. Enrolling a replacement and enabling Device Watch are separate steps.
 
 **Enrollment does not enable Device Watch.** To request passive observation after enrollment:
 

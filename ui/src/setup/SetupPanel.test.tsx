@@ -111,6 +111,7 @@ function client(overrides: Partial<SetupClient> = {}): SetupClient {
       interface: candidate,
       changed: true,
     })),
+    retireNetwork: vi.fn(async (scopeID: string) => ({ scope_id: scopeID, changed: true })),
     enableDeviceWatch: vi.fn(async () => control(true)),
     disableDeviceWatch: vi.fn(async () => control(false)),
     ...overrides,
@@ -118,6 +119,23 @@ function client(overrides: Partial<SetupClient> = {}): SetupClient {
 }
 
 describe("SetupPanel", () => {
+  it("reviews retirement only after monitoring stops and then reloads enrollment", async () => {
+    const setup = client();
+    const changed = vi.fn();
+    const reviewCoverage = vi.fn();
+    const { rerender } = render(<SetupPanel data={data({ enabled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(screen.queryByRole("button", { name: "Change home network" })).toBeNull();
+    rerender(<SetupPanel data={data({ enrolled: true })} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    fireEvent.click(screen.getByRole("button", { name: "Change home network" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Retire this network authorization?" }));
+    expect(screen.getByText(/Historical evidence remains/)).toBeTruthy();
+    expect(setup.retireNetwork).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Retire this authorization" }));
+    await waitFor(() => expect(setup.retireNetwork).toHaveBeenCalledWith("scope.home"));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    rerender(<SetupPanel data={data()} client={setup} onChanged={changed} onReviewCoverage={reviewCoverage} />);
+    expect(screen.getByRole("heading", { name: "Choose the home network to authorize" })).toBeTruthy();
+  });
   it("requires an explicit network choice and review before enrollment", async () => {
     const setup = client();
     const changed = vi.fn();

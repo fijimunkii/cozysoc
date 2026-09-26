@@ -27,6 +27,7 @@ const (
 	MethodDeviceSplits        = "device.splits"
 	MethodNetworksList        = "networks.list"
 	MethodNetworkEnroll       = "network.enroll"
+	MethodNetworkRetire       = "network.retire"
 	MethodDeviceWatchCoverage = "device-watch.coverage"
 	MethodDeviceWatchEnable   = "device-watch.enable"
 	MethodDeviceWatchDisable  = "device-watch.disable"
@@ -264,6 +265,15 @@ type NetworkEnrollResult struct {
 	EnrolledAt time.Time        `json:"enrolled_at"`
 	Interface  NetworkInterface `json:"interface"`
 	Changed    bool             `json:"changed"`
+}
+
+type NetworkRetireParams struct {
+	ScopeID string `json:"scope_id"`
+}
+
+type NetworkRetireResult struct {
+	ScopeID string `json:"scope_id"`
+	Changed bool   `json:"changed"`
 }
 
 type DeviceWatchCoverageSource struct {
