@@ -45,7 +45,8 @@ class BundleMetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no top-level license"):
                 metadata.license_texts(package)
             (package / "LICENSE").write_text("MIT\n")
-            self.assertEqual(metadata.license_texts(package), [("LICENSE", "MIT\n")])
+            (package / "PATENTS").write_text("Patent grant\n")
+            self.assertEqual(metadata.license_texts(package), [("LICENSE", "MIT\n"), ("PATENTS", "Patent grant\n")])
 
 
 if __name__ == "__main__":

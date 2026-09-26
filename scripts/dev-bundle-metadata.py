@@ -25,6 +25,22 @@ def go_binary_modules(binary: pathlib.Path) -> list[tuple[str, str]]:
     return sorted(set(modules))
 
 
+def go_toolchain(binary: pathlib.Path) -> tuple[str, pathlib.Path]:
+    environment = subprocess.run(
+        ["go", "env", "GOVERSION", "GOROOT"],
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    if len(environment) != 2 or not environment[0] or not environment[1]:
+        raise ValueError("Go toolchain identity is unavailable")
+    header = subprocess.run(
+        ["go", "version", "-m", str(binary)],
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()[0]
+    if not header.endswith(": " + environment[0]):
+        raise ValueError("Go toolchain does not match the built executable")
+    return environment[0], pathlib.Path(environment[1])
+
+
 def go_module_directories() -> dict[tuple[str, str], pathlib.Path]:
     output = subprocess.run(
         ["go", "list", "-m", "-json", "all"],
@@ -80,7 +96,7 @@ def license_texts(directory: pathlib.Path) -> list[tuple[str, str]]:
     files = sorted(
         path for path in directory.iterdir()
         if path.is_file() and not path.is_symlink()
-        and path.name.upper().startswith(("LICENSE", "COPYING", "NOTICE"))
+        and path.name.upper().startswith(("LICENSE", "COPYING", "NOTICE", "PATENTS"))
     )
     if not files:
         raise ValueError(f"dependency has no top-level license or notice: {directory.name}")
@@ -91,9 +107,12 @@ def create(binary: pathlib.Path, lockfile: pathlib.Path, node_modules: pathlib.P
     if not binary.is_file() or not bundle.is_dir() or binary.parent != bundle:
         raise ValueError("expected the built executable inside the bundle")
     directories = go_module_directories()
-    dependencies = []
+    go_version, go_root = go_toolchain(binary)
+    dependencies = [{"type": "library", "name": "Go standard library", "version": go_version}]
     notices = ["Third-party notices for the unsigned Cozy SOC developer bundle.\n",
-               "This lists Go modules embedded in the executable and production npm packages for the browser UI.\n"]
+               "This lists the Go standard library and modules embedded in the executable, plus production npm packages for the browser UI.\n"]
+    for filename, content in license_texts(go_root):
+        notices.append(f"\n{'=' * 72}\nGo standard library: {go_version}\nSource file: {filename}\n{'=' * 72}\n{content.rstrip()}\n")
     for name, version in go_binary_modules(binary):
         directory = directories.get((name, version))
         if directory is None:
