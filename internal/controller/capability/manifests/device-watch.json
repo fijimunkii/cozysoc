@@ -63,7 +63,7 @@
     "coverage_requires_verification": true
   },
   "data_handling": {
-    "activation": "Collection starts only after network enrollment and separate Device Watch enablement.",
+    "activation": "Collection starts only after network enrollment and separate Device Watch enablement. Device Watch sends no discovery probes or scans.",
     "sources": ["Local macOS ARP and IPv6 neighbor caches for the enrolled network interface."],
     "stored": [
       "Observed IP and MAC addresses with source and time.",
@@ -72,7 +72,7 @@
     ],
     "excluded": [
       "Packet payloads and browsing history.",
-      "Discovery probes or scans sent by Device Watch."
+      "Responses from active discovery probes or scans."
     ]
   },
   "outputs": [

@@ -21,10 +21,10 @@ export const demoCapabilitiesRaw = {
     provenance: { kind: "first-party", license: "MIT", version_policy: "Ships with the Cozy SOC controller and follows the controller release version." },
     health: { process_required: false, verification_signals: ["network-scope-enrolled", "observation-freshness", "sensor-operational", "ingestion-health", "storage-health"], coverage_requires_verification: true },
     data_handling: {
-      activation: "Collection starts only after network enrollment and separate Device Watch enablement.",
+      activation: "Collection starts only after network enrollment and separate Device Watch enablement. Device Watch sends no discovery probes or scans.",
       sources: ["Local macOS ARP and IPv6 neighbor caches for the enrolled network interface."],
       stored: ["Observed IP and MAC addresses with source and time.", "Temporal device associations and presence evidence; labels when you add them.", "Coverage, health, and control audit records."],
-      excluded: ["Packet payloads and browsing history.", "Discovery probes or scans sent by Device Watch."],
+      excluded: ["Packet payloads and browsing history.", "Responses from active discovery probes or scans."],
     },
     lifecycle: ["preflight", "enable", "verify", "disable"],
     deep_link_count: 0,
