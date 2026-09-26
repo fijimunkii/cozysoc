@@ -147,6 +147,18 @@ func TestDeviceWatchRetirementRequiresStoppedIntentAndFreshScope(t *testing.T) {
 	if _, err := control.Enable(ctx); !errors.Is(err, localapi.ErrMutationPrecondition) {
 		t.Fatalf("old scope re-enabled: %v", err)
 	}
+	metadata, err := devicewatch.EncodeScopeMetadata(devicewatch.ScopeBinding{InterfaceName: "en1", InterfaceIndex: 8, Prefixes: []string{"10.0.0.0/24"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, _, err := store.EnrollDeviceWatchScope(ctx, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled, err := control.Enable(ctx)
+	if err != nil || enabled.ScopeID != replacement.ID || !enabled.Active {
+		t.Fatalf("replacement enable=%+v err=%v", enabled, err)
+	}
 }
 
 func TestDeviceWatchControlBlockedEnableDoesNotPersistIntent(t *testing.T) {
