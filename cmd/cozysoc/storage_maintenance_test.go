@@ -22,6 +22,51 @@ type fakeStorageMaintenanceStore struct {
 	times   []time.Time
 }
 
+type blockingStartupMaintenanceStore struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingStartupMaintenanceStore) Health(context.Context) (storage.Health, error) {
+	return storage.Health{QuotaState: storage.HealthCurrent, FilesystemState: storage.FilesystemCapacityCurrent}, nil
+}
+
+func (s *blockingStartupMaintenanceStore) PruneEvidenceBatchExpired(context.Context, time.Time, int, int) (*storage.EvidenceBatchRetentionResult, error) {
+	close(s.started)
+	<-s.release
+	return &storage.EvidenceBatchRetentionResult{}, nil
+}
+
+func TestStartupMaintenanceFinishesBeforeRequestsCanBeServed(t *testing.T) {
+	store := &blockingStartupMaintenanceStore{started: make(chan struct{}), release: make(chan struct{})}
+	returned := make(chan struct{})
+	go func() {
+		stop, err := startStorageMaintenance(context.Background(), store, nil)
+		if err == nil {
+			stop()
+		}
+		close(returned)
+	}()
+	select {
+	case <-store.started:
+	case <-time.After(2 * time.Second):
+		close(store.release)
+		t.Fatal("startup retention pass never began")
+	}
+	select {
+	case <-returned:
+		close(store.release)
+		t.Fatal("maintenance returned before its first pass completed")
+	default:
+	}
+	close(store.release)
+	select {
+	case <-returned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("maintenance did not finish after startup pass")
+	}
+}
+
 func (f *fakeStorageMaintenanceStore) Health(context.Context) (storage.Health, error) {
 	index := f.health
 	f.health++
