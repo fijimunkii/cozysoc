@@ -34,8 +34,25 @@ describe("DevicesPage labels", () => {
     const onChanged = vi.fn();
     render(<DevicesPage devices={devices} labelClient={client(labelDevice)} onChanged={onChanged} />);
     fireEvent.click(screen.getByRole("button", { name: "Clear label" }));
+    expect(labelDevice).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: "Clear label review" }).textContent).toContain("older audit entries may still contain past label text");
+    fireEvent.click(screen.getByRole("button", { name: "Keep label" }));
+    expect(labelDevice).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Clear label" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm clear label" }));
     await waitFor(() => expect(labelDevice).toHaveBeenCalledWith("device.one", ""));
     expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a stale clear review after the label changes", () => {
+    const labelDevice = vi.fn();
+    const { rerender } = render(<DevicesPage devices={devices} labelClient={client(labelDevice)} onChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear label" }));
+    const changed = parseDeviceList({ ...devices, devices: [{ ...devices.devices[0]!, user_label: "Kitchen TV" }] });
+    rerender(<DevicesPage devices={changed} labelClient={client(labelDevice)} onChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm clear label" }));
+    expect(labelDevice).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("The label changed");
   });
 
   it("keeps a scoped not-found error local to the row", async () => {

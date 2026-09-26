@@ -32,6 +32,9 @@
 
 .device-label-actions { min-width: 150px; }
 .device-label-actions .quiet-button { display: block; width: 100%; margin-bottom: 6px; text-align: left; }
+.device-label-clear-review { min-width: 230px; max-width: 340px; }
+.device-label-clear-review p { margin: 0 0 10px; line-height: 1.45; }
+.device-label-clear-review .device-label-form-actions { flex-wrap: wrap; }
 .device-label-form { min-width: 250px; display: grid; gap: 7px; }
 .device-label-form label { font-size: .76rem; font-weight: 700; color: #565b52; }
 .device-label-form input { width: 100%; box-sizing: border-box; border: 1px solid #c9c7be; border-radius: 10px; background: #fff; color: #2b2f29; padding: 9px 10px; font: inherit; }

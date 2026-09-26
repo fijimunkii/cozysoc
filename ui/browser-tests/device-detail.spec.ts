@@ -101,6 +101,32 @@ test("device evidence export requires a preview and saves only the reviewed fiel
   expect(saved).not.toContain("do-not-export");
 });
 
+test("clearing a label requires an accessible review and keeps saved exports separate", async ({ page }) => {
+  await mockLiveDevice(page, false);
+  const requests: unknown[] = [];
+  await page.route("**/api/session", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ csrf_token: "a".repeat(43) }) }));
+  await page.route("**/api/devices/label", async (route) => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ device_id: "device.one", user_label: "", changed: true }) });
+  });
+  await page.setViewportSize({ width: 320, height: 740 });
+  await openDeviceList(page);
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  await page.getByRole("button", { name: "Clear label" }).press("Enter");
+  await expect(page.getByRole("group", { name: "Clear label review" })).toContainText("older audit entries may still contain past label text");
+  await expect(page.getByRole("group", { name: "Clear label review" })).toBeFocused();
+  expect(requests).toEqual([]);
+  await checkPage(page);
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole("button", { name: "Keep label" }).click();
+  await expect(page.getByRole("button", { name: "Clear label" })).toBeFocused();
+  expect(requests).toEqual([]);
+  await page.getByRole("button", { name: "Clear label" }).click();
+  await page.getByRole("button", { name: "Confirm clear label" }).click();
+  await expect.poll(() => requests).toEqual([{ device_id: "device.one", label: "" }]);
+  await expect(page.locator(".device-label-actions")).toBeFocused();
+});
+
 async function expectNoHorizontalOverflow(page: Page) {
   const widths = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));
   expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
