@@ -174,16 +174,19 @@ For every persisted neighbor observation it creates immutable temporal claims fo
 - the observed IP address; and
 - the observed MAC/link-layer address.
 
-When a new candidate Device is created by the canonical batch path, the same
-transaction also stores one `new-device` finding with informational severity and
-the source observation reference. Its identity authority is explicitly
-`inferred`; the finding payload contains no IP or MAC address. A replay or a
-later observation linked to the same candidate creates no second arrival
-finding. This is a record of a newly observed identity, not proof that a new
-physical device joined or that it is unsafe: MAC rotation, retention gaps, and
-limited host-cache visibility remain possible. It does not trigger a desktop
-notification or establish an incident inbox. Those user-facing controls remain
-#18 work.
+The first successful collection for a scope and sensor establishes a baseline:
+it creates candidate Devices and claims without arrival findings. After a
+recent successful collection, a newly created candidate Device also gets one
+`new-device` finding in the canonical batch transaction, with informational
+severity and the source observation reference. An unavailable collection or a
+gap longer than three minutes resets that baseline. Its identity authority is
+explicitly `inferred`; the finding payload contains no IP or MAC address. A
+replay or a later observation linked to the same candidate creates no second
+arrival finding. This is a record of a newly observed identity, not proof that a
+new physical device joined or that it is unsafe: MAC rotation, retention gaps,
+and limited host-cache visibility remain possible. Retained arrivals appear in
+the local Findings view; they do not trigger desktop notifications or become
+incidents. Those controls remain #18 work.
 
 The IP claim is never used by itself to reconnect a device identity, preventing DHCP/address reuse from merging unrelated devices.
 

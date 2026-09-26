@@ -44,10 +44,22 @@ func newQueuedObservation(o domain.Observation) domain.Observation {
 	return o
 }
 
+func seedArrivalCoverage(t *testing.T, s *storage.Store, o domain.Observation, status string, endedAt time.Time) {
+	t.Helper()
+	if err := s.InsertCoverageSample(context.Background(), domain.CoverageSample{
+		ID: "coverage.arrival.baseline", ScopeID: o.ScopeID, SensorID: o.SensorID,
+		CapabilityID: "device-watch", Status: status, StartedAt: endedAt, EndedAt: endedAt,
+		SchemaVersion: 2, Evidence: json.RawMessage(`{"schema_version":2}`), Retention: domain.RetentionShort,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) {
 	s, db, legacy := legacyRepairFixture(t)
 	i := newBatchQueue(t, s)
 	o := newQueuedObservation(legacy)
+	seedArrivalCoverage(t, s, o, "partial", o.IngestedAt.Add(-time.Minute))
 	cp := domain.IngestionCheckpoint{SensorID: o.SensorID, StreamID: o.SourceStream, Cursor: "first", UpdatedAt: time.Now().UTC()}
 	// The checkpoint is deliberately the last write after device/batch/index work.
 	if _, err := db.Exec(`CREATE TRIGGER reject_batch_checkpoint BEFORE INSERT ON ingestion_checkpoints BEGIN SELECT RAISE(ABORT,'injected checkpoint failure'); END;`); err != nil {
@@ -127,6 +139,7 @@ func TestBatchQueueRealReconciliationReplayAndCheckpointAtomicity(t *testing.T) 
 
 func TestBatchArrivalFindingFailureRollsBackObservationAndDevice(t *testing.T) {
 	s, db, original := legacyRepairFixture(t)
+	seedArrivalCoverage(t, s, original, "partial", original.IngestedAt.Add(-time.Minute))
 	i := newBatchQueue(t, s)
 	if _, err := db.Exec(`CREATE TRIGGER reject_arrival BEFORE INSERT ON findings BEGIN SELECT RAISE(ABORT,'injected finding failure'); END;`); err != nil {
 		t.Fatal(err)
@@ -141,6 +154,7 @@ func TestBatchArrivalFindingFailureRollsBackObservationAndDevice(t *testing.T) {
 
 func TestBatchArrivalFindingIsNotRepeatedForRecentMACContinuity(t *testing.T) {
 	s, db, original := legacyRepairFixture(t)
+	seedArrivalCoverage(t, s, original, "partial", original.IngestedAt.Add(-time.Minute))
 	i := newBatchQueue(t, s)
 	first := newQueuedObservation(original)
 	if result, err := queuedObservation(t, i, first, nil); err != nil || !result.Inserted {
@@ -157,6 +171,34 @@ func TestBatchArrivalFindingIsNotRepeatedForRecentMACContinuity(t *testing.T) {
 	legacyRowCount(t, db, "evidence_batch_lookup", 2)
 	legacyRowCount(t, db, "devices", 1)
 	legacyRowCount(t, db, "findings", 1)
+}
+
+func TestBatchArrivalFindingRequiresContinuousCoverage(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status string
+		gap    time.Duration
+		want   int
+	}{
+		{name: "first collection", want: 0},
+		{name: "continuous collection", status: "partial", gap: time.Minute, want: 1},
+		{name: "unavailable collection", status: "unavailable", gap: time.Minute, want: 0},
+		{name: "stale collection", status: "partial", gap: 4 * time.Minute, want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, db, original := legacyRepairFixture(t)
+			o := newQueuedObservation(original)
+			if tc.status != "" {
+				seedArrivalCoverage(t, s, o, tc.status, o.IngestedAt.Add(-tc.gap))
+			}
+			i := newBatchQueue(t, s)
+			if result, err := queuedObservation(t, i, o, nil); err != nil || !result.Inserted {
+				t.Fatal(result, err)
+			}
+			legacyRowCount(t, db, "devices", 1)
+			legacyRowCount(t, db, "findings", tc.want)
+		})
+	}
 }
 
 func TestBatchQueueLegacyDispatchAndOtherObservationFallback(t *testing.T) {
@@ -229,6 +271,7 @@ func TestBatchQueueCollectorReconcilesBeforeReceipt(t *testing.T) {
 		legacyRowCount(t, db, "devices", 100)
 		legacyRowCount(t, db, "evidence_batch_lookup", (round+1)*100)
 		legacyRowCount(t, db, "coverage_samples", round+1)
+		legacyRowCount(t, db, "findings", 0)
 	}
 	if err := i.Close(context.Background()); err != nil {
 		t.Fatal(err)

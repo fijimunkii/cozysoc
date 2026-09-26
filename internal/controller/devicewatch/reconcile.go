@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	macContinuityHorizon = 7 * 24 * time.Hour
-	claimValidity        = 10 * time.Minute
+	macContinuityHorizon  = 7 * 24 * time.Hour
+	claimValidity         = 10 * time.Minute
+	arrivalCoverageMaxGap = 3 * time.Minute
 )
 
 // IdentityReader can be backed by the same snapshot that will commit a batch.
@@ -297,6 +298,13 @@ func PlanBatchEvidence(ctx context.Context, reader *storage.MixedIdentitySnapsho
 	}
 	result := storage.EvidenceBatchPlan{NewDevice: plan.NewDevice, Claims: plan.Claims, Links: plan.Links}
 	if plan.NewDevice != nil {
+		continuous, err := reader.HasContinuousDeviceWatchCoverage(ctx, observation.ScopeID, observation.SensorID, observation.IngestedAt, arrivalCoverageMaxGap)
+		if err != nil {
+			return storage.EvidenceBatchPlan{}, err
+		}
+		if !continuous {
+			return result, nil
+		}
 		// A new inferred identity can reflect MAC rotation or an observation
 		// gap. It is evidence for an inbox, not a security verdict or a reason
 		// to send a desktop notification on its own.
