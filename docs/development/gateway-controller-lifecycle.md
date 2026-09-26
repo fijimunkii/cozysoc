@@ -2,7 +2,7 @@
 
 Related to #14 and #29. Following the measured-run integration, `cozysoc serve`
 now owns one dormant gateway coordinator and concrete ICMP adapter for its
-lifetime. The later [native consent session](gateway-consent-session.md) reuses
+lifetime. The [native consent session](gateway-consent-session.md) reuses
 this owner only behind explicit experimental macOS startup opt-in. There is no
 automatic retry or scheduling. The [local browser flow](browser-gateway-check.md)
 requires a separate one-shot review and approval. Opening the app, enrolling a network,
@@ -93,6 +93,8 @@ and restart with SQLite preserved. Its fresh controller has no active probe.
 
 The [experimental native consent path](gateway-consent-session.md) now has a
 real-process isolated-lab case and an [interactive command](interactive-gateway-check.md).
-Still next: bounded
-history/assessment reads, and validation of the packaged permission flow. Physical Wi-Fi/NIC behavior, sleep/resume and other hardware gates remain
-separate. Neither #14 nor #29 is completed by this ownership slice.
+The [retained history](gateway-history.md) and
+[diagnosis](retained-quality-diagnosis.md) provide bounded read-only views.
+Validation of the packaged permission flow, physical Wi-Fi/NIC behavior,
+sleep/resume and other hardware gates remains separate. Neither #14 nor #29 is
+completed by this ownership slice.

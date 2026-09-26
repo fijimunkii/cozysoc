@@ -2,7 +2,7 @@
 
 Related to #14 and #29. This follows the
 [route/source metadata preflight](gateway-route-preflight.md) with internal
-one-shot orchestration and a real SQLite audit adapter. The later
+one-shot orchestration and a real SQLite audit adapter. The
 [experimental native consent session](gateway-consent-session.md) exposes one
 connection-bound operation only after explicit macOS controller opt-in. Ordinary
 startup cannot initiate checks; the [local browser flow](browser-gateway-check.md)
@@ -26,15 +26,17 @@ The native preview DTO is not accepted as an approval or a run request. Internal
 cannot replace the target, source, interface, prefixes, or budget when consuming
 it. The ticket has no wire decoder; formatting and JSON redact its value. It is
 not stored in SQLite, and persistent run IDs are separate non-authorizing random
-identifiers. A future authenticated IPC/CSRF flow must deliberately convey and
-bind user consent; this internal boolean is not a replacement for authentication
-or an assertion that a real user has consented in the current product.
+identifiers. The [native session](gateway-consent-session.md) and
+[browser flow](browser-gateway-check.md) deliberately convey the one-shot
+decision through authenticated boundaries. This internal boolean alone is not
+an assertion that a real user consented.
 
 Missing preflight, executor, or audit collaborators leave the control unavailable.
 There is no fallback shell, ping executable, URL, or generic callback supplied by
 clients. A concrete ICMP adapter now exists for the candidate sender, but it is
 owned dormant by the controller lifecycle. Portable tests use packet-free fakes.
-The real route inspector is not promoted to send-binding evidence by this work.
+The route inspector remains metadata; the sender independently verifies its
+socket binding before each send.
 
 ## One-shot state transitions
 

@@ -1,7 +1,7 @@
 # Gateway run measurement integration
 
 Related to #14 and #29. This joins the existing one-shot coordinator to the
-bounded ICMP candidate. A later [controller lifecycle](gateway-controller-lifecycle.md)
+bounded ICMP candidate. The [controller lifecycle](gateway-controller-lifecycle.md)
 owns a dormant-by-default instance. The [native consent session](gateway-consent-session.md)
 requires explicit experimental macOS startup opt-in plus one-shot approval. There
 is a [narrow local browser consent flow](browser-gateway-check.md), but no scheduler
@@ -104,5 +104,7 @@ flow or physical Wi-Fi/NIC certification.
 
 The [experimental native consent/result path](gateway-consent-session.md)
 and [interactive command](interactive-gateway-check.md) now use this model.
-Next: bounded historical reads/assessment. Packaged permission recovery and remaining hardware tests still
-precede broad user-facing controls.
+The [retained history](gateway-history.md) and
+[diagnosis](retained-quality-diagnosis.md) read bounded saved evidence without
+repeating traffic. Packaged permission recovery and remaining hardware tests
+still precede broad user-facing controls.

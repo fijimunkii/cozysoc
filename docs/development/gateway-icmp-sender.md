@@ -5,8 +5,9 @@ Related to #14 and #29. This adds `internal/controller/gatewayicmp` after the
 macOS ICMPv4 transport and packet-free unit tests. It remains off by default.
 A separate [native macOS lab](macos-network-lab.md) exercises real isolated packets.
 The [native consent session](gateway-consent-session.md) can reach it only with
-explicit experimental macOS controller opt-in and connection-bound approval. No
-browser control, scheduler, privilege escalation or new dependency is installed.
+explicit experimental macOS controller opt-in and connection-bound approval. The
+[local browser flow](browser-gateway-check.md) uses that same native consent
+boundary. No scheduler, privilege escalation or new dependency is installed.
 The [interactive command](interactive-gateway-check.md) requires an explicit
 terminal decision through this same gated native path. Existing gateway
 previews still report execution unavailable and consent not granted.
@@ -22,8 +23,9 @@ complete enrolled binding, evidence deadline, and exact fixed profile.
 
 The [gatewayrun adapter](gateway-run-measurements.md) now carries samples through
 one-shot admission, validation and a versioned terminal audit. The
-[controller lifecycle](gateway-controller-lifecycle.md) owns it dormant, with no
-production run entrypoint. Execution completion remains separate from measurement.
+[controller lifecycle](gateway-controller-lifecycle.md) owns it dormant until
+an explicitly approved native or browser one-shot run. Execution completion
+remains separate from measurement.
 The controller-wide one-minute cooldown, one-shot consent and single coordinator
 ownership remain `gatewayrun` responsibilities. A sender instance rejects a
 concurrent sample but is not a cross-instance, process-wide or persistent limiter.
