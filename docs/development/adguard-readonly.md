@@ -21,7 +21,13 @@ and reapproval path. Credentials are supplied as protected
 `secretstore.Secret` values, not URL userinfo. The client does not use proxy
 environment variables.
 
-`Probe` reads only status, filtering state and query-log configuration. It is
+`Probe` reads only status, filtering state and query-log configuration. The
+filtering response can supply bounded source metadata: up to 32 blocklists and
+32 allowlists, with reported name, ID, enablement, rule count and optional
+update time. Source URLs, local file paths and custom rule text are excluded
+from native and browser projections. Missing or malformed source metadata makes
+the inventory unavailable without turning valid service state into an outage.
+An update time is the resolver's report, not a verified list version. `Probe` is
 the validation path for a proposed connection and never retrieves query names
 or client history. `Read` calls that same probe before its bounded query-log
 read.
@@ -41,8 +47,9 @@ disabled local intent for a safe retry. All native results and errors omit
 passwords and upstream response bodies. Browser routes do not expose these
 controls. Authenticated `GET /api/adguard/status` is a separate, user-triggered
 status-only read. Its bounded browser projection omits the configured username,
-password, secret reference and query history. A deliberate admin link uses only
-the validated IP-literal origin and opens the external owner's page in a new tab
+password, secret reference, query history, source URLs and custom rule text. A
+deliberate admin link uses only the validated IP-literal origin and opens the
+external owner's page in a new tab
 without a referrer. A direct link is withheld when the resolver shares the
 web UI's hostname: browser cookies ignore ports, so that navigation could
 send Cozy SOC's HttpOnly session cookie to the other service.
@@ -79,8 +86,8 @@ These observations are private browsing data. The one-shot collection path
 persists selected DNS name, client IP, query type, response status and filtering
 reason in the controller's local evidence store with `ephemeral` retention
 (24 hours by default); configured ephemeral retention may be shorter. Client
-IDs are used only to form opaque deduplication keys and are
-not stored in the observation payload. Query names and addresses never enter
+IDs are used only to form opaque deduplication keys and are not stored in the
+observation payload. Query names and addresses never enter
 index keys, native results, logs, or diagnostics. Retained events state
 `device-identity-unverified`; they do not create device identity claims or
 coverage samples. A matching prefix means only that the reported client IP
@@ -90,9 +97,19 @@ retention/deletion controls remain separate work under #30.
 
 The source contract is the [AdGuard Home v0.107.79 OpenAPI definition](https://github.com/AdguardTeam/AdGuardHome/blob/v0.107.79/openapi/openapi.yaml).
 The API and connection paths are tested against local HTTP and in-memory
-Keychain fixtures, including the canonical durable config manager. A live
-v0.107.79 instance and signed macOS Keychain runtime exercise remain release
-gates under #8 and #29. The one-shot collection path has local HTTP and store
-round-trip fixtures, including deduplication and scope exclusions. This is
-candidate support; live signed runtime, device-history validation, managed
-configuration and coverage verification remain later #16 gates.
+Keychain fixtures, including the canonical durable config manager. The one-shot
+collection path has local HTTP and store round-trip fixtures, including
+deduplication and scope exclusions.
+
+### Isolated instance evidence — 2026-09-26
+
+The official `linux/arm64` v0.107.79 container image at digest
+`sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0`
+was configured in a disposable local Docker lab. Only its web port was
+published to host loopback; DNS port 53 was not published. The actual
+controller client completed a status probe and a bounded empty query-log read.
+It observed two blocklists and the release API's `null` empty allowlist shape;
+both are now handled by the filter inventory parser. This exercise does not
+validate DNS traffic from household clients, signed macOS Keychain access,
+device-history attribution, managed configuration, or coverage. This remains
+candidate support; those release gates stay open under #16 and #29.

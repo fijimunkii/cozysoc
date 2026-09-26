@@ -33,6 +33,18 @@ describe("AdGuardStatusPanel", () => {
     expect(screen.queryByRole("link", { name: "Open AdGuard Home admin UI" })).toBeNull();
   });
 
+  it("shows resolver-reported filter sources without URLs or custom rule text", async () => {
+    const load = vi.fn().mockResolvedValue(parseAdGuardStatus({ connected: true, endpoint: "https://192.0.2.5:3000", version: "v0.107.79", running: true,
+      protection_enabled: true, filtering_enabled: true, query_log_enabled: false, anonymized_clients: false,
+      filter_inventory: { blocklist_total: 1, allowlist_total: 0, truncated: false, sources: [{ kind: "blocklist", id: "7", name: "Example source", enabled: true, rules_count: 12, last_updated: "2026-09-25T12:00:00Z" }] } }));
+    render(<AdGuardStatusPanel mode="live" load={load} />);
+    fireEvent.click(screen.getByRole("button", { name: "Read AdGuard Home status" }));
+    await waitFor(() => expect(screen.getByText("Example source")).toBeTruthy());
+    expect(screen.getByText(/12 rules/)).toBeTruthy();
+    expect(screen.getByText(/not a verified source version/)).toBeTruthy();
+    expect(screen.queryByText(/private.example/)).toBeNull();
+  });
+
   it("requires a separate review and decision before reading DNS history", async () => {
     const load = vi.fn().mockResolvedValue(parseAdGuardStatus({ connected: true, endpoint: "https://192.0.2.5:3000", version: "v0.107.79", running: true, protection_enabled: true, filtering_enabled: true, query_log_enabled: true, anonymized_clients: false }));
     const review = vi.fn().mockResolvedValue({ review_id: "r".repeat(43), expires_at: "2999-01-01T00:00:00Z", endpoint: "https://192.0.2.5:3000", scope_id: "scope.home", interface: { interface_name: "en0", interface_index: 7, prefixes: ["192.0.2.0/24"] }, max_queries: 100, max_query_age_hours: 24 });

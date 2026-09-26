@@ -9,6 +9,46 @@ export interface AdGuardStatus {
   filtering_enabled: boolean;
   query_log_enabled: boolean;
   anonymized_clients: boolean;
+  filter_inventory?: AdGuardFilterInventory;
+}
+
+export interface AdGuardFilterSource {
+  kind: "blocklist" | "allowlist";
+  id: string;
+  name: string;
+  enabled: boolean;
+  rules_count: number;
+  last_updated?: string;
+}
+
+export interface AdGuardFilterInventory {
+  blocklist_total: number;
+  allowlist_total: number;
+  truncated: boolean;
+  sources: AdGuardFilterSource[];
+}
+
+function parseFilterInventory(input: unknown): AdGuardFilterInventory {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Invalid AdGuard Home filter inventory");
+  const value = input as Record<string, unknown>;
+  if (!Number.isSafeInteger(value.blocklist_total) || (value.blocklist_total as number) < 0 || (value.blocklist_total as number) > 100000 ||
+      !Number.isSafeInteger(value.allowlist_total) || (value.allowlist_total as number) < 0 || (value.allowlist_total as number) > 100000 ||
+      typeof value.truncated !== "boolean" || !Array.isArray(value.sources) || value.sources.length > 64) throw new Error("Invalid AdGuard Home filter inventory");
+  const blocklistTotal = value.blocklist_total as number, allowlistTotal = value.allowlist_total as number;
+  const sources = value.sources.map((item): AdGuardFilterSource => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("Invalid AdGuard Home filter source");
+    const source = item as Record<string, unknown>;
+    if ((source.kind !== "blocklist" && source.kind !== "allowlist") || typeof source.id !== "string" || !/^(0|-?[1-9]\d{0,18})$/.test(source.id) || BigInt(source.id) > 9223372036854775807n || BigInt(source.id) < -9223372036854775808n ||
+        typeof source.name !== "string" || source.name.length === 0 || source.name.length > 128 || /[\p{Cc}\p{Cf}]/u.test(source.name) ||
+        typeof source.enabled !== "boolean" || !Number.isSafeInteger(source.rules_count) || (source.rules_count as number) < 0 || (source.rules_count as number) > 4294967295 ||
+        (source.last_updated !== undefined && (typeof source.last_updated !== "string" || !Number.isFinite(Date.parse(source.last_updated))))) throw new Error("Invalid AdGuard Home filter source");
+    return { kind: source.kind, id: source.id, name: source.name, enabled: source.enabled, rules_count: source.rules_count as number,
+      ...(source.last_updated === undefined ? {} : { last_updated: source.last_updated as string }) };
+  });
+  if (sources.filter((source) => source.kind === "blocklist").length !== Math.min(blocklistTotal, 32) ||
+      sources.filter((source) => source.kind === "allowlist").length !== Math.min(allowlistTotal, 32) ||
+      value.truncated !== (blocklistTotal > 32 || allowlistTotal > 32)) throw new Error("Invalid AdGuard Home filter inventory counts");
+  return { blocklist_total: blocklistTotal, allowlist_total: allowlistTotal, truncated: value.truncated, sources };
 }
 
 export function parseAdGuardStatus(input: unknown): AdGuardStatus {
@@ -20,7 +60,8 @@ export function parseAdGuardStatus(input: unknown): AdGuardStatus {
   const fields = ["running", "protection_enabled", "filtering_enabled", "query_log_enabled", "anonymized_clients"] as const;
   for (const field of fields) if (typeof value[field] !== "boolean") throw new Error("Invalid AdGuard Home service state");
   if (typeof value.version !== "string" || value.version.length > 64 || /[\u0000-\u001f\u007f]/.test(value.version)) throw new Error("Invalid AdGuard Home version");
-  return { connected: true, endpoint, version: value.version, running: value.running as boolean, protection_enabled: value.protection_enabled as boolean, filtering_enabled: value.filtering_enabled as boolean, query_log_enabled: value.query_log_enabled as boolean, anonymized_clients: value.anonymized_clients as boolean };
+  return { connected: true, endpoint, version: value.version, running: value.running as boolean, protection_enabled: value.protection_enabled as boolean, filtering_enabled: value.filtering_enabled as boolean, query_log_enabled: value.query_log_enabled as boolean, anonymized_clients: value.anonymized_clients as boolean,
+    ...(value.filter_inventory === undefined ? {} : { filter_inventory: parseFilterInventory(value.filter_inventory) }) };
 }
 
 export function parseAdminOrigin(input: unknown): string {

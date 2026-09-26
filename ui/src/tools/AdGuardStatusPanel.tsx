@@ -64,6 +64,17 @@ export function AdGuardStatusPanel({ mode, load = loadAdGuardStatus, collection 
           <div><dt>Client IP anonymization</dt><dd>{status.anonymized_clients ? "Enabled" : "Disabled"}</dd></div>
         </dl>
         <p>These settings describe the resolver, not household coverage. Clients using another resolver or encrypted DNS may be unobserved.</p>
+        <div className="adguard-filter-sources">
+          <h3>Filter lists reported by AdGuard Home</h3>
+          {status.filter_inventory ? <>
+            <p>{status.filter_inventory.blocklist_total} blocklists and {status.filter_inventory.allowlist_total} allowlists reported by this instance.{status.filter_inventory.truncated ? " Showing up to 32 of each kind." : ""} List metadata does not prove any client used filtering.</p>
+            {status.filter_inventory.sources.length > 0 ? <ul className="tool-list">{status.filter_inventory.sources.map((source) => <li key={`${source.kind}-${source.id}`}>
+              <strong>{source.name}</strong>
+              <span>{source.kind === "blocklist" ? "Blocklist" : "Allowlist"} #{source.id} · {source.enabled ? "Enabled" : "Disabled"} · {source.rules_count} rules{source.last_updated ? ` · Updated ${new Date(source.last_updated).toLocaleString()} (resolver reported)` : " · Update time unavailable"}</span>
+            </li>)}</ul> : <p>No filter lists were reported.</p>}
+            <p>Source URLs and custom rule text stay out of this view. The reported update time is not a verified source version.</p>
+          </> : <p>Filter list details are unavailable from this status read. The filtering setting above does not identify active list sources.</p>}
+        </div>
         {status.running && status.query_log_enabled && !review ? <button type="button" className="secondary-action" disabled={collectionState === "loading"} onClick={() => void prepareCollection()}>Review one DNS history collection</button> : null}
         {review ? <div className="adguard-collection-review">
           <h3>Review one private DNS history read</h3>

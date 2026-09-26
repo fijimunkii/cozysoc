@@ -2,6 +2,7 @@ package adguard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,7 +28,7 @@ func TestReadOnlySnapshot(t *testing.T) {
 		case "/control/status":
 			fmt.Fprint(w, `{"version":"v0.107.79","running":true,"protection_enabled":true}`)
 		case "/control/filtering/status":
-			fmt.Fprint(w, `{"enabled":true,"user_rules":["private-rule"]}`)
+			fmt.Fprint(w, `{"enabled":true,"filters":[{"enabled":true,"id":7,"last_updated":"2026-09-25T12:00:00Z","name":"Example blocklist","rules_count":5912,"url":"file:///private/household/path"}],"whitelist_filters":[{"enabled":false,"id":8,"name":"Example allowlist","rules_count":3,"url":"https://secret.example/token"}],"user_rules":["private-rule"]}`)
 		case "/control/querylog/config":
 			fmt.Fprint(w, `{"enabled":true,"anonymize_client_ip":true}`)
 		case "/control/querylog?limit=100":
@@ -51,6 +52,16 @@ func TestReadOnlySnapshot(t *testing.T) {
 	}
 	if !snapshot.Status.Running || !snapshot.Status.ProtectionEnabled || !snapshot.Status.FilteringEnabled || !snapshot.Status.QueryLogEnabled || !snapshot.Status.AnonymizedClients {
 		t.Fatalf("wrong status: %+v", snapshot.Status)
+	}
+	inventory := snapshot.Status.FilterInventory
+	if !inventory.Available || inventory.BlocklistTotal != 1 || inventory.AllowlistTotal != 1 || inventory.Truncated || len(inventory.Sources) != 2 ||
+		inventory.Sources[0].Kind != "blocklist" || inventory.Sources[0].RulesCount != 5912 || inventory.Sources[0].LastUpdated == nil ||
+		inventory.Sources[1].Kind != "allowlist" || inventory.Sources[1].Enabled {
+		t.Fatalf("wrong filter inventory: %+v", inventory)
+	}
+	encoded, _ := json.Marshal(inventory)
+	if strings.Contains(string(encoded), "private-rule") || strings.Contains(string(encoded), "/private/household") || strings.Contains(string(encoded), "secret.example") {
+		t.Fatalf("private filter source leaked: %s", encoded)
 	}
 	if len(snapshot.Queries) != 2 || snapshot.Queries[0].Filtering != "blocked" || snapshot.Queries[0].Attribution != "unknown" || snapshot.Queries[0].ClientIP != "" || snapshot.Queries[1].Attribution != "client-id" || snapshot.Queries[1].Filtering != "not-blocked" {
 		t.Fatalf("wrong observations: %+v", snapshot.Queries)
@@ -110,6 +121,75 @@ func TestProbeDoesNotReadQueryHistory(t *testing.T) {
 	}
 	if strings.Join(paths, ",") != "/control/status,/control/filtering/status,/control/querylog/config" {
 		t.Fatalf("wrong probe paths: %v", paths)
+	}
+}
+
+func TestFilterInventoryBoundsAndFailsClosedWithoutBreakingServiceStatus(t *testing.T) {
+	id, name, enabled, rules := int64(1), "Source", true, int64(12)
+	item := filterItem{ID: &id, Name: &name, Enabled: &enabled, RulesCount: &rules}
+	negativeID := int64(-3)
+	negative := []filterItem{{ID: &negativeID, Name: &name, Enabled: &enabled, RulesCount: &rules}}
+	empty := []filterItem{}
+	if got := projectFilterInventory(&negative, &empty); !got.Available || got.Sources[0].ID != -3 {
+		t.Fatalf("signed source ID rejected: %+v", got)
+	}
+	if projectFilterInventory(nil, nil).Available {
+		t.Fatal("missing filter arrays looked complete")
+	}
+	items := make([]filterItem, MaxFilterSources+1)
+	for i := range items {
+		items[i] = item
+	}
+	allow := []filterItem{}
+	inventory := projectFilterInventory(&items, &allow)
+	if !inventory.Available || !inventory.Truncated || inventory.BlocklistTotal != MaxFilterSources+1 || len(inventory.Sources) != MaxFilterSources {
+		t.Fatalf("unbounded filter inventory: %+v", inventory)
+	}
+	for _, malformed := range []filterItem{
+		{ID: &id, Name: nil, Enabled: &enabled, RulesCount: &rules},
+		{ID: &id, Name: func() *string { value := "masked\u202ename"; return &value }(), Enabled: &enabled, RulesCount: &rules},
+		{ID: &id, Name: &name, Enabled: &enabled, RulesCount: func() *int64 { value := int64(-1); return &value }()},
+	} {
+		block := []filterItem{malformed}
+		if got := projectFilterInventory(&block, &allow); got.Available || len(got.Sources) != 0 {
+			t.Fatalf("malformed source leaked: %+v", got)
+		}
+	}
+}
+
+func TestMalformedFilterMetadataDoesNotHideValidServiceStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/control/status":
+			fmt.Fprint(w, `{"version":"v0.107.79","running":true,"protection_enabled":true}`)
+		case "/control/filtering/status":
+			fmt.Fprint(w, `{"enabled":true,"filters":[{"id":"wrong-type","name":"private name"}],"whitelist_filters":[],"user_rules":["private.example"]}`)
+		case "/control/querylog/config":
+			fmt.Fprint(w, `{"enabled":false,"anonymize_client_ip":false}`)
+		default:
+			t.Errorf("unexpected probe endpoint: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", secretstore.Secret{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.Probe(context.Background())
+	if err != nil || !status.Running || !status.FilteringEnabled || status.FilterInventory.Available {
+		t.Fatalf("malformed list hid service status: %+v, %v", status, err)
+	}
+}
+
+func TestFilterInventoryAcceptsNullEmptyListFromReleaseAPI(t *testing.T) {
+	block := json.RawMessage(`[{"enabled":true,"id":7,"name":"Example","rules_count":12}]`)
+	inventory := decodeFilterInventory(block, json.RawMessage(`null`))
+	if !inventory.Available || inventory.BlocklistTotal != 1 || inventory.AllowlistTotal != 0 || len(inventory.Sources) != 1 {
+		t.Fatalf("null empty allowlist hid filter inventory: %+v", inventory)
+	}
+	if decodeFilterInventory(nil, json.RawMessage(`[]`)).Available {
+		t.Fatal("missing list looked complete")
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/secretstore"
 )
@@ -23,6 +24,7 @@ import (
 const (
 	SupportedVersion   = "v0.107.79"
 	MaxQueryLogEntries = 100
+	MaxFilterSources   = 32 // Per list kind in user-facing status.
 	maxResponseBytes   = 2 << 20
 	requestTimeout     = 5 * time.Second
 )
@@ -85,6 +87,88 @@ type Status struct {
 	FilteringEnabled  bool
 	QueryLogEnabled   bool
 	AnonymizedClients bool
+	FilterInventory   FilterInventory
+}
+
+// FilterInventory excludes rule text and source URLs, which may contain
+// private domains, local file paths, or credentials supplied by the owner.
+type FilterInventory struct {
+	Available      bool
+	BlocklistTotal int
+	AllowlistTotal int
+	Truncated      bool
+	Sources        []FilterSource
+}
+
+type FilterSource struct {
+	Kind        string // blocklist or allowlist
+	ID          int64
+	Name        string
+	Enabled     bool
+	RulesCount  uint32
+	LastUpdated *time.Time
+}
+
+type filterItem struct {
+	ID          *int64  `json:"id"`
+	Name        *string `json:"name"`
+	Enabled     *bool   `json:"enabled"`
+	RulesCount  *int64  `json:"rules_count"`
+	LastUpdated *string `json:"last_updated"`
+}
+
+func projectFilterInventory(blocklists, allowlists *[]filterItem) FilterInventory {
+	if blocklists == nil || allowlists == nil {
+		return FilterInventory{}
+	}
+	result := FilterInventory{Available: true, BlocklistTotal: len(*blocklists), AllowlistTotal: len(*allowlists),
+		Truncated: len(*blocklists) > MaxFilterSources || len(*allowlists) > MaxFilterSources}
+	for _, list := range []struct {
+		kind  string
+		items []filterItem
+	}{{"blocklist", *blocklists}, {"allowlist", *allowlists}} {
+		for i, item := range list.items {
+			if i >= MaxFilterSources {
+				break
+			}
+			if item.ID == nil || item.Name == nil || *item.Name == "" || len(*item.Name) > 128 ||
+				!utf8.ValidString(*item.Name) || strings.IndexFunc(*item.Name, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }) >= 0 ||
+				item.Enabled == nil || item.RulesCount == nil || *item.RulesCount < 0 || *item.RulesCount > 1<<32-1 {
+				return FilterInventory{}
+			}
+			source := FilterSource{Kind: list.kind, ID: *item.ID, Name: *item.Name, Enabled: *item.Enabled, RulesCount: uint32(*item.RulesCount)}
+			if item.LastUpdated != nil && *item.LastUpdated != "" {
+				when, err := time.Parse(time.RFC3339, *item.LastUpdated)
+				if err != nil {
+					return FilterInventory{}
+				}
+				if !when.IsZero() {
+					utc := when.UTC()
+					source.LastUpdated = &utc
+				}
+			}
+			result.Sources = append(result.Sources, source)
+		}
+	}
+	return result
+}
+
+func decodeFilterInventory(blockRaw, allowRaw json.RawMessage) FilterInventory {
+	if len(blockRaw) == 0 || len(allowRaw) == 0 {
+		return FilterInventory{}
+	}
+	// The release API serializes an empty list as null on a fresh instance.
+	if bytes.Equal(bytes.TrimSpace(blockRaw), []byte("null")) {
+		blockRaw = []byte("[]")
+	}
+	if bytes.Equal(bytes.TrimSpace(allowRaw), []byte("null")) {
+		allowRaw = []byte("[]")
+	}
+	var blocklists, allowlists []filterItem
+	if json.Unmarshal(blockRaw, &blocklists) != nil || json.Unmarshal(allowRaw, &allowlists) != nil {
+		return FilterInventory{}
+	}
+	return projectFilterInventory(&blocklists, &allowlists)
 }
 
 // Query is a transient observation. Names and client identifiers are private
@@ -137,7 +221,9 @@ func (c *Client) Probe(ctx context.Context) (Status, error) {
 	}
 	result := Status{Version: *status.Version, Running: *status.Running, ProtectionEnabled: *status.ProtectionEnabled}
 	var filtering struct {
-		Enabled *bool `json:"enabled"`
+		Enabled          *bool           `json:"enabled"`
+		Filters          json.RawMessage `json:"filters"`
+		WhitelistFilters json.RawMessage `json:"whitelist_filters"`
 	}
 	if err := c.get(ctx, "/control/filtering/status", &filtering); err != nil {
 		return Status{}, err
@@ -146,6 +232,7 @@ func (c *Client) Probe(ctx context.Context) (Status, error) {
 		return Status{}, ErrResponse
 	}
 	result.FilteringEnabled = *filtering.Enabled
+	result.FilterInventory = decodeFilterInventory(filtering.Filters, filtering.WhitelistFilters)
 	var logConfig struct {
 		Enabled    *bool `json:"enabled"`
 		Anonymized *bool `json:"anonymize_client_ip"`

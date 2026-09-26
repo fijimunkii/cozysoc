@@ -9,6 +9,11 @@
   overflow-wrap: anywhere;
 }
 
+.adguard-filter-sources {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .adguard-collection-review button {
   max-width: 100%;
   white-space: normal;
