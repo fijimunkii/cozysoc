@@ -19,41 +19,44 @@ import (
 )
 
 type fakeDeviceStore struct {
-	page           storage.DeviceEvidencePage
-	err            error
-	detail         storage.DeviceEvidenceDetail
-	detailErr      error
-	detailQuery    storage.DeviceEvidenceDetailQuery
-	dnsHistory     storage.DeviceDNSHistory
-	dnsHistoryErr  error
-	activity       storage.DeviceActivityPage
-	activityErr    error
-	activityQuery  storage.DeviceActivityQuery
-	setScope       string
-	setDevice      string
-	setLabel       string
-	setChanged     bool
-	setErr         error
-	mergeScope     string
-	mergeSource    string
-	mergeTarget    string
-	mergeChanged   bool
-	mergeErr       error
-	unmergeSource  string
-	merges         []storage.DeviceMerge
-	splitScope     string
-	splitSource    string
-	splitObs       string
-	splitTarget    string
-	splitChanged   bool
-	splitErr       error
-	splits         []storage.DeviceSplit
-	activeScopes   []domain.NetworkScope
-	activeErr      error
-	enrollScope    domain.NetworkScope
-	enrollChanged  bool
-	enrollErr      error
-	enrollMetadata json.RawMessage
+	page             storage.DeviceEvidencePage
+	err              error
+	detail           storage.DeviceEvidenceDetail
+	detailErr        error
+	detailQuery      storage.DeviceEvidenceDetailQuery
+	dnsHistory       storage.DeviceDNSHistory
+	dnsHistoryErr    error
+	activity         storage.DeviceActivityPage
+	activityErr      error
+	activityQuery    storage.DeviceActivityQuery
+	observations     storage.ObservationPage
+	observationErr   error
+	observationQuery storage.ObservationQuery
+	setScope         string
+	setDevice        string
+	setLabel         string
+	setChanged       bool
+	setErr           error
+	mergeScope       string
+	mergeSource      string
+	mergeTarget      string
+	mergeChanged     bool
+	mergeErr         error
+	unmergeSource    string
+	merges           []storage.DeviceMerge
+	splitScope       string
+	splitSource      string
+	splitObs         string
+	splitTarget      string
+	splitChanged     bool
+	splitErr         error
+	splits           []storage.DeviceSplit
+	activeScopes     []domain.NetworkScope
+	activeErr        error
+	enrollScope      domain.NetworkScope
+	enrollChanged    bool
+	enrollErr        error
+	enrollMetadata   json.RawMessage
 }
 
 func (f *fakeDeviceStore) ListDeviceEvidence(context.Context, storage.DeviceEvidenceQuery) (storage.DeviceEvidencePage, error) {
@@ -76,6 +79,11 @@ func (f *fakeDeviceStore) GetDeviceDetailSnapshot(_ context.Context, query stora
 func (f *fakeDeviceStore) ListDeviceActivity(_ context.Context, query storage.DeviceActivityQuery) (storage.DeviceActivityPage, error) {
 	f.activityQuery = query
 	return f.activity, f.activityErr
+}
+
+func (f *fakeDeviceStore) ListObservations(_ context.Context, query storage.ObservationQuery) (storage.ObservationPage, error) {
+	f.observationQuery = query
+	return f.observations, f.observationErr
 }
 
 func (f *fakeDeviceStore) SetDeviceLabel(_ context.Context, scopeID, deviceID, label string) (bool, error) {

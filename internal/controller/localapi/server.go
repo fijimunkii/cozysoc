@@ -288,12 +288,16 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 		}
 		s.handleAdGuard(ctx, conn, request)
 		return
-	case api.MethodOPNsenseConnect, api.MethodOPNsenseStatus, api.MethodOPNsenseDisconnect, api.MethodOPNsenseCollect:
+	case api.MethodOPNsenseConnect, api.MethodOPNsenseStatus, api.MethodOPNsenseDisconnect, api.MethodOPNsenseCollect, api.MethodOPNsenseNeighbors:
 		if !identity.Verified {
 			s.writeError(conn, request.ID, "unauthorized", "verified OS identity is required")
 			return
 		}
-		s.handleOPNsense(ctx, conn, request)
+		if request.Method == api.MethodOPNsenseNeighbors {
+			s.handleOPNsenseNeighbors(ctx, conn, request)
+		} else {
+			s.handleOPNsense(ctx, conn, request)
+		}
 		return
 	case api.MethodHTTPSCheck:
 		if !identity.Verified {

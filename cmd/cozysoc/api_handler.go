@@ -30,6 +30,7 @@ type controllerStore interface {
 	devicewatch.CoverageSampleReader
 	GetDeviceDetailSnapshot(context.Context, storage.DeviceEvidenceDetailQuery) (storage.DeviceDetailSnapshot, error)
 	ListDeviceActivity(context.Context, storage.DeviceActivityQuery) (storage.DeviceActivityPage, error)
+	ListObservations(context.Context, storage.ObservationQuery) (storage.ObservationPage, error)
 	SetDeviceLabel(context.Context, string, string, string) (bool, error)
 	MergeDevices(context.Context, string, string, string) (bool, error)
 	UnmergeDevices(context.Context, string, string) (bool, error)

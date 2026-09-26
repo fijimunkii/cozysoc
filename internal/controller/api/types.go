@@ -39,6 +39,7 @@ const (
 	MethodOPNsenseStatus      = "opnsense.status"
 	MethodOPNsenseDisconnect  = "opnsense.disconnect"
 	MethodOPNsenseCollect     = "opnsense.collect"
+	MethodOPNsenseNeighbors   = "opnsense.neighbors"
 )
 
 type Request struct {
