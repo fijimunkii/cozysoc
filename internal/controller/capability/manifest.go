@@ -1,6 +1,6 @@
 package capability
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 const MaxManifestBytes = 64 * 1024
 
@@ -86,6 +86,7 @@ type Manifest struct {
 	Resources     ResourceBudget         `json:"resources"`
 	Provenance    Provenance             `json:"provenance"`
 	Health        HealthContract         `json:"health"`
+	DataHandling  DataHandlingContract   `json:"data_handling"`
 	Outputs       []OutputContract       `json:"outputs"`
 	DeepLinks     []DeepLink             `json:"deep_links"`
 	Lifecycle     []LifecycleAction      `json:"lifecycle"`
@@ -154,6 +155,15 @@ type HealthContract struct {
 	CoverageRequiresVerification bool     `json:"coverage_requires_verification"`
 }
 
+// DataHandlingContract describes the capability's collection boundary for
+// setup and local privacy views. It contains product copy, never live values.
+type DataHandlingContract struct {
+	Activation string   `json:"activation"`
+	Sources    []string `json:"sources"`
+	Stored     []string `json:"stored"`
+	Excluded   []string `json:"excluded"`
+}
+
 type OutputContract struct {
 	Kind          string `json:"kind"`
 	SchemaVersion int    `json:"schema_version"`
@@ -177,6 +187,9 @@ func cloneManifest(m Manifest) Manifest {
 		out.Config.Fields[i].Enum = append([]string(nil), field.Enum...)
 	}
 	out.Health.VerificationSignals = append([]string(nil), m.Health.VerificationSignals...)
+	out.DataHandling.Sources = append([]string(nil), m.DataHandling.Sources...)
+	out.DataHandling.Stored = append([]string(nil), m.DataHandling.Stored...)
+	out.DataHandling.Excluded = append([]string(nil), m.DataHandling.Excluded...)
 	out.Outputs = append([]OutputContract(nil), m.Outputs...)
 	out.DeepLinks = make([]DeepLink, len(m.DeepLinks))
 	for i, link := range m.DeepLinks {

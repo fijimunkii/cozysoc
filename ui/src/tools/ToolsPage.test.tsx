@@ -16,6 +16,9 @@ describe("ToolsPage", () => {
     expect(screen.getAllByText("Verification passed").length).toBeGreaterThan(0);
     expect(screen.getByText("Coverage is still evaluated separately from this lifecycle state.")).toBeTruthy();
     expect(screen.getByText(/no separate engine UI/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "What this capability collects" })).toBeTruthy();
+    expect(screen.getByText("Collection starts only after network enrollment and separate Device Watch enablement.")).toBeTruthy();
+    expect(screen.getByText("Packet payloads and browsing history.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Enable Device Watch" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable Device Watch" })).toBeNull();
     expect(screen.queryByText(/fully protected/i)).toBeNull();

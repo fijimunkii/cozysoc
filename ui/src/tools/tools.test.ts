@@ -9,6 +9,7 @@ describe("parseToolsSnapshot", () => {
     expect(tools.capabilities).toHaveLength(1);
     expect(tools.capabilities[0]?.state.process).toBe("not-applicable");
     expect(tools.capabilities[0]?.resources.measurement).toBe("unmeasured");
+    expect(tools.capabilities[0]?.data_handling.stored).toContain("Observed IP and MAC addresses with source and time.");
   });
 
   it("rejects unsupported operating states and duplicate capability ids", () => {
@@ -27,5 +28,12 @@ describe("parseToolsSnapshot", () => {
       ...demoCapabilitiesRaw,
       capabilities: [{ ...demoCapabilitiesRaw.capabilities[0], resources: { measurement: "unmeasured", profile: "desktop-base", max_ram_mib: 64 } }],
     })).toThrow(/unmeasured resources cannot declare measured limits/);
+  });
+
+  it("rejects malformed collection claims and unsupported catalog versions", () => {
+    const capability = demoCapabilitiesRaw.capabilities[0]!;
+    expect(() => parseToolsSnapshot(demoStatusRaw, { ...demoCapabilitiesRaw, capabilities: [{ ...capability, data_handling: { ...capability.data_handling, stored: ["private\npath"] } }] })).toThrow(/control characters/);
+    expect(() => parseToolsSnapshot(demoStatusRaw, { ...demoCapabilitiesRaw, capabilities: [{ ...capability, data_handling: { ...capability.data_handling, sources: [] } }] })).toThrow(/incomplete/);
+    expect(() => parseToolsSnapshot(demoStatusRaw, { catalog_schema_version: 1, capabilities: [capability] })).toThrow(/Unsupported capability catalog version/);
   });
 });

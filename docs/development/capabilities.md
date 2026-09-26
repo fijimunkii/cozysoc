@@ -1,4 +1,4 @@
-# Capability catalog v1
+# Capability catalog v2
 
 Issue #9 introduces a declarative catalog for user-facing capabilities such as Device Watch, DNS Protection, Traffic Watch, and Wireless Watch.
 
@@ -6,7 +6,7 @@ The catalog is deliberately **not a plugin execution format**. A manifest descri
 
 ## Manifest contract
 
-Schema version `1` records:
+Schema version `2` records:
 
 - stable capability ID, display name, summary, and intended release line;
 - supported ownership modes (`builtin`, `external`, `managed-local`, `managed-remote`);
@@ -16,11 +16,14 @@ Schema version `1` records:
 - measured or explicitly **unmeasured** resource budget status;
 - provenance, license, source, and version policy;
 - health verification signals that remain separate from process state;
+- a bounded data-handling explanation covering activation, sources, locally stored categories, and excluded collection;
 - normalized output contract identifiers;
 - optional deep-link contexts; and
 - supported lifecycle actions.
 
 Manifest input is capped at 64 KiB, unknown JSON fields are rejected, duplicate identifiers are rejected, and builtin capabilities cannot declare installer/process/upgrade actions. Adding an executable-shaped field such as `command` therefore fails decoding rather than becoming an implicit extension point.
+
+Every v2 manifest must supply nonempty, bounded data-handling claims. Device Watch describes the separate enrollment and enablement decisions, its local ARP/NDP neighbor-cache source, retained addresses/associations/labels and operational records, and the absence of packet payload capture or Device Watch discovery probes. These are capability-specific collection boundaries, not a promise that optional future capabilities will collect the same data. The browser receives only this display contract, not configuration values or live household identifiers.
 
 ## Support honesty
 

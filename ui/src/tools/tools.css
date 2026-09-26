@@ -104,9 +104,37 @@
 }
 
 .capability-sections h3,
+.capability-data-handling h3,
 .capability-evidence-links h3 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.capability-data-handling {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e2d9;
+}
+
+.capability-data-handling__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.capability-data-handling__grid h4 {
+  margin: 10px 0;
+}
+
+.capability-data-handling__grid ul {
+  padding-left: 1.2rem;
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.capability-data-handling__grid li + li {
+  margin-top: 8px;
 }
 
 .tool-list {
@@ -228,7 +256,8 @@
 
   .tools-controller,
   .capability-state-grid,
-  .capability-sections {
+  .capability-sections,
+  .capability-data-handling__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

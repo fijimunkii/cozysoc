@@ -24,6 +24,9 @@ func TestBuiltinsIncludeDeviceWatchWithoutSupportInflation(t *testing.T) {
 	if len(manifest.DeepLinks) != 0 {
 		t.Fatalf("unexpected deep links: %+v", manifest.DeepLinks)
 	}
+	if manifest.SchemaVersion != SchemaVersion || len(manifest.DataHandling.Sources) == 0 || len(manifest.DataHandling.Stored) == 0 || len(manifest.DataHandling.Excluded) == 0 {
+		t.Fatalf("missing Device Watch data handling contract: %+v", manifest.DataHandling)
+	}
 }
 
 func TestDecodeRejectsUnknownFieldsAndOversizedManifests(t *testing.T) {
@@ -48,9 +51,33 @@ func TestRegistryRejectsDuplicatesAndReturnsCopies(t *testing.T) {
 
 	copyOne, _ := registry.Get("device-watch")
 	copyOne.Config.Fields[0].Name = "mutated"
+	copyOne.DataHandling.Stored[0] = "mutated"
 	copyTwo, _ := registry.Get("device-watch")
-	if copyTwo.Config.Fields[0].Name == "mutated" {
+	if copyTwo.Config.Fields[0].Name == "mutated" || copyTwo.DataHandling.Stored[0] == "mutated" {
 		t.Fatal("registry leaked mutable manifest state")
+	}
+}
+
+func TestDataHandlingContractRejectsMissingUnsafeAndDuplicateClaims(t *testing.T) {
+	registry, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, _ := registry.Get("device-watch")
+	for name, mutate := range map[string]func(*Manifest){
+		"missing sources":   func(m *Manifest) { m.DataHandling.Sources = nil },
+		"control character": func(m *Manifest) { m.DataHandling.Stored[0] = "secret\npath" },
+		"duplicate claim": func(m *Manifest) {
+			m.DataHandling.Excluded = append(m.DataHandling.Excluded, m.DataHandling.Excluded[0])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			manifest := cloneManifest(original)
+			mutate(&manifest)
+			if err := Validate(manifest); err == nil {
+				t.Fatal("invalid data handling contract accepted")
+			}
+		})
 	}
 }
 

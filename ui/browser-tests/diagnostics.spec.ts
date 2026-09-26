@@ -26,6 +26,9 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   await page.goto("/");
   await expect(page.getByRole("status", { name: "Live controller data" })).toBeVisible();
   await page.getByRole("button", { name: "Tools", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "What this capability collects" })).toBeVisible();
+  await expect(page.getByText("Local macOS ARP and IPv6 neighbor caches for the enrolled network interface.")).toBeVisible();
+  await expect(page.getByText("Packet payloads and browsing history.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Diagnostic preview" })).toBeVisible();
   expect(previewReads).toBe(0);
   await page.getByRole("button", { name: "Preview diagnostics" }).click();

@@ -58,21 +58,29 @@ type webCapabilityHealth struct {
 	CoverageRequiresVerification bool     `json:"coverage_requires_verification"`
 }
 
+type webCapabilityDataHandling struct {
+	Activation string   `json:"activation"`
+	Sources    []string `json:"sources"`
+	Stored     []string `json:"stored"`
+	Excluded   []string `json:"excluded"`
+}
+
 type webCapability struct {
-	ID            string                   `json:"id"`
-	DisplayName   string                   `json:"display_name"`
-	Summary       string                   `json:"summary"`
-	Release       string                   `json:"release"`
-	Configured    bool                     `json:"configured"`
-	Ownership     string                   `json:"ownership"`
-	State         webCapabilityState       `json:"state"`
-	Targets       []webCapabilityTarget    `json:"targets"`
-	Privileges    []webCapabilityPrivilege `json:"privileges"`
-	Resources     webCapabilityResources   `json:"resources"`
-	Provenance    webCapabilityProvenance  `json:"provenance"`
-	Health        webCapabilityHealth      `json:"health"`
-	Lifecycle     []string                 `json:"lifecycle"`
-	DeepLinkCount int                      `json:"deep_link_count"`
+	ID            string                    `json:"id"`
+	DisplayName   string                    `json:"display_name"`
+	Summary       string                    `json:"summary"`
+	Release       string                    `json:"release"`
+	Configured    bool                      `json:"configured"`
+	Ownership     string                    `json:"ownership"`
+	State         webCapabilityState        `json:"state"`
+	Targets       []webCapabilityTarget     `json:"targets"`
+	Privileges    []webCapabilityPrivilege  `json:"privileges"`
+	Resources     webCapabilityResources    `json:"resources"`
+	Provenance    webCapabilityProvenance   `json:"provenance"`
+	Health        webCapabilityHealth       `json:"health"`
+	DataHandling  webCapabilityDataHandling `json:"data_handling"`
+	Lifecycle     []string                  `json:"lifecycle"`
+	DeepLinkCount int                       `json:"deep_link_count"`
 }
 
 type webCapabilityList struct {
@@ -194,6 +202,12 @@ func projectWebCapabilities(list api.CapabilityList) webCapabilityList {
 				ProcessRequired:              manifest.Health.ProcessRequired,
 				VerificationSignals:          append([]string(nil), manifest.Health.VerificationSignals...),
 				CoverageRequiresVerification: manifest.Health.CoverageRequiresVerification,
+			},
+			DataHandling: webCapabilityDataHandling{
+				Activation: manifest.DataHandling.Activation,
+				Sources:    append([]string(nil), manifest.DataHandling.Sources...),
+				Stored:     append([]string(nil), manifest.DataHandling.Stored...),
+				Excluded:   append([]string(nil), manifest.DataHandling.Excluded...),
 			},
 			Lifecycle:     make([]string, 0, len(manifest.Lifecycle)),
 			DeepLinkCount: len(manifest.DeepLinks),

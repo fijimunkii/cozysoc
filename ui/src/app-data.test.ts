@@ -18,7 +18,7 @@ vi.mock("./tools/storage", () => ({ loadStorageOverviewFromWeb: vi.fn() }));
 const coverage = { as_of: "2026-09-10T12:00:00Z", reports: [] };
 const devices = { configured: false, as_of: "2026-09-10T12:00:00Z", devices: [], truncated: false };
 const networks = { candidates: [], candidates_truncated: false };
-const tools = { status: { controller_version: "dev", started_at: "2026-09-10T11:00:00Z", config_schema_version: 1, transport: "unix" as const }, catalog_schema_version: 1, capabilities: [] };
+const tools = { status: { controller_version: "dev", started_at: "2026-09-10T11:00:00Z", config_schema_version: 1, transport: "unix" as const }, catalog_schema_version: 2, capabilities: [] };
 
 describe("loadAppDataFromWeb", () => {
   beforeEach(() => {

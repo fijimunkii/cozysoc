@@ -138,6 +138,16 @@ function CapabilityCard({ capability, onNavigate }: { capability: ToolCapability
         </section>
       </div>
 
+      <section className="capability-data-handling" aria-labelledby={`${capability.id}-data-handling`}>
+        <h3 id={`${capability.id}-data-handling`}>What this capability collects</h3>
+        <p>{capability.data_handling.activation}</p>
+        <div className="capability-data-handling__grid">
+          <DataClaims title="Reads from" claims={capability.data_handling.sources} />
+          <DataClaims title="Keeps locally" claims={capability.data_handling.stored} />
+          <DataClaims title="Does not collect" claims={capability.data_handling.excluded} />
+        </div>
+      </section>
+
       {capability.id === "device-watch" ? (
         <section className="capability-evidence-links" aria-labelledby={`${capability.id}-evidence`}>
           <div>
@@ -165,6 +175,10 @@ function CapabilityCard({ capability, onNavigate }: { capability: ToolCapability
       </details>
     </section>
   );
+}
+
+function DataClaims({ title, claims }: { title: string; claims: string[] }) {
+  return <div><h4>{title}</h4><ul>{claims.map((claim) => <li key={claim}>{claim}</li>)}</ul></div>;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
