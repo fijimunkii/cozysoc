@@ -61,6 +61,10 @@ type webHandler struct {
 	loadCapabilities       capabilityLoader
 	loadStorageOverview    storageOverviewLoader
 	loadAdGuardStatus      adguardStatusLoader
+	collectAdGuard         func(context.Context, api.AdGuardCollectParams) (api.AdGuardCollection, error)
+	adguardReviewMu        sync.Mutex
+	adguardReview          *webAdGuardReviewState
+	adguardCollecting      bool
 	loadDiagnostics        func(context.Context) (api.DiagnosticPreview, error)
 	loadLocalQuality       func(context.Context) (api.LocalNetworkQuality, error)
 	loadGatewayHistory     func(context.Context) (api.GatewayHistory, error)
@@ -215,6 +219,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		defer cancel()
 		return localapi.NewClient(dir).AdGuardStatus(requestCtx)
 	}
+	handler.collectAdGuard = localapi.NewClient(dir).CollectAdGuardReviewed
 	handler.loadDiagnostics = func(requestCtx context.Context) (api.DiagnosticPreview, error) {
 		return loadDiagnosticsFromController(requestCtx, dir)
 	}
@@ -237,7 +242,7 @@ func runWeb(ctx context.Context, args []string, stdout, stderr *os.File) error {
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 3 * time.Second,
-		WriteTimeout:      25 * time.Second,
+		WriteTimeout:      55 * time.Second,
 		IdleTimeout:       30 * time.Second,
 		MaxHeaderBytes:    maxWebHeaderBytes,
 	}
@@ -381,6 +386,10 @@ func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleStorageOverview(w, r)
 	case "/api/adguard/status":
 		h.handleAdGuardStatus(w, r)
+	case "/api/adguard/collection/review":
+		h.handleAdGuardCollectionReview(w, r)
+	case "/api/adguard/collection/run":
+		h.handleAdGuardCollectionRun(w, r)
 	case "/api/diagnostics/preview":
 		h.handleDiagnosticsPreview(w, r)
 	case "/api/coverage":

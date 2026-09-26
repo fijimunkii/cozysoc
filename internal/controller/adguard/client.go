@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	SupportedVersion = "v0.107.79"
-	maxResponseBytes = 2 << 20
-	maxQueries       = 100
-	requestTimeout   = 5 * time.Second
+	SupportedVersion   = "v0.107.79"
+	MaxQueryLogEntries = 100
+	maxResponseBytes   = 2 << 20
+	requestTimeout     = 5 * time.Second
 )
 
 var (
@@ -176,10 +176,10 @@ func (c *Client) Read(ctx context.Context) (Snapshot, error) {
 	var log struct {
 		Data *[]queryItem `json:"data"`
 	}
-	if err := c.get(ctx, "/control/querylog?limit=100", &log); err != nil {
+	if err := c.get(ctx, "/control/querylog?limit="+strconv.Itoa(MaxQueryLogEntries), &log); err != nil {
 		return Snapshot{}, err
 	}
-	if log.Data == nil || len(*log.Data) > maxQueries {
+	if log.Data == nil || len(*log.Data) > MaxQueryLogEntries {
 		return Snapshot{}, ErrResponse
 	}
 	result.Queries = make([]Query, 0, len(*log.Data))

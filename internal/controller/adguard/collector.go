@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"reflect"
 	"time"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/devicewatch"
@@ -54,12 +55,32 @@ func NewCollector(connections *Connections, store collectorStore, ingestor *stor
 }
 
 func (c *Collector) Collect(ctx context.Context, scopeID string) (result CollectionResult, operationErr error) {
+	return c.collect(ctx, scopeID, nil)
+}
+
+// CollectReviewed rejects a changed scope or resolver before reading query history.
+func (c *Collector) CollectReviewed(ctx context.Context, scopeID string, expectedEndpoint string, expectedBinding devicewatch.ScopeBinding) (CollectionResult, error) {
+	if expectedEndpoint == "" || devicewatch.ValidateScopeBinding(expectedBinding) != nil {
+		return CollectionResult{}, ErrObservationScope
+	}
+	return c.collect(ctx, scopeID, &collectionReview{endpoint: expectedEndpoint, binding: expectedBinding})
+}
+
+type collectionReview struct {
+	endpoint string
+	binding  devicewatch.ScopeBinding
+}
+
+func (c *Collector) collect(ctx context.Context, scopeID string, reviewed *collectionReview) (result CollectionResult, operationErr error) {
 	scope, err := c.store.GetNetworkScope(ctx, scopeID)
 	if err != nil || scope.RetiredAt != nil {
 		return CollectionResult{}, ErrObservationScope
 	}
 	binding, err := devicewatch.ParseScopeBinding(scope)
 	if err != nil {
+		return CollectionResult{}, ErrObservationScope
+	}
+	if reviewed != nil && !reflect.DeepEqual(binding, reviewed.binding) {
 		return CollectionResult{}, ErrObservationScope
 	}
 	if _, err := devicewatch.ValidateCurrentScope(ctx, c.inspector, binding); err != nil {
@@ -87,7 +108,13 @@ func (c *Collector) Collect(ctx context.Context, scopeID string) (result Collect
 			operationErr = errors.Join(operationErr, ErrObservationAudit)
 		}
 	}()
-	snapshot, endpoint, err := c.connections.ReadSnapshot(ctx)
+	var snapshot Snapshot
+	var endpoint string
+	if reviewed == nil {
+		snapshot, endpoint, err = c.connections.ReadSnapshot(ctx)
+	} else {
+		snapshot, endpoint, err = c.connections.ReadSnapshotBound(ctx, reviewed.endpoint)
+	}
 	if err != nil {
 		return CollectionResult{}, err
 	}
@@ -106,7 +133,7 @@ func (c *Collector) Collect(ctx context.Context, scopeID string) (result Collect
 		return CollectionResult{}, err
 	}
 	result = CollectionResult{ScopeID: scopeID, QueryLogEnabled: snapshot.Status.QueryLogEnabled,
-		Read: len(snapshot.Queries), LimitReached: len(snapshot.Queries) == maxQueries, Skipped: stats}
+		Read: len(snapshot.Queries), LimitReached: len(snapshot.Queries) == MaxQueryLogEntries, Skipped: stats}
 	if len(observations) == 0 {
 		return result, nil
 	}

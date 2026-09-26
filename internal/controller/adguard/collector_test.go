@@ -112,7 +112,15 @@ func TestCollectorPersistsOnlyScopedQueryObservationsAndReplaysIdempotently(t *t
 	if _, err := denied.Collect(ctx, "scope.home"); !errors.Is(err, ErrObservationAudit) || requests.Load() != 0 {
 		t.Fatalf("unconfirmed audit admitted private read: %v, requests %d", err, requests.Load())
 	}
-	result, err := collector.Collect(ctx, "scope.home")
+	changedBinding := binding
+	changedBinding.Prefixes = []string{"198.51.100.0/24"}
+	if _, err := collector.CollectReviewed(ctx, "scope.home", server.URL, changedBinding); !errors.Is(err, ErrObservationScope) || requests.Load() != 0 {
+		t.Fatalf("changed reviewed scope fetched private history: %v, requests %d", err, requests.Load())
+	}
+	if _, err := collector.CollectReviewed(ctx, "scope.home", "http://127.0.0.1:9999", binding); !errors.Is(err, ErrConnectionChanged) || requests.Load() != 0 {
+		t.Fatalf("changed reviewed endpoint fetched private history: %v, requests %d", err, requests.Load())
+	}
+	result, err := collector.CollectReviewed(ctx, "scope.home", server.URL, binding)
 	if err != nil || result.Read != 2 || result.Inserted != 1 || result.Skipped.OutsideScope != 1 || !result.QueryLogEnabled {
 		t.Fatalf("collection %+v, %v", result, err)
 	}
@@ -156,7 +164,7 @@ func TestCollectorPersistsOnlyScopedQueryObservationsAndReplaysIdempotently(t *t
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if audits != 6 {
-		t.Fatalf("got %d collection audit phases, want 6", audits)
+	if audits != 8 {
+		t.Fatalf("got %d collection audit phases, want 8", audits)
 	}
 }

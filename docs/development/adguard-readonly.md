@@ -1,9 +1,10 @@
 # External AdGuard Home read boundary
 
 Related issue: #16. This candidate integration adds a controller-owned,
-read-only API client, native macOS connection commands, a separately approved
-one-shot DNS observation command, and a local browser status view. Device detail
-can show retained DNS events with a unique, recent, time-valid Device Watch IP
+read-only API client, native macOS connection commands, separately approved
+one-shot DNS observation from native or local browser review, and a local
+browser status view. Device detail can show retained DNS events with a unique,
+recent, time-valid Device Watch IP
 association, marked as inferred. These remain candidate behavior until the
 release gates are validated.
 
@@ -48,7 +49,16 @@ send Cozy SOC's HttpOnly session cookie to the other service.
 
 `cozysoc adguard-collect ENROLLED_SCOPE_ID` requires a separate, exact terminal
 approval for one read of at most the newest 100 query-log entries. The
-controller verifies the selected enrolled network scope still matches the
+authenticated browser Tools page can instead review the current external
+origin, enrolled scope, interface, prefixes, 100-query bound, and 24-hour query
+eligibility window, then
+approve or decline a one-use review within five minutes. Browser approval is
+bound to the reviewed origin and scope at the controller before private query
+history is read. Expired, replayed, changed or unreviewed browser requests cannot
+start collection. A failed or interrupted run never retries automatically; the
+result is count-only, and an uncertain outcome directs the user to saved local
+history. These browser routes cannot connect, disconnect, or configure AdGuard.
+The controller verifies the selected enrolled network scope still matches the
 current interface and prefixes before reading private query history. It stores
 only entries with a visible client IP inside those prefixes. Anonymized,
 missing-client-IP and out-of-scope entries are skipped; old or future entries
@@ -67,8 +77,9 @@ cannot establish device attribution;
 even a present client ID describes only a request that reached this resolver.
 These observations are private browsing data. The one-shot collection path
 persists selected DNS name, client IP, query type, response status and filtering
-reason in the controller's local evidence store with `ephemeral` (24-hour)
-retention. Client IDs are used only to form opaque deduplication keys and are
+reason in the controller's local evidence store with `ephemeral` retention
+(24 hours by default); configured ephemeral retention may be shorter. Client
+IDs are used only to form opaque deduplication keys and are
 not stored in the observation payload. Query names and addresses never enter
 index keys, native results, logs, or diagnostics. Retained events state
 `device-identity-unverified`; they do not create device identity claims or

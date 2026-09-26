@@ -18,9 +18,10 @@ import (
 const CapabilityID = "adguard-home"
 
 var (
-	ErrAlreadyConnected = errors.New("AdGuard Home connection already exists")
-	ErrNotConnected     = errors.New("AdGuard Home is not connected")
-	ErrNotRunning       = errors.New("AdGuard Home is not running")
+	ErrAlreadyConnected  = errors.New("AdGuard Home connection already exists")
+	ErrNotConnected      = errors.New("AdGuard Home is not connected")
+	ErrNotRunning        = errors.New("AdGuard Home is not running")
+	ErrConnectionChanged = errors.New("AdGuard Home connection changed before the approved read")
 )
 
 type configurationStore interface {
@@ -188,11 +189,27 @@ func (c *Connections) Current(ctx context.Context) (Connection, error) {
 // ReadSnapshot is available only to an explicit collection request. Normal
 // connection and status paths continue to use the status-only Probe method.
 func (c *Connections) ReadSnapshot(ctx context.Context) (Snapshot, string, error) {
+	return c.readSnapshot(ctx, "")
+}
+
+// ReadSnapshotBound compares the reviewed origin under the connection lock,
+// before any request for private query history can reach the external service.
+func (c *Connections) ReadSnapshotBound(ctx context.Context, expectedEndpoint string) (Snapshot, string, error) {
+	if expectedEndpoint == "" {
+		return Snapshot{}, "", ErrConnectionChanged
+	}
+	return c.readSnapshot(ctx, expectedEndpoint)
+}
+
+func (c *Connections) readSnapshot(ctx context.Context, expectedEndpoint string) (Snapshot, string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, endpoint, _, err := c.configuredClient(ctx)
 	if err != nil {
 		return Snapshot{}, "", err
+	}
+	if expectedEndpoint != "" && endpoint != expectedEndpoint {
+		return Snapshot{}, "", ErrConnectionChanged
 	}
 	snapshot, err := client.Read(ctx)
 	if err != nil {

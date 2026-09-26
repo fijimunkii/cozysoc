@@ -66,6 +66,7 @@ type adguardConnectionControl interface {
 
 type adguardCollectionControl interface {
 	Collect(context.Context, string) (adguard.CollectionResult, error)
+	CollectReviewed(context.Context, string, string, devicewatch.ScopeBinding) (adguard.CollectionResult, error)
 }
 
 type controllerAPIHandler struct {

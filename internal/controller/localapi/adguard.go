@@ -90,6 +90,8 @@ func (s *Server) writeAdGuardError(conn net.Conn, id string, err error) {
 		s.writeError(conn, id, "precondition_failed", "AdGuard Home is not running")
 	case errors.Is(err, adguard.ErrNotConnected):
 		s.writeError(conn, id, "precondition_failed", "AdGuard Home is not connected")
+	case errors.Is(err, adguard.ErrConnectionChanged):
+		s.writeError(conn, id, "precondition_failed", "reviewed AdGuard Home connection changed; no query history was read")
 	case errors.Is(err, adguard.ErrObservationScope):
 		s.writeError(conn, id, "precondition_failed", "enrolled network scope is unavailable or changed")
 	case errors.Is(err, adguard.ErrObservationIngestion):
