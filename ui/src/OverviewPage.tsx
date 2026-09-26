@@ -2,14 +2,16 @@ import type { AppData } from "./app-data";
 import { coverageStatePresentation } from "./coverage/presentation";
 
 export function OverviewPage({ data, onNavigate }: { data: AppData; onNavigate: (page: "devices" | "coverage") => void }) {
-  const visible = data.devices.devices.filter((device) => device.state === "visible").length;
-  const uncertain = data.devices.devices.length - visible;
+  const counts = data.devices === null ? null : {
+    visible: data.devices.devices.filter((device) => device.state === "visible").length,
+    known: data.devices.devices.length,
+  };
   const report = data.coverage.reports.find((item) => item.capability_id === "device-watch") ?? data.coverage.reports[0];
   const coverage = report === undefined ? undefined : coverageStatePresentation(report.state);
   const knownLimits = report?.configured
     ? report.observation_points.reduce((total, point) => total + point.gaps.length, 0)
     : undefined;
-  const recent = [...data.devices.devices]
+  const recent = [...(data.devices?.devices ?? [])]
     .sort((left, right) => Date.parse(right.last_seen) - Date.parse(left.last_seen))
     .slice(0, 5);
 
@@ -18,8 +20,8 @@ export function OverviewPage({ data, onNavigate }: { data: AppData; onNavigate: 
       <div className="overview-grid">
         <article className="overview-card">
           <span>Device visibility</span>
-          <strong>{data.devices.configured ? `${visible} visible now` : "Not configured"}</strong>
-          <p>{data.devices.configured ? `${uncertain} uncertain · ${data.devices.devices.length} known` : "No Device Watch presence evidence is expected until monitoring is enabled."}</p>
+          <strong>{counts === null ? "Unavailable" : data.devices?.configured ? `${counts.visible} visible now` : "Not configured"}</strong>
+          <p>{counts === null ? "The device read failed. Current presence is unknown; coverage is shown separately." : data.devices?.configured ? `${counts.known - counts.visible} uncertain · ${counts.known} known` : "No Device Watch presence evidence is expected until monitoring is enabled."}</p>
           <button type="button" onClick={() => onNavigate("devices")}>View devices</button>
         </article>
         <article className="overview-card">
@@ -39,9 +41,11 @@ export function OverviewPage({ data, onNavigate }: { data: AppData; onNavigate: 
       <div className="product-card overview-detail">
         <div className="section-heading-row overview-heading-row">
           <div><p className="eyebrow">Recent visibility</p><h2 id="overview-title">Recent device visibility</h2></div>
-          {data.devices.configured ? <button type="button" className="quiet-button" onClick={() => onNavigate("devices")}>All devices</button> : null}
+          {data.devices?.configured ? <button type="button" className="quiet-button" onClick={() => onNavigate("devices")}>All devices</button> : null}
         </div>
-        {!data.devices.configured ? (
+        {data.devices === null ? (
+          <p className="overview-empty">Device evidence could not be read. Retry the live read; no current presence or absence is inferred.</p>
+        ) : !data.devices.configured ? (
           <p className="overview-empty">No device-presence evidence is available yet. Setup above shows whether a network is authorized and whether Device Watch is enabled.</p>
         ) : recent.length === 0 ? (
           <p className="overview-empty">No positive device-presence evidence has arrived yet.</p>

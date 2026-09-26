@@ -303,6 +303,16 @@ describe("SetupPanel", () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
+  it("pauses setup when current Device Watch state is unavailable", () => {
+    const setup = client();
+    render(<SetupPanel data={{ ...data({ enabled: true }), devices: null }} client={setup} onChanged={() => undefined} onReviewCoverage={() => undefined} />);
+    expect(screen.getByRole("heading", { name: "Device status is unavailable" })).toBeTruthy();
+    expect(screen.getByText(/monitoring intent is not guessed/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pause Device Watch" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Enable Device Watch" })).toBeNull();
+    expect(setup.disableDeviceWatch).not.toHaveBeenCalled();
+  });
+
   it("completes setup only with current limited coverage and opens its details", () => {
     const reviewCoverage = vi.fn();
     render(<SetupPanel data={data({ enabled: true })} client={client()} onChanged={() => undefined} onReviewCoverage={reviewCoverage} />);

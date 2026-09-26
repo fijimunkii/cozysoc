@@ -7,7 +7,8 @@ import { loadStorageOverviewFromWeb, type StorageOverview } from "./tools/storag
 
 export interface AppData {
   coverage: CoverageBundle;
-  devices: DeviceList;
+  devices: DeviceList | null;
+  devices_error?: string;
   activity: DeviceActivityList | null;
   activity_error?: string;
   tools: ToolsSnapshot | null;
@@ -23,7 +24,9 @@ export async function loadAppDataFromWeb(): Promise<AppData> {
   // Core evidence reads stay authoritative even when secondary setup/activity/tools
   // projections are temporarily unavailable.
   const coverage = await loadCoverageFromWeb();
-  const devicesPromise = loadDevicesFromWeb();
+  const devicesPromise = loadDevicesFromWeb()
+    .then((devices) => ({ devices }))
+    .catch(() => ({ devices: null, devices_error: "Device evidence is temporarily unavailable." }));
   const activityPromise = loadDeviceActivityFromWeb()
     .then((activity) => ({ activity }))
     .catch((error: unknown) => ({
@@ -45,6 +48,6 @@ export async function loadAppDataFromWeb(): Promise<AppData> {
       networks: { candidates: [], candidates_truncated: false } as NetworkList,
       network_error: error instanceof Error ? error.message : "Network setup information is unavailable.",
     }));
-  const [devices, activityState, toolsState, storageState, networkState] = await Promise.all([devicesPromise, activityPromise, toolsPromise, storagePromise, networksPromise]);
-  return { coverage, devices, ...activityState, ...toolsState, ...storageState, ...networkState };
+  const [deviceState, activityState, toolsState, storageState, networkState] = await Promise.all([devicesPromise, activityPromise, toolsPromise, storagePromise, networksPromise]);
+  return { coverage, ...deviceState, ...activityState, ...toolsState, ...storageState, ...networkState };
 }
