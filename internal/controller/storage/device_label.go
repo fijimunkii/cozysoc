@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,47 +66,21 @@ func (s *Store) SetDeviceLabel(ctx context.Context, scopeID, deviceID, label str
 		return false, ErrDeviceNotInScope
 	}
 
-	var current sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT d.user_label
-		FROM devices d
-		WHERE d.id = ?
-		  AND (d.retired_at_ns IS NULL OR d.retired_at_ns >= ?)
-		  AND EXISTS (
-		      SELECT 1
-		      FROM device_claim_links l
-		      JOIN identity_claims c ON c.id = l.claim_id
-		      WHERE l.device_id = d.id
-		        AND c.scope_id = ?
-		        AND c.observed_at_ns <= ?
-		        AND c.expires_at_ns > ?
-		  )`,
-		deviceID, unixNanos(now), scopeID, unixNanos(now), unixNanos(now)).Scan(&current)
-	if errors.Is(err, sql.ErrNoRows) {
-		// Canonical Device Watch evidence retains claims and links in batches.
-		// Resolve that evidence inside this write transaction before authorizing
-		// the label, so a stale route or another scope cannot grant a mutation.
-		snapshot, snapshotErr := NewMixedIdentitySnapshot(tx, now)
-		if snapshotErr != nil {
-			return false, fmt.Errorf("resolve device label evidence: %w", snapshotErr)
-		}
-		detail, detailErr := snapshot.GetDeviceEvidenceDetail(ctx, DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: deviceID, AsOf: now, Limit: 1})
-		if errors.Is(detailErr, ErrDeviceEvidenceNotFound) {
-			return false, fmt.Errorf("%w: %s", ErrDeviceNotInScope, deviceID)
-		}
-		if detailErr != nil {
-			return false, fmt.Errorf("resolve device label evidence: %w", detailErr)
-		}
-		current = sql.NullString{String: detail.Summary.Device.UserLabel, Valid: detail.Summary.Device.UserLabel != ""}
-		err = nil
+	// Authorize labels against the same corrected, scope-local evidence view
+	// shown to the user. A source whose only links were split away is absent;
+	// a new target with retained batch links is available.
+	snapshot, err := NewMixedIdentitySnapshot(tx, now)
+	if err != nil {
+		return false, fmt.Errorf("resolve device label evidence: %w", err)
+	}
+	detail, err := snapshot.GetDeviceEvidenceDetail(ctx, DeviceEvidenceDetailQuery{ScopeID: scopeID, DeviceID: deviceID, AsOf: now, Limit: 1})
+	if errors.Is(err, ErrDeviceEvidenceNotFound) {
+		return false, fmt.Errorf("%w: %s", ErrDeviceNotInScope, deviceID)
 	}
 	if err != nil {
-		return false, fmt.Errorf("resolve device label target: %w", err)
+		return false, fmt.Errorf("resolve device label evidence: %w", err)
 	}
-
-	previous := ""
-	if current.Valid {
-		previous = current.String
-	}
+	previous := detail.Summary.Device.UserLabel
 	if previous == label {
 		return false, nil
 	}

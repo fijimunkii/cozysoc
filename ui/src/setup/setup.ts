@@ -81,6 +81,31 @@ export interface DeviceCorrectionClient {
   unmergeDevice(sourceID: string): Promise<DeviceCorrectionResult>;
 }
 
+export interface DeviceSplit {
+  observation_id: string;
+  source_device_id: string;
+  target_device_id: string;
+  created_at: string;
+}
+
+export interface DeviceSplitList {
+  configured: boolean;
+  scope_id?: string;
+  splits: DeviceSplit[];
+}
+
+export interface DeviceSplitResult {
+  observation_id: string;
+  source_device_id?: string;
+  target_device_id?: string;
+  changed: boolean;
+}
+
+export interface DeviceSplitClient {
+  splitObservation(sourceID: string, observationID: string, targetID?: string): Promise<DeviceSplitResult>;
+  unsplitObservation(observationID: string): Promise<DeviceSplitResult>;
+}
+
 export class SetupRequestError extends Error {
   readonly code: string;
   readonly status: number;
@@ -128,7 +153,12 @@ export async function loadDeviceMergesFromWeb(): Promise<DeviceMergeList> {
   return parseDeviceMergeList(await readJSON(response, "Device correction response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & GatewayCheckClient {
+export async function loadDeviceSplitsFromWeb(): Promise<DeviceSplitList> {
+  const response = await request("/api/devices/splits", { method: "GET" });
+  return parseDeviceSplitList(await readJSON(response, "Device split response"));
+}
+
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -197,6 +227,20 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Device
       if (result.source_device_id !== sourceID || result.target_device_id !== undefined) throw new SetupRequestError("invalid_response", "Device undo response did not match the reviewed correction.");
       return result;
     },
+    async splitObservation(sourceID: string, observationID: string, targetID?: string) {
+      if (!idPattern.test(sourceID) || !idPattern.test(observationID) || targetID !== undefined && (!idPattern.test(targetID) || targetID === sourceID)) throw new SetupRequestError("invalid_request", "Select a valid observation and a different device target.");
+      const body: { source_device_id: string; observation_id: string; target_device_id?: string } = { source_device_id: sourceID, observation_id: observationID };
+      if (targetID !== undefined) body.target_device_id = targetID;
+      const result = parseDeviceSplitResult(await mutate("/api/devices/split", body));
+      if (result.source_device_id !== sourceID || result.observation_id !== observationID || result.target_device_id === undefined || targetID !== undefined && result.target_device_id !== targetID) throw new SetupRequestError("invalid_response", "Device split response did not match the reviewed observation.");
+      return result;
+    },
+    async unsplitObservation(observationID: string) {
+      if (!idPattern.test(observationID)) throw new SetupRequestError("invalid_request", "Device split observation is invalid.");
+      const result = parseDeviceSplitResult(await mutate("/api/devices/unsplit", { observation_id: observationID }));
+      if (result.observation_id !== observationID || result.source_device_id !== undefined || result.target_device_id !== undefined) throw new SetupRequestError("invalid_response", "Device split undo did not match the reviewed correction.");
+      return result;
+    },
     async reviewGateway(target: string) {
       return parseGatewayCheckReview(await mutate("/api/network-quality/gateway/review", { target }));
     },
@@ -229,6 +273,34 @@ export function parseDeviceMergeList(input: unknown): DeviceMergeList {
   const sources = new Set(merges.map((item) => item.source_device_id));
   if (sources.size !== merges.length || merges.some((item) => sources.has(item.target_device_id))) throw new SetupRequestError("invalid_response", "Device corrections contain conflicting mappings.");
   const result: DeviceMergeList = { configured: value.configured, merges };
+  if (typeof scopeID === "string") result.scope_id = scopeID;
+  return result;
+}
+
+function parseDeviceSplitResult(input: unknown): DeviceSplitResult {
+  const value = objectValue(input, "device split result");
+  if (typeof value.observation_id !== "string" || !idPattern.test(value.observation_id) || typeof value.changed !== "boolean") throw new SetupRequestError("invalid_response", "Device split result is invalid.");
+  const result: DeviceSplitResult = { observation_id: value.observation_id, changed: value.changed };
+  if (value.source_device_id !== undefined) result.source_device_id = idValue(value.source_device_id, "device split source");
+  if (value.target_device_id !== undefined) result.target_device_id = idValue(value.target_device_id, "device split target");
+  return result;
+}
+
+export function parseDeviceSplitList(input: unknown): DeviceSplitList {
+  const value = objectValue(input, "device splits");
+  if (typeof value.configured !== "boolean" || !Array.isArray(value.splits) || value.splits.length > 64) throw new SetupRequestError("invalid_response", "Device split list is invalid.");
+  const scopeID = value.scope_id;
+  if (value.configured ? typeof scopeID !== "string" || !idPattern.test(scopeID) : scopeID !== undefined || value.splits.length !== 0) throw new SetupRequestError("invalid_response", "Device split scope is invalid.");
+  const splits: DeviceSplit[] = value.splits.map((item) => {
+    const entry = objectValue(item, "device split");
+    const observationID = idValue(entry.observation_id, "split observation");
+    const sourceID = idValue(entry.source_device_id, "split source");
+    const targetID = idValue(entry.target_device_id, "split target");
+    if (sourceID === targetID) throw new SetupRequestError("invalid_response", "Device split maps a device to itself.");
+    return { observation_id: observationID, source_device_id: sourceID, target_device_id: targetID, created_at: timestampValue(entry.created_at, "split time") };
+  });
+  if (new Set(splits.map((item) => item.observation_id)).size !== splits.length) throw new SetupRequestError("invalid_response", "Device splits contain duplicate observations.");
+  const result: DeviceSplitList = { configured: value.configured, splits };
   if (typeof scopeID === "string") result.scope_id = scopeID;
   return result;
 }
@@ -372,6 +444,11 @@ function objectValue(input: unknown, label: string): Record<string, unknown> {
     throw new SetupRequestError("invalid_response", `${label} must be an object.`);
   }
   return input as Record<string, unknown>;
+}
+
+function idValue(input: unknown, label: string): string {
+  if (typeof input !== "string" || !idPattern.test(input)) throw new SetupRequestError("invalid_response", `${label} is invalid.`);
+  return input;
 }
 
 function boundedText(input: unknown, label: string, maxLength: number): string {

@@ -97,6 +97,12 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runDeviceUnmergeCommand(ctx, args[1:], stdout, stderr)
 	case "device-merges":
 		return runDeviceMergesCommand(ctx, args[1:], stdout, stderr)
+	case "device-split":
+		return runDeviceSplitCommand(ctx, args[1:], stdout, stderr)
+	case "device-unsplit":
+		return runDeviceUnsplitCommand(ctx, args[1:], stdout, stderr)
+	case "device-splits":
+		return runDeviceSplitsCommand(ctx, args[1:], stdout, stderr)
 	case "network-enroll":
 		return runNetworkEnrollCommand(ctx, args[1:], stdout, stderr)
 	case "help", "-h", "--help":
@@ -148,6 +154,9 @@ Usage:
   cozysoc device-merge [--state-dir PATH] SOURCE_DEVICE_ID TARGET_DEVICE_ID
   cozysoc device-unmerge [--state-dir PATH] SOURCE_DEVICE_ID
   cozysoc device-merges [--state-dir PATH]
+  cozysoc device-split [--state-dir PATH] SOURCE_DEVICE_ID OBSERVATION_ID [TARGET_DEVICE_ID]
+  cozysoc device-unsplit [--state-dir PATH] OBSERVATION_ID
+  cozysoc device-splits [--state-dir PATH]
   cozysoc network-enroll [--state-dir PATH] INTERFACE
 
 The controller mode uses a permissioned Unix socket, requires a per-controller session secret, verifies OS peer identity on the current macOS and Linux reference paths, and keeps write operations explicitly allowlisted and controller-authorized.

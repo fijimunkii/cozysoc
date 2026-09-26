@@ -35,6 +35,13 @@ func deleteEvidenceBatchDevice(ctx context.Context, tx *sql.Tx, device string, l
 	if corrected {
 		return false, ErrDeviceMergeConflict
 	}
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM device_identity_splits
+		WHERE source_device_id=? OR target_device_id=?)`, device, device).Scan(&corrected); err != nil {
+		return false, err
+	}
+	if corrected {
+		return false, ErrDeviceSplitConflict
+	}
 	// Global device IDs can have evidence in multiple scopes: delete every link,
 	// not just the scope that happened to select the device in the UI.
 	first := true

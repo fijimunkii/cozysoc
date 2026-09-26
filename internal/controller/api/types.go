@@ -22,6 +22,9 @@ const (
 	MethodDeviceMerge         = "device.merge"
 	MethodDeviceUnmerge       = "device.unmerge"
 	MethodDeviceMerges        = "device.merges"
+	MethodDeviceSplit         = "device.split"
+	MethodDeviceUnsplit       = "device.unsplit"
+	MethodDeviceSplits        = "device.splits"
 	MethodNetworksList        = "networks.list"
 	MethodNetworkEnroll       = "network.enroll"
 	MethodDeviceWatchCoverage = "device-watch.coverage"
@@ -201,6 +204,36 @@ type DeviceMergeList struct {
 	Configured bool          `json:"configured"`
 	ScopeID    string        `json:"scope_id,omitempty"`
 	Merges     []DeviceMerge `json:"merges"`
+}
+
+type DeviceSplitParams struct {
+	SourceDeviceID string `json:"source_device_id"`
+	ObservationID  string `json:"observation_id"`
+	TargetDeviceID string `json:"target_device_id,omitempty"`
+}
+
+type DeviceUnsplitParams struct {
+	ObservationID string `json:"observation_id"`
+}
+
+type DeviceSplitResult struct {
+	ObservationID  string `json:"observation_id"`
+	SourceDeviceID string `json:"source_device_id,omitempty"`
+	TargetDeviceID string `json:"target_device_id,omitempty"`
+	Changed        bool   `json:"changed"`
+}
+
+type DeviceSplit struct {
+	ObservationID  string    `json:"observation_id"`
+	SourceDeviceID string    `json:"source_device_id"`
+	TargetDeviceID string    `json:"target_device_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type DeviceSplitList struct {
+	Configured bool          `json:"configured"`
+	ScopeID    string        `json:"scope_id,omitempty"`
+	Splits     []DeviceSplit `json:"splits"`
 }
 
 type NetworkInterface struct {

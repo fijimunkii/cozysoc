@@ -10,7 +10,7 @@ import (
 // ListDevicesForScope preserves the legacy claim/link presence intervals in the
 // caller's fixed snapshot. A history match alone does not establish membership.
 func (s *MixedIdentitySnapshot) ListDevicesForScope(ctx context.Context, query DeviceQuery) (DevicePage, error) {
-	return s.listMergedDevicesForScope(ctx, query)
+	return s.listCorrectedDevicesForScope(ctx, query)
 }
 
 func (s *MixedIdentitySnapshot) listOriginalDevicesForScope(ctx context.Context, query DeviceQuery) (DevicePage, error) {

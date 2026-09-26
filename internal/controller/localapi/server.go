@@ -77,6 +77,12 @@ type DeviceMergeListHandler interface {
 	DeviceMerges(context.Context) (api.DeviceMergeList, error)
 }
 
+type DeviceSplitHandler interface {
+	SplitDeviceObservation(context.Context, api.DeviceSplitParams) (api.DeviceSplitResult, error)
+	UnsplitDeviceObservation(context.Context, api.DeviceUnsplitParams) (api.DeviceSplitResult, error)
+	DeviceSplits(context.Context) (api.DeviceSplitList, error)
+}
+
 type NetworkHandler interface {
 	Networks(context.Context) (api.NetworkList, error)
 }
@@ -379,6 +385,24 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			return
 		}
 		result = merges
+	case api.MethodDeviceSplits:
+		if s.rejectUnexpectedParams(conn, request) {
+			return
+		}
+		splitHandler, ok := s.handler.(DeviceSplitHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		splits, splitErr := splitHandler.DeviceSplits(requestCtx)
+		cancel()
+		if splitErr != nil {
+			s.logger.Warn("local_api_request_failed", "method", api.MethodDeviceSplits)
+			s.writeError(conn, request.ID, "internal_error", "unable to load device splits")
+			return
+		}
+		result = splits
 	case api.MethodDeviceActivity:
 		if s.rejectUnexpectedParams(conn, request) {
 			return
@@ -507,6 +531,48 @@ func (s *Server) handleConnContext(ctx context.Context, conn net.Conn) {
 			default:
 				s.logger.Warn("local_api_request_failed", "method", request.Method)
 				s.writeError(conn, request.ID, "internal_error", "unable to correct device identity")
+			}
+			return
+		}
+		result = correction
+	case api.MethodDeviceSplit, api.MethodDeviceUnsplit:
+		splitHandler, ok := s.handler.(DeviceSplitHandler)
+		if !ok {
+			s.writeError(conn, request.ID, "method_not_found", "method is not available")
+			return
+		}
+		requestCtx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		var correction api.DeviceSplitResult
+		var correctionErr error
+		if request.Method == api.MethodDeviceSplit {
+			var params api.DeviceSplitParams
+			if err := decodeRequiredParams(request.Params, &params); err != nil || params.SourceDeviceID == "" || params.ObservationID == "" {
+				cancel()
+				s.writeError(conn, request.ID, "invalid_request", "invalid device split parameters")
+				return
+			}
+			correction, correctionErr = splitHandler.SplitDeviceObservation(requestCtx, params)
+		} else {
+			var params api.DeviceUnsplitParams
+			if err := decodeRequiredParams(request.Params, &params); err != nil || params.ObservationID == "" {
+				cancel()
+				s.writeError(conn, request.ID, "invalid_request", "invalid device split parameters")
+				return
+			}
+			correction, correctionErr = splitHandler.UnsplitDeviceObservation(requestCtx, params)
+		}
+		cancel()
+		if correctionErr != nil {
+			switch {
+			case errors.Is(correctionErr, ErrInvalidMutation):
+				s.writeError(conn, request.ID, "invalid_request", "invalid device split parameters")
+			case errors.Is(correctionErr, ErrMutationTargetNotFound):
+				s.writeError(conn, request.ID, "not_found", "device observation is not available")
+			case errors.Is(correctionErr, ErrMutationConflict):
+				s.writeError(conn, request.ID, "conflict", "device split conflicts with current state")
+			default:
+				s.logger.Warn("local_api_request_failed", "method", request.Method)
+				s.writeError(conn, request.ID, "internal_error", "unable to split device observation")
 			}
 			return
 		}

@@ -31,6 +31,9 @@ type controllerStore interface {
 	MergeDevices(context.Context, string, string, string) (bool, error)
 	UnmergeDevices(context.Context, string, string) (bool, error)
 	ListDeviceMerges(context.Context, string) ([]storage.DeviceMerge, error)
+	SplitDeviceObservation(context.Context, string, string, string, string) (string, bool, error)
+	UndoDeviceSplitObservation(context.Context, string, string) (bool, error)
+	ListDeviceSplits(context.Context, string) ([]storage.DeviceSplit, error)
 	ListActiveDeviceWatchScopes(context.Context) ([]domain.NetworkScope, error)
 	EnrollDeviceWatchScope(context.Context, json.RawMessage) (domain.NetworkScope, bool, error)
 }
@@ -420,6 +423,67 @@ func (h *controllerAPIHandler) DeviceMerges(ctx context.Context) (api.DeviceMerg
 		result.Merges = append(result.Merges, api.DeviceMerge{
 			SourceDeviceID: item.SourceDeviceID, TargetDeviceID: item.TargetDeviceID, CreatedAt: item.CreatedAt,
 		})
+	}
+	return result, nil
+}
+
+func (h *controllerAPIHandler) SplitDeviceObservation(ctx context.Context, params api.DeviceSplitParams) (api.DeviceSplitResult, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceSplitResult{}, err
+	}
+	if !configured || scopeID == "" {
+		return api.DeviceSplitResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if !deviceIDPattern.MatchString(params.SourceDeviceID) || !deviceIDPattern.MatchString(params.ObservationID) || params.TargetDeviceID != "" && !deviceIDPattern.MatchString(params.TargetDeviceID) {
+		return api.DeviceSplitResult{}, localapi.ErrInvalidMutation
+	}
+	targetID, changed, err := h.store.SplitDeviceObservation(ctx, scopeID, params.SourceDeviceID, params.ObservationID, params.TargetDeviceID)
+	switch {
+	case errors.Is(err, storage.ErrDeviceNotInScope):
+		return api.DeviceSplitResult{}, localapi.ErrMutationTargetNotFound
+	case errors.Is(err, storage.ErrDeviceSplitConflict), errors.Is(err, storage.ErrDeviceSplitLimit), errors.Is(err, storage.ErrDeviceMergeConflict):
+		return api.DeviceSplitResult{}, localapi.ErrMutationConflict
+	case err != nil:
+		return api.DeviceSplitResult{}, err
+	}
+	return api.DeviceSplitResult{ObservationID: params.ObservationID, SourceDeviceID: params.SourceDeviceID, TargetDeviceID: targetID, Changed: changed}, nil
+}
+
+func (h *controllerAPIHandler) UnsplitDeviceObservation(ctx context.Context, params api.DeviceUnsplitParams) (api.DeviceSplitResult, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceSplitResult{}, err
+	}
+	if !configured || scopeID == "" {
+		return api.DeviceSplitResult{}, localapi.ErrMutationTargetNotFound
+	}
+	if !deviceIDPattern.MatchString(params.ObservationID) {
+		return api.DeviceSplitResult{}, localapi.ErrInvalidMutation
+	}
+	changed, err := h.store.UndoDeviceSplitObservation(ctx, scopeID, params.ObservationID)
+	if err != nil {
+		return api.DeviceSplitResult{}, err
+	}
+	return api.DeviceSplitResult{ObservationID: params.ObservationID, Changed: changed}, nil
+}
+
+func (h *controllerAPIHandler) DeviceSplits(ctx context.Context) (api.DeviceSplitList, error) {
+	scopeID, configured, err := h.deviceWatch.Current()
+	if err != nil {
+		return api.DeviceSplitList{}, err
+	}
+	result := api.DeviceSplitList{Configured: configured, Splits: []api.DeviceSplit{}}
+	if !configured || scopeID == "" {
+		return result, nil
+	}
+	result.ScopeID = scopeID
+	items, err := h.store.ListDeviceSplits(ctx, scopeID)
+	if err != nil {
+		return api.DeviceSplitList{}, err
+	}
+	for _, item := range items {
+		result.Splits = append(result.Splits, api.DeviceSplit{ObservationID: item.ObservationID, SourceDeviceID: item.SourceDeviceID, TargetDeviceID: item.TargetDeviceID, CreatedAt: item.CreatedAt})
 	}
 	return result, nil
 }

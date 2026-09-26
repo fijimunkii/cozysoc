@@ -36,9 +36,17 @@ func (s *MixedIdentitySnapshot) FindRecentDevicesByClaim(ctx context.Context, sc
 	if err != nil {
 		return nil, err
 	}
+	splits, err := loadDeviceSplits(ctx, s.legacy.tx, scope)
+	if err != nil {
+		return nil, err
+	}
+	normalized, err := domain.NormalizeClaimValue(kind, value)
+	if err != nil {
+		return nil, err
+	}
 	limit := 3
-	if len(merges.bySource) != 0 {
-		limit = MaxDeviceMergesPerScope + 2
+	if len(merges.bySource) != 0 || len(splits.byObservation) != 0 {
+		limit = MaxDeviceMergesPerScope + MaxDeviceSplitsPerScope + 3
 	}
 	legacy, err := findRecentDevicesByClaim(ctx, s.legacy.tx, s.legacy.now, scope, kind, value, since, until, limit)
 	if err != nil {
@@ -49,32 +57,40 @@ func (s *MixedIdentitySnapshot) FindRecentDevicesByClaim(ctx context.Context, sc
 		return nil, err
 	}
 	byID := map[string]domain.Device{}
+	splitTargets := map[string]map[string]bool{}
+	for _, route := range splits.byValue[splitClaimKey(kind, normalized)] {
+		if route.ObservedAt.Before(since) || route.ObservedAt.After(until) {
+			continue
+		}
+		if splitTargets[route.SourceDeviceID] == nil {
+			splitTargets[route.SourceDeviceID] = map[string]bool{}
+		}
+		splitTargets[route.SourceDeviceID][route.TargetDeviceID] = true
+	}
 	for _, d := range append(legacy, batch...) {
 		id := merges.canonical(d.ID)
 		if id == d.ID {
 			byID[id] = d
-			continue
+		} else if _, exists := byID[id]; !exists {
+			target, err := loadMergeTargetDevice(ctx, s.legacy.tx, id, until)
+			if err != nil {
+				return nil, err
+			}
+			byID[id] = target
 		}
-		if _, exists := byID[id]; exists {
-			continue
+		// Original routing can still identify the source after one observation
+		// was split from it. Include the corrected target too, leaving a shared
+		// MAC ambiguous rather than silently undoing the user's correction.
+		for targetID := range splitTargets[d.ID] {
+			if _, exists := byID[targetID]; exists {
+				continue
+			}
+			target, err := loadMergeTargetDevice(ctx, s.legacy.tx, targetID, until)
+			if err != nil {
+				return nil, err
+			}
+			byID[targetID] = target
 		}
-		var target domain.Device
-		var label sql.NullString
-		var created int64
-		var retired sql.NullInt64
-		if err := s.legacy.tx.QueryRowContext(ctx, `SELECT id,user_label,created_at_ns,retired_at_ns FROM devices WHERE id=?`, id).Scan(&target.ID, &label, &created, &retired); err != nil {
-			return nil, err
-		}
-		target.UserLabel = label.String
-		target.CreatedAt = time.Unix(0, created).UTC()
-		if retired.Valid {
-			at := time.Unix(0, retired.Int64).UTC()
-			target.RetiredAt = &at
-		}
-		if target.RetiredAt != nil && target.RetiredAt.Before(until) {
-			return nil, ErrEvidenceBatchData
-		}
-		byID[id] = target
 	}
 	devices := make([]domain.Device, 0, len(byID))
 	for _, d := range byID {

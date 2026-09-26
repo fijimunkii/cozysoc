@@ -1,6 +1,6 @@
 package storage
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 const migrationV1 = `
 CREATE TABLE network_scopes (
@@ -269,4 +269,32 @@ CREATE TABLE device_identity_merges (
  CHECK(source_device_id <> target_device_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX device_identity_merges_target ON device_identity_merges(scope_id,target_device_id,source_device_id);
+`
+
+// A split changes the current owner of one reviewed observation's retained
+// claim links without rewriting their original inferred association. Link IDs
+// remain stable when a record moves between row and batch storage.
+const migrationV6 = `
+CREATE TABLE device_identity_splits (
+ scope_id TEXT NOT NULL REFERENCES network_scopes(id) ON DELETE RESTRICT,
+ observation_id TEXT NOT NULL,
+ source_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
+ target_device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE RESTRICT,
+ created_at_ns INTEGER NOT NULL,
+ PRIMARY KEY(scope_id,observation_id),
+ CHECK(source_device_id <> target_device_id)
+) STRICT, WITHOUT ROWID;
+CREATE INDEX device_identity_splits_source ON device_identity_splits(scope_id,source_device_id);
+CREATE INDEX device_identity_splits_target ON device_identity_splits(scope_id,target_device_id);
+CREATE TABLE device_identity_split_links (
+ scope_id TEXT NOT NULL,
+ observation_id TEXT NOT NULL,
+ link_id TEXT NOT NULL,
+ kind TEXT NOT NULL,
+ value TEXT NOT NULL,
+ observed_at_ns INTEGER NOT NULL,
+ PRIMARY KEY(scope_id,link_id),
+ FOREIGN KEY(scope_id,observation_id) REFERENCES device_identity_splits(scope_id,observation_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+CREATE INDEX device_identity_split_links_observation ON device_identity_split_links(scope_id,observation_id);
 `

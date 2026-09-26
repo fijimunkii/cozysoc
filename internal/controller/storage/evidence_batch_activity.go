@@ -73,6 +73,10 @@ func readMixedDeviceActivity(ctx context.Context, tx *sql.Tx, now time.Time, q D
 	if err != nil {
 		return DeviceActivityPage{}, err
 	}
+	splits, err := loadDeviceSplits(ctx, tx, q.ScopeID)
+	if err != nil {
+		return DeviceActivityPage{}, err
+	}
 	type mergedActivity struct {
 		device    domain.Device
 		rows      activityDeviceRows
@@ -145,6 +149,47 @@ func readMixedDeviceActivity(ctx context.Context, tx *sql.Tx, now time.Time, q D
 			}
 			first, batchCursor = false, b.ID
 		}
+		if len(splits.byObservation) != 0 {
+			for _, row := range rows.rows {
+				corrected := device.ID
+				if split, ok := splits.byObservation[row.ID]; ok && split.SourceDeviceID == device.ID {
+					corrected = split.TargetDeviceID
+				}
+				canonical := merges.canonical(corrected)
+				bucket := merged[canonical]
+				if bucket == nil {
+					target, err := loadMergeTargetDevice(ctx, tx, canonical, q.AsOf)
+					if err != nil {
+						return DeviceActivityPage{}, err
+					}
+					bucket = &mergedActivity{device: target, originals: map[string]activityRawRow{}}
+					merged[canonical] = bucket
+				}
+				if corrected == device.ID && canonical != device.ID && device.CreatedAt.Before(bucket.device.CreatedAt) {
+					bucket.device.CreatedAt = device.CreatedAt
+				}
+				if original, ok := bucket.originals[row.ID]; ok {
+					if original.At != row.At || original.Hardware != row.Hardware || original.Family != row.Family || original.Address != row.Address ||
+						original.Source.ObservationID != row.Source.ObservationID || original.Source.SensorID != row.Source.SensorID ||
+						original.Source.Kind != row.Source.Kind || original.Source.SourceStream != row.Source.SourceStream ||
+						!original.Source.IngestedAt.Equal(row.Source.IngestedAt) || original.Source.Attribution != row.Source.Attribution {
+						return DeviceActivityPage{}, ErrEvidenceBatchData
+					}
+					continue
+				}
+				if mergedRows >= 65536 {
+					return DeviceActivityPage{}, ErrEvidenceBatchQueryLimit
+				}
+				allow := activityQueryBudget{rows: 1}
+				if err := bucket.rows.add(row, &allow); err != nil {
+					return DeviceActivityPage{}, err
+				}
+				bucket.originals[row.ID] = row
+				mergedRows++
+			}
+			cursor = device.ID
+			continue
+		}
 		canonical := merges.canonical(device.ID)
 		if canonical == device.ID && len(merges.sourcesByTarget[canonical]) == 0 {
 			if err := classifyActivityDevice(ctx, device, rows.rows, since, q.Limit+1, &best); err != nil {
@@ -187,6 +232,17 @@ func readMixedDeviceActivity(ctx context.Context, tx *sql.Tx, now time.Time, q D
 		cursor = device.ID
 	}
 	for _, bucket := range merged {
+		if len(splits.bySource[bucket.device.ID]) != 0 || len(splits.byTarget[bucket.device.ID]) != 0 {
+			view, err := NewMixedIdentitySnapshot(tx, now)
+			if err != nil {
+				return DeviceActivityPage{}, err
+			}
+			detail, err := view.getCorrectedDeviceEvidenceDetail(ctx, DeviceEvidenceDetailQuery{ScopeID: q.ScopeID, DeviceID: bucket.device.ID, AsOf: q.AsOf, Limit: 1})
+			if err != nil {
+				return DeviceActivityPage{}, err
+			}
+			bucket.device.CreatedAt = detail.Summary.FirstSeen
+		}
 		if err := classifyActivityDevice(ctx, bucket.device, bucket.rows.rows, since, q.Limit+1, &best); err != nil {
 			return DeviceActivityPage{}, err
 		}
