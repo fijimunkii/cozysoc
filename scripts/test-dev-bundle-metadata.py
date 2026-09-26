@@ -6,6 +6,8 @@ import json
 import pathlib
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 SCRIPT = pathlib.Path(__file__).with_name("dev-bundle-metadata.py")
 SPEC = importlib.util.spec_from_file_location("bundle_metadata", SCRIPT)
@@ -14,6 +16,14 @@ SPEC.loader.exec_module(metadata)
 
 
 class BundleMetadataTests(unittest.TestCase):
+    def test_rejects_toolchain_that_did_not_build_the_binary(self):
+        with mock.patch.object(metadata.subprocess, "run", side_effect=[
+            SimpleNamespace(stdout="go1.27.1\n/tmp/go\n"),
+            SimpleNamespace(stdout="/tmp/cozysoc: go1.26.9\n"),
+        ]):
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                metadata.go_toolchain(pathlib.Path("/tmp/cozysoc"))
+
     def test_npm_runtime_graph_excludes_build_tools(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
