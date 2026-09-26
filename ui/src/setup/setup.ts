@@ -1,6 +1,6 @@
 import { parseGatewayCheckResult, parseGatewayCheckReview, type GatewayCheckClient } from "../quality/gateway-check";
-import { parseResolverSelections, parseResolverReview, parseResolverResult, type ResolverCheckClient, type ResolverSelection } from "../quality/resolver-check";
-import { parseHTTPSSelections, parseHTTPSReview, parseHTTPSResult, type HTTPSCheckClient, type HTTPSSelection } from "../quality/https-check";
+import { parseResolverSelections, parseResolverReview, parseResolverResult, type ResolverCheckClient, type ResolverSelection, type ResolverSettings } from "../quality/resolver-check";
+import { parseHTTPSSelections, parseHTTPSReview, parseHTTPSResult, type HTTPSCheckClient, type HTTPSSelection, type HTTPSSettings } from "../quality/https-check";
 
 const maxCandidates = 64;
 const maxPrefixes = 64;
@@ -54,6 +54,16 @@ export interface SetupClient {
   retireNetwork(scopeID: string): Promise<NetworkRetireResult>;
   enableDeviceWatch(): Promise<DeviceWatchControlResult>;
   disableDeviceWatch(): Promise<DeviceWatchControlResult>;
+}
+
+export interface ResolverSettingsClient {
+  saveResolverSettings(settings: ResolverSettings): Promise<ResolverSelection>;
+  retireResolverSettings(selectionID: string): Promise<void>;
+}
+
+export interface HTTPSSettingsClient {
+  saveHTTPSSettings(settings: HTTPSSettings): Promise<HTTPSSelection>;
+  retireHTTPSSettings(selectionID: string): Promise<void>;
 }
 
 export interface DeviceLabelResult {
@@ -176,7 +186,7 @@ export async function loadDeviceSplitsFromWeb(): Promise<DeviceSplitList> {
   return parseDeviceSplitList(await readJSON(response, "Device split response"));
 }
 
-export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient & ResolverCheckClient & HTTPSCheckClient {
+export function createWebSetupClient(): SetupClient & DeviceLabelClient & DeviceCorrectionClient & DeviceSplitClient & GatewayCheckClient & ResolverCheckClient & HTTPSCheckClient & ResolverSettingsClient & HTTPSSettingsClient {
   let csrfToken: string | undefined;
 
   async function csrf(): Promise<string> {
@@ -281,6 +291,30 @@ export function createWebSetupClient(): SetupClient & DeviceLabelClient & Device
     async decideResolver(reviewID: string, approve: boolean) {
       if (!csrfPattern.test(reviewID)) throw new SetupRequestError("invalid_request", "Resolver review is invalid or expired.");
       return parseResolverResult(await mutate("/api/network-quality/resolver/run", { review_id: reviewID, approve }));
+    },
+    async saveResolverSettings(settings: ResolverSettings) {
+      const [saved] = parseResolverSelections({ items: [await mutate("/api/network-quality/resolver/selections/save", settings)] });
+      if (!saved || saved.settings.endpoint !== settings.endpoint || saved.settings.name !== settings.name.toLowerCase() || saved.settings.family !== settings.family || saved.settings.transport !== settings.transport || saved.settings.query_type !== settings.query_type || saved.settings.expect !== settings.expect || saved.settings.destination_scope !== settings.destination_scope) {
+        throw new SetupRequestError("invalid_response", "Saved DNS target did not match the requested settings.");
+      }
+      return saved;
+    },
+    async retireResolverSettings(selectionID: string) {
+      if (!/^selection\.[0-9a-f]{32}$/.test(selectionID)) throw new SetupRequestError("invalid_request", "Choose a saved DNS target.");
+      const value = objectValue(await mutate("/api/network-quality/resolver/selections/retire", { selection_id: selectionID }), "DNS retirement response");
+      if (Object.keys(value).length !== 3 || value.schema_version !== 1 || value.selection_id !== selectionID || value.state !== "retired") throw new SetupRequestError("invalid_response", "DNS retirement response did not match the reviewed target.");
+    },
+    async saveHTTPSSettings(settings: HTTPSSettings) {
+      const [saved] = parseHTTPSSelections({ items: [await mutate("/api/network-quality/https/selections/save", settings)] });
+      if (!saved || saved.settings.endpoint !== settings.endpoint || saved.settings.server_name !== settings.server_name.toLowerCase() || saved.settings.request_target !== settings.request_target || saved.settings.family !== settings.family || saved.settings.method !== settings.method || saved.settings.expected_status !== settings.expected_status || saved.settings.destination_policy !== settings.destination_policy) {
+        throw new SetupRequestError("invalid_response", "Saved HTTPS target did not match the requested settings.");
+      }
+      return saved;
+    },
+    async retireHTTPSSettings(selectionID: string) {
+      if (!/^https-selection\.[0-9a-f]{32}$/.test(selectionID)) throw new SetupRequestError("invalid_request", "Choose a saved HTTPS target.");
+      const value = objectValue(await mutate("/api/network-quality/https/selections/retire", { selection_id: selectionID }), "HTTPS retirement response");
+      if (Object.keys(value).length !== 3 || value.schema_version !== 1 || value.selection_id !== selectionID || value.state !== "retired") throw new SetupRequestError("invalid_response", "HTTPS retirement response did not match the reviewed target.");
     },
     async reviewHTTPS(selectionID: string) {
       if (!/^https-selection\.[0-9a-f]{32}$/.test(selectionID)) throw new SetupRequestError("invalid_request", "Choose a saved HTTPS selection.");

@@ -57,10 +57,10 @@ export function ResolverCheckPanel({ mode, client, loadSelections = loadResolver
   </section>;
   return <section className="product-card local-quality gateway-check" aria-labelledby={titleID}>
     <p className="eyebrow">Network quality · active check</p><h2 id={titleID}>Check a selected DNS resolver</h2>
-    <p>Use a resolver selection saved through the local controller. Loading saved selections reads private DNS settings on this device; it sends no query. The controller must be started with the experimental resolver-check option.</p>
+    <p>Use a resolver selection saved above. Loading saved selections reads private DNS settings on this device; it sends no query. The controller must be started with the experimental resolver-check option.</p>
     <button type="button" disabled={busy.current || phase.kind==="review"} onClick={()=>{void load();}}>Load saved resolver selections</button>
     {phase.kind==="loading" ? <p role="status">Reading saved selections…</p> : null}
-    {items?.length===0 ? <p>No saved selection is available for the enrolled network. Save explicit resolver settings with the local command first.</p> : null}
+    {items?.length===0 ? <p>No saved selection is available for the enrolled network. Save an explicit DNS target above first.</p> : null}
     {items && items.length>0 ? <form onSubmit={(event)=>{event.preventDefault();void review();}}>
       <label htmlFor={selectID}>Saved resolver selection</label>{" "}
       <select id={selectID} value={selected} disabled={busy.current || phase.kind==="review"} onChange={(event)=>setSelected(event.target.value)}>

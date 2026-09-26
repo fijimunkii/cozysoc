@@ -49,7 +49,7 @@ fail without fallback. Settings storage remains usable on Linux.
 All four UDS methods require a verified kernel peer UID, rotating session secret
 and API version. Parameter fields are exact, unique and bounded. Caller-supplied
 scope/source/interface/budget/reference IDs on save and any approval field are
-rejected. Only the selected reference can enter preview. The browser has fixed, authenticated saved-selection and review routes with explicit narrow projections; it cannot call arbitrary native methods. Errors never include raw database or route details.
+rejected. Only the selected reference can enter preview. The browser has fixed, authenticated settings save/retire, saved-selection and check-review routes with explicit narrow projections; it cannot call arbitrary native methods. Browser save requires every supported field, returns only the saved selection and settings, and grants no check consent. An uncertain browser mutation requires reloading saved selections before any further attempt. Errors never include raw database or route details.
 
 One inert coordinator is installed only after the controller owns its socket.
 Installation has no settings read, route lookup or probe side effect. It cannot be

@@ -19,6 +19,9 @@ cozysoc https-retire SELECTION_ID
 ```
 
 The endpoint and name above are documentation fixtures, not default destinations.
+The authenticated local browser offers the same explicit save and retire settings
+operations through fixed routes. It shows private selections only after an
+intentional load, and a save never starts the separately reviewed HTTPS check.
 All seven settings are required. Endpoints use canonical numeric IPv4 or bracketed
 IPv6 with port 443; family must agree. Methods are GET or HEAD. The server name is
 an explicit DNS identity, stored lowercase, and the request target is an exact

@@ -10,4 +10,6 @@
 .gateway-check select { display: block; width: 100%; min-width: 0; max-width: 100%; padding: .5rem; border: 1px solid #858c80; border-radius: 8px; }
 .gateway-check button { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .gateway-check .primary-action { margin: .5rem 0; }
+.check-settings-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .75rem; width: 100%; }
+.check-settings-fields label { display: block; width: 100%; min-width: 0; }
 .https-check-request { max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; word-break: break-all; border: 1px solid #dedbd1; border-radius: 8px; padding: 1rem; background: #f8f7f2; }

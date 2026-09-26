@@ -42,10 +42,10 @@ export function HTTPSCheckPanel({mode,client,loadSelections=loadHTTPSSelectionsF
  </section>;
  return <section className="product-card local-quality gateway-check" aria-labelledby={titleID}>
   <p className="eyebrow">Network quality · active check</p><h2 id={titleID}>Check a selected HTTPS target</h2>
-  <p>Use a target saved through the local controller. Loading selections reads private HTTPS settings on this device; it sends no request. The controller must be started with the experimental HTTPS-check option.</p>
+  <p>Use a target saved above. Loading selections reads private HTTPS settings on this device; it sends no request. The controller must be started with the experimental HTTPS-check option.</p>
   <button type="button" disabled={busy.current||phase.kind==="review"} onClick={()=>{void load()}}>Load saved HTTPS selections</button>
   {phase.kind==="loading"?<p role="status">Reading saved HTTPS selections…</p>:null}
-  {items?.length===0?<p>No saved HTTPS selection is available for the enrolled network. Save explicit settings with the local command first.</p>:null}
+  {items?.length===0?<p>No saved HTTPS selection is available for the enrolled network. Save an explicit HTTPS target above first.</p>:null}
   {items&&items.length>0?<form onSubmit={(event)=>{event.preventDefault();void review()}}>
    <label htmlFor={selectID}>Saved HTTPS selection</label>{" "}
    <select id={selectID} value={selected} disabled={busy.current||phase.kind==="review"} onChange={(event)=>setSelected(event.target.value)}>
