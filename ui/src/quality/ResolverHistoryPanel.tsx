@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadResolverHistoryFromWeb, type ResolverHistory, type ResolverHistoryLoader, type ResolverHistoryRun, type ResolverEvidence, type ResolverOutcome } from "./resolver-history";
+import { HistoryExport } from "./HistoryExport";
+import { resolverHistoryExportJSON } from "./history-export";
 import "./local-quality.css";
 import "./gateway-history.css";
 type View = { kind: "idle" | "loading" | "error" } | { kind: "history"; data: ResolverHistory };
@@ -76,6 +78,7 @@ function HistoryDetails({ data }: { data: ResolverHistory }) {
     {data.truncated || data.scan_truncated ? <p role="note" className="gateway-history-warning">The history list is incomplete: {data.truncated ? "the 20-run limit was reached. " : ""}{data.scan_truncated ? "the record read limit was reached. " : ""}More retained checks may exist.</p> : null}
     <p>Expired or missing records are not reconstructed. Older retained runs can be inspected with their run reference using the native history command; a reference grants no execution authority.</p>
     {data.runs.length > 0 ? <ul className="gateway-history-list">{data.runs.map((run) => <li key={run.run_id}><RunDetails run={run} /></li>)}</ul> : null}
+    <HistoryExport data={data} label="DNS" filename="cozysoc-dns-history.json" serialize={resolverHistoryExportJSON} privacy="The file includes interface and saved selection references. Private query names, resolver addresses and raw answers are not in this browser snapshot." />
   </>;
 }
 function RunDetails({ run }: { run: ResolverHistoryRun }) {

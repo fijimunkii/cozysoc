@@ -136,7 +136,9 @@ Current typed device read surfaces:
 - `GET /api/devices/detail?device_id=...` — bounded current-scope identity evidence and retained source provenance for one device; raw observation payloads are not exposed.
 - `GET /api/activity` — bounded low-noise Device Watch activity derived from retained normalized evidence; no raw payloads or inferred departures.
 
-Live Activity offers an explicit preview and local JSON download of its current bounded 24-hour view. The versioned file contains only the validated activity projection, including the original window, read time and truncation flag. It can include labels, IP/MAC addresses and source identifiers. It does not include unobserved devices or a complete history, and Cozy SOC neither rereads the controller nor uploads data at save time. Synthetic demo Activity has no export action. Broader history export, deletion and restore remain #30 work.
+Live Activity offers an explicit preview and local JSON download of its current bounded 24-hour view. The versioned file contains only the validated activity projection, including the original window, read time and truncation flag. It can include labels, IP/MAC addresses and source identifiers. It does not include unobserved devices or a complete history, and Cozy SOC neither rereads the controller nor uploads data at save time. Synthetic demo Activity has no export action. Full-history export, deletion and restore remain #30 work.
+
+Overview's manually read gateway, DNS and HTTPS history cards likewise offer a reviewed, versioned JSON download of their current bounded browser snapshot. Each export revalidates the projected records and retains the original 24-hour window, read time and list/scan truncation flags. Gateway history may include private target/source addresses; DNS and HTTPS history include saved-selection references without private target settings. Preview and save are local read-only actions, and a fresh history read clears the old preview. Demo mode has no export.
 
 The validated information architecture now exposes **Overview**, **Devices**, **Activity**, **Coverage**, and **Tools**. Tools is backed by the real capability catalog rather than an empty navigation placeholder; broader Settings stays deferred until there are additional user-facing configuration choices.
 
@@ -199,7 +201,7 @@ Presence (`visible` / `uncertain`) and identity validity are intentionally separ
 
 Device detail reports the controller's original read time. Its presence and identity labels apply to that read, even when the live list refreshes while the detail remains open; reopening the device requests newer evidence.
 
-The detail view offers an explicit, local JSON export for that one bounded read. The user reviews the exact versioned JSON before saving. The export serializes only the validated detail projection, so unexpected response fields cannot enter the file. It may contain household identifiers such as labels, IP/MAC addresses and source IDs; the UI says so before saving. It is limited to 100 retained identity records, carries the original read time and truncation flag, and is not a backup or complete history. It does not upload anything or read the controller again at save time. Broader history export and restore remain #30 work.
+The detail view offers an explicit, local JSON export for that one bounded read. The user reviews the exact versioned JSON before saving. The export serializes only the validated detail projection, so unexpected response fields cannot enter the file. It may contain household identifiers such as labels, IP/MAC addresses and source IDs; the UI says so before saving. It is limited to 100 retained identity records, carries the original read time and truncation flag, and is not a backup or complete history. It does not upload anything or read the controller again at save time. Full-history export and restore remain #30 work.
 
 ## Tools and capability presentation
 

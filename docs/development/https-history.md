@@ -78,3 +78,5 @@ The [retained diagnosis](retained-quality-diagnosis.md) also compares the latest
 HTTPS run with available gateway and resolver evidence from one shared snapshot.
 It requires at least two layers and matching historical times and observation
 context. Missing, incomplete or stale selected evidence cannot be bypassed.
+
+A successful live read permits an explicit preview and local download of version 1 `cozysoc-https-history` JSON. Export revalidates that exact browser snapshot and preserves its original window, read time, references and both truncation flags. Interface and saved-selection references are included; private endpoint addresses, TLS names, paths and response content are not. Preview and save do not read the controller or send a request; refreshing clears the old preview. It is a bounded list, not complete history or a backup, and demo mode has no export.

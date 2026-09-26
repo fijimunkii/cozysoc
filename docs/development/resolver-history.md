@@ -105,3 +105,5 @@ its request and discards late results. Go boundary, TypeScript/parser, component
 and Unix process tests cover this path with synthetic evidence and active checks
 disabled. Browser history shares the existing read-only SQLite pool and does not
 change storage or the native send/consent path.
+
+A successful live read also permits an explicit preview and local download of version 1 `cozysoc-resolver-history` JSON. Export revalidates that exact browser snapshot, including original window, read time, references and both truncation flags. It contains interface and saved-selection references, but no private query name, resolver address or raw answer. Preview and save do not read the controller or send a query; refreshing clears the old preview. It is a bounded list, not complete history or a backup, and demo mode has no export.
