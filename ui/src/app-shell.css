@@ -35,6 +35,8 @@
 .overview-empty { padding: 4px 28px 28px; color: #62675e; }
 .empty-product-state { padding: 28px; }
 .empty-product-state h2 { margin: 5px 0 10px; font-size: 1.6rem; }
+.device-read-unavailable { min-width: 0; overflow-wrap: anywhere; }
+.device-read-unavailable :is(h2, p, button) { max-width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .product-shell { grid-template-columns: minmax(0, 1fr); }
   .app-sidebar { position: static; height: auto; padding: 16px 18px 10px; border-right: 0; border-bottom: 1px solid #dedbd1; }

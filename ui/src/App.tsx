@@ -203,7 +203,7 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
         ) : null}
         {activeData && page === "devices" ? (
           activeData.devices === null
-            ? <section className="product-card empty-product-state" aria-labelledby="devices-unavailable-title"><h2 id="devices-unavailable-title">Device evidence is temporarily unavailable</h2><p>Current presence is unknown. Coverage and other local evidence can still be read.</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry device evidence</button> : null}</section>
+            ? <section className="product-card empty-product-state device-read-unavailable" aria-labelledby="devices-unavailable-title"><h2 id="devices-unavailable-title">Device evidence is temporarily unavailable</h2><p>Current presence is unknown. Coverage and other local evidence can still be read.</p>{view.mode === "live" ? <button type="button" className="primary-action" onClick={retryLive}>Retry device evidence</button> : null}</section>
             : view.mode === "live"
             ? <DevicesPage devices={activeData.devices} labelClient={liveDeviceLabelClient} onChanged={retryLive} onNavigate={setPage} loadDetail={loadDeviceDetailFromWeb} />
             : <DevicesPage devices={activeData.devices} />
