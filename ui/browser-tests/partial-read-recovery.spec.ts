@@ -31,6 +31,7 @@ test("partial Activity and storage failures announce gaps and recover with a fre
           filesystem_state: "current", filesystem_supported: true, filesystem_total_bytes: 1073741824, filesystem_available_bytes: 536870912,
           retention: [{ class: "ephemeral", duration_seconds: 86400 }, { class: "short", duration_seconds: 604800 },
             { class: "standard", duration_seconds: 2592000 }, { class: "audit", duration_seconds: 15552000 }],
+          inventory: { batch_evidence_records: 0, other_observations: 0, identity_claims: 0, coverage_samples: 0, findings: 0, audit_events: 0, saved_check_selections: 0, labeled_devices: 0 },
         });
       default: return reply({ error: "unavailable" }, 503);
     }

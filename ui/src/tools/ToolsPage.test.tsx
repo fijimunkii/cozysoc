@@ -42,11 +42,14 @@ describe("ToolsPage", () => {
         { class: "ephemeral", duration_seconds: 86400 }, { class: "short", duration_seconds: 7 * 86400 },
         { class: "standard", duration_seconds: 30 * 86400 }, { class: "audit", duration_seconds: 180 * 86400 },
       ],
+      inventory: { batch_evidence_records: 12, other_observations: 1, identity_claims: 2, coverage_samples: 3, findings: 0, audit_events: 4, saved_check_selections: 1, labeled_devices: 2 },
     });
     render(<ToolsPage tools={parseToolsSnapshot(demoStatusRaw, demoCapabilitiesRaw)} storage={storage} onNavigate={() => undefined} />);
     expect(screen.getByText("70 MiB")).toBeTruthy();
     expect(screen.getByText("100 MiB · Approaching quota")).toBeTruthy();
     expect(screen.getByText("0 MiB available · Volume full")).toBeTruthy();
     expect(screen.getByText("180 days")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Stored data inventory" })).toBeTruthy();
+    expect(screen.getByText("Device Watch evidence records")).toBeTruthy();
   });
 });

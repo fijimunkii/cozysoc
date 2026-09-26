@@ -71,6 +71,19 @@ function StorageFacts({ storage }: { storage: StorageOverview }) {
     <h3>Current evidence expiry</h3>
     <p>These are the controller's current class durations. Individual evidence is hidden when its expiry ends, even if cleanup has not reclaimed its pages yet.</p>
     <ul className="tool-list">{storage.retention.map((item) => <li key={item.class}><strong>{retentionLabel(item.class)}</strong><span>{formatDuration(item.duration_seconds)}</span></li>)}</ul>
+    <h3>Stored data inventory</h3>
+    <p>These are stored record counts, including evidence awaiting expiry cleanup. They are not a byte breakdown or a count of visible devices. Database page use above includes indexes and other SQLite overhead.</p>
+    <dl className="tools-facts">
+      <Fact label="Device Watch evidence records" value={storage.inventory.batch_evidence_records.toLocaleString()} />
+      <Fact label="Other observations" value={storage.inventory.other_observations.toLocaleString()} />
+      <Fact label="Separate identity claims" value={storage.inventory.identity_claims.toLocaleString()} />
+      <Fact label="Coverage samples" value={storage.inventory.coverage_samples.toLocaleString()} />
+      <Fact label="Findings" value={storage.inventory.findings.toLocaleString()} />
+      <Fact label="Audit events" value={storage.inventory.audit_events.toLocaleString()} />
+      <Fact label="Saved check records, including retired" value={storage.inventory.saved_check_selections.toLocaleString()} />
+      <Fact label="Labeled device rows" value={storage.inventory.labeled_devices.toLocaleString()} />
+    </dl>
+    <p>Device Watch batches can retain identity claims after an observation expires. Counts do not include controller settings, Keychain secrets, user-saved exports, transient files or data held by connected services.</p>
     <p>Device Watch uses short-lived retention for coverage samples and standard retention for neighbor observations and their IP/MAC identity claims. Its current collector does not use the ephemeral class. Enrollment, label and identity-correction actions, and reviewed network-check history use audit retention.</p>
     <p>These evidence deadlines do not delete saved network enrollment, sensor registrations, device labels, identity corrections, check settings, or controller configuration. A JSON file you choose to save is outside Cozy SOC's retention cleanup. Full deletion and backup/restore controls are still in development.</p>
     <p>Database quota and host-volume space are separate limits. Volume availability includes space used by other applications; the database figures do not.</p>

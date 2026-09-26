@@ -35,6 +35,7 @@ describe("loadAppDataFromWeb", () => {
         { class: "ephemeral", duration_seconds: 86400 }, { class: "short", duration_seconds: 7 * 86400 },
         { class: "standard", duration_seconds: 30 * 86400 }, { class: "audit", duration_seconds: 180 * 86400 },
       ],
+      inventory: { batch_evidence_records: 0, other_observations: 0, identity_claims: 0, coverage_samples: 0, findings: 0, audit_events: 0, saved_check_selections: 0, labeled_devices: 0 },
     });
     vi.mocked(loadDeviceActivityFromWeb).mockResolvedValue({
       configured: false,

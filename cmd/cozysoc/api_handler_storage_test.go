@@ -12,13 +12,17 @@ import (
 )
 
 type storageOverviewFixture struct {
-	health storage.Health
-	err    error
-	policy map[domain.RetentionClass]time.Duration
+	health    storage.Health
+	inventory storage.Inventory
+	err       error
+	policy    map[domain.RetentionClass]time.Duration
 }
 
 func (f storageOverviewFixture) Health(context.Context) (storage.Health, error) {
 	return f.health, f.err
+}
+func (f storageOverviewFixture) Inventory(context.Context) (storage.Inventory, error) {
+	return f.inventory, f.err
 }
 func (f storageOverviewFixture) RetentionDurations() map[domain.RetentionClass]time.Duration {
 	return f.policy
@@ -32,7 +36,8 @@ func TestControllerStorageOverviewUsesActivePolicyAndIndependentCapacities(t *te
 	readAt := time.Unix(1_800_000_000, 0).UTC()
 	handler.now = func() time.Time { return readAt }
 	handler.storageOverview = storageOverviewFixture{
-		health: storage.Health{QuotaState: storage.HealthPressure, DatabaseBytes: 80, UsedBytes: 70, ReusableBytes: 10, MaxBytes: 100, FilesystemState: storage.FilesystemCapacityFull, FilesystemSupported: true, FilesystemTotalBytes: 1000, FilesystemAvailableBytes: 0},
+		health:    storage.Health{QuotaState: storage.HealthPressure, DatabaseBytes: 80, UsedBytes: 70, ReusableBytes: 10, MaxBytes: 100, FilesystemState: storage.FilesystemCapacityFull, FilesystemSupported: true, FilesystemTotalBytes: 1000, FilesystemAvailableBytes: 0},
+		inventory: storage.Inventory{BatchEvidenceRecords: 12, LabeledDevices: 2},
 		policy: map[domain.RetentionClass]time.Duration{
 			domain.RetentionEphemeral: time.Hour, domain.RetentionShort: 48 * time.Hour,
 			domain.RetentionStandard: 14 * 24 * time.Hour, domain.RetentionAudit: 90 * 24 * time.Hour,
@@ -42,7 +47,7 @@ func TestControllerStorageOverviewUsesActivePolicyAndIndependentCapacities(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.AsOf.Equal(readAt) || got.QuotaState != "pressure" || got.FilesystemState != "full" || got.UsedBytes != 70 || got.ReusableBytes != 10 || len(got.Retention) != 4 || got.Retention[2].DurationSeconds != 14*86400 {
+	if !got.AsOf.Equal(readAt) || got.QuotaState != "pressure" || got.FilesystemState != "full" || got.UsedBytes != 70 || got.ReusableBytes != 10 || len(got.Retention) != 4 || got.Retention[2].DurationSeconds != 14*86400 || got.Inventory.BatchEvidenceRecords != 12 || got.Inventory.LabeledDevices != 2 {
 		t.Fatalf("storage overview = %+v", got)
 	}
 	handler.storageOverview = storageOverviewFixture{err: errors.New("private database path")}
