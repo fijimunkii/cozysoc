@@ -10,6 +10,7 @@ type DiagnosticPreview struct {
 	Controller    DiagnosticController `json:"controller"`
 	Modules       []DiagnosticModule   `json:"modules"`
 	Coverage      []DiagnosticCoverage `json:"coverage"`
+	Storage       DiagnosticStorage    `json:"storage"`
 }
 
 type DiagnosticController struct {
@@ -30,4 +31,12 @@ type DiagnosticCoverage struct {
 	CapabilityID    string `json:"capability_id"`
 	State           string `json:"state"`
 	FailureCategory string `json:"failure_category"`
+}
+
+// DiagnosticStorage keeps quota and host-volume health independent without
+// exposing database size, free space, filesystem paths, or raw read errors.
+type DiagnosticStorage struct {
+	ReadState   string `json:"read_state"`
+	QuotaState  string `json:"quota_state"`
+	VolumeState string `json:"volume_state"`
 }

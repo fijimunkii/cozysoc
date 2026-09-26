@@ -35,6 +35,7 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   await expect(page.getByRole("button", { name: "Save preview as JSON" })).toBeVisible();
   expect(previewReads).toBe(1);
   await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"failure_category": "sensor"');
+  await expect(page.getByLabel("Diagnostic bundle preview")).toContainText('"quota_state": "pressure"');
   await expect(page.getByLabel("Diagnostic bundle preview")).not.toContainText("private");
   const downloadReady = page.waitForEvent("download");
   await page.getByRole("button", { name: "Save preview as JSON" }).click();
@@ -42,6 +43,7 @@ test("live diagnostics load only on request, stay redacted, and reflow", async (
   expect(download.suggestedFilename()).toBe("cozysoc-diagnostic-preview.json");
   const saved = await readFile(await download.path(), "utf8");
   expect(saved).toContain('"failure_category": "sensor"');
+  expect(saved).toContain('"volume_state": "current"');
   expect(saved).not.toContain("private");
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   const widths = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));

@@ -25,11 +25,11 @@ func loadDiagnosticsFromController(ctx context.Context, stateDir string) (api.Di
 }
 
 func validDiagnosticPreview(preview api.DiagnosticPreview) bool {
-	if preview.SchemaVersion != 1 || preview.GeneratedAt.IsZero() ||
+	if preview.SchemaVersion != 2 || preview.GeneratedAt.IsZero() ||
 		!diagnosticBuildVersion.MatchString(preview.Controller.BuildVersion) ||
 		preview.Controller.ConfigSchemaVersion < 1 ||
 		preview.Controller.HealthState != diagnosticControllerState(preview.Controller.HealthState) ||
-		len(preview.Modules) > 1 || len(preview.Coverage) != 1 {
+		len(preview.Modules) > 1 || len(preview.Coverage) != 1 || !validDiagnosticStorage(preview.Storage) {
 		return false
 	}
 	for _, module := range preview.Modules {
@@ -48,6 +48,23 @@ func validDiagnosticPreview(preview api.DiagnosticPreview) bool {
 	default:
 		return false
 	}
+}
+
+func validDiagnosticStorage(value api.DiagnosticStorage) bool {
+	if value.ReadState != "current" && value.ReadState != "unavailable" {
+		return false
+	}
+	switch value.QuotaState {
+	case "current", "pressure", "at-quota", "unknown":
+	default:
+		return false
+	}
+	switch value.VolumeState {
+	case "current", "pressure", "full", "unavailable", "unsupported", "unknown":
+	default:
+		return false
+	}
+	return value.ReadState != "unavailable" || value.QuotaState == "unknown" && value.VolumeState == "unknown"
 }
 
 func (h *webHandler) handleDiagnosticsPreview(w http.ResponseWriter, r *http.Request) {

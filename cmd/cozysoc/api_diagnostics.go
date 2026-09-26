@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/fijimunkii/cozysoc/internal/controller/api"
+	"github.com/fijimunkii/cozysoc/internal/controller/storage"
 )
 
 var diagnosticBuildVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
@@ -20,7 +21,7 @@ func (h *controllerAPIHandler) DiagnosticsPreview(ctx context.Context) (api.Diag
 		build = status.ControllerVersion
 	}
 	preview := api.DiagnosticPreview{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		GeneratedAt:   h.now().UTC(),
 		Controller: api.DiagnosticController{
 			BuildVersion: build, ConfigSchemaVersion: status.ConfigSchemaVersion,
@@ -28,6 +29,7 @@ func (h *controllerAPIHandler) DiagnosticsPreview(ctx context.Context) (api.Diag
 		},
 		Modules:  []api.DiagnosticModule{},
 		Coverage: []api.DiagnosticCoverage{},
+		Storage:  api.DiagnosticStorage{ReadState: "unavailable", QuotaState: "unknown", VolumeState: "unknown"},
 	}
 	for _, instance := range h.controller.Capabilities().Capabilities {
 		// The current support schema knows only the first-party Device Watch
@@ -51,7 +53,40 @@ func (h *controllerAPIHandler) DiagnosticsPreview(ctx context.Context) (api.Diag
 		return api.DiagnosticPreview{}, ctx.Err()
 	}
 	preview.Coverage = append(preview.Coverage, coverage)
+	if h.storageOverview != nil {
+		health, healthErr := h.storageOverview.Health(ctx)
+		if healthErr == nil {
+			preview.Storage = api.DiagnosticStorage{
+				ReadState: "current", QuotaState: diagnosticQuotaState(health.QuotaState),
+				VolumeState: diagnosticVolumeState(health.FilesystemSupported, health.FilesystemState),
+			}
+		} else if ctx.Err() != nil {
+			return api.DiagnosticPreview{}, ctx.Err()
+		}
+	}
 	return preview, nil
+}
+
+func diagnosticQuotaState(state storage.HealthState) string {
+	switch state {
+	case storage.HealthCurrent, storage.HealthPressure, storage.HealthAtQuota:
+		return string(state)
+	default:
+		return "unknown"
+	}
+}
+
+func diagnosticVolumeState(supported bool, state storage.FilesystemCapacityState) string {
+	if !supported {
+		return "unsupported"
+	}
+	switch state {
+	case storage.FilesystemCapacityCurrent, storage.FilesystemCapacityPressure,
+		storage.FilesystemCapacityFull, storage.FilesystemCapacityUnavailable:
+		return string(state)
+	default:
+		return "unknown"
+	}
 }
 
 func diagnosticControllerState(value string) string {

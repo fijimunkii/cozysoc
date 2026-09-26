@@ -2,13 +2,22 @@ const COVERAGE_STATES = new Set(["unconfigured", "unavailable", "unverified", "a
 const FAILURE_CATEGORIES = new Set(["none", "not-configured", "read-failed", "sensor", "ingestion", "storage", "evidence", "source", "unknown"]);
 const VERIFICATION_STATES = new Set(["unverified", "verifying", "verified", "degraded", "stale", "unknown"]);
 const DESIRED_STATES = new Set(["enabled", "disabled", "unknown"]);
+const QUOTA_STATES = new Set(["current", "pressure", "at-quota", "unknown"]);
+const VOLUME_STATES = new Set(["current", "pressure", "full", "unavailable", "unsupported", "unknown"]);
+
+export interface DiagnosticStorage {
+  read_state: "current" | "unavailable";
+  quota_state: "current" | "pressure" | "at-quota" | "unknown";
+  volume_state: "current" | "pressure" | "full" | "unavailable" | "unsupported" | "unknown";
+}
 
 export interface DiagnosticPreview {
-  schema_version: 1;
+  schema_version: 2;
   generated_at: string;
   controller: { build_version: string; config_schema_version: number; health_state: "ok" | "degraded" | "unknown"; gap_count: number };
   modules: { id: "device-watch"; build_version: string; desired: string; verification: string }[];
   coverage: { capability_id: "device-watch"; state: string; failure_category: string }[];
+  storage: DiagnosticStorage;
 }
 
 export async function loadDiagnosticPreview(signal: AbortSignal): Promise<DiagnosticPreview> {
@@ -19,7 +28,7 @@ export async function loadDiagnosticPreview(signal: AbortSignal): Promise<Diagno
 
 export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {
   const value = object(raw);
-  if (value.schema_version !== 1) throw new Error("Unsupported diagnostic version.");
+  if (value.schema_version !== 2) throw new Error("Unsupported diagnostic version.");
   const generatedAt = value.generated_at;
   if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) throw new Error("Diagnostic time is invalid.");
   const controller = object(value.controller);
@@ -42,7 +51,17 @@ export function parseDiagnosticPreview(raw: unknown): DiagnosticPreview {
     if (item.capability_id !== "device-watch") throw new Error("Diagnostic capability is invalid.");
     return { capability_id: "device-watch" as const, state: allowed(item.state, COVERAGE_STATES), failure_category: allowed(item.failure_category, FAILURE_CATEGORIES) };
   });
-  return { schema_version: 1, generated_at: generatedAt, controller: { build_version: buildVersion, config_schema_version: configSchema, health_state: healthState as DiagnosticPreview["controller"]["health_state"], gap_count: gapCount }, modules, coverage };
+  const rawStorage = object(value.storage);
+  const readState = allowed(rawStorage.read_state, new Set(["current", "unavailable"]));
+  const quotaState = allowed(rawStorage.quota_state, QUOTA_STATES);
+  const volumeState = allowed(rawStorage.volume_state, VOLUME_STATES);
+  if (readState === "unavailable" && (quotaState !== "unknown" || volumeState !== "unknown")) throw new Error("Diagnostic storage state is inconsistent.");
+  const storage: DiagnosticStorage = {
+    read_state: readState as DiagnosticStorage["read_state"],
+    quota_state: quotaState as DiagnosticStorage["quota_state"],
+    volume_state: volumeState as DiagnosticStorage["volume_state"],
+  };
+  return { schema_version: 2, generated_at: generatedAt, controller: { build_version: buildVersion, config_schema_version: configSchema, health_state: healthState as DiagnosticPreview["controller"]["health_state"], gap_count: gapCount }, modules, coverage, storage };
 }
 
 function object(value: unknown): Record<string, unknown> {

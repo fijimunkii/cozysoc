@@ -47,7 +47,7 @@ export function DiagnosticsPanel({ mode, load = loadDiagnosticPreview }: Diagnos
   return <section className="product-card" aria-labelledby="diagnostics-title">
     <p className="eyebrow">Local support</p>
     <h2 id="diagnostics-title">Diagnostic preview</h2>
-    <p>Review a small versioned support snapshot before saving it. It contains build and module state, controller gaps, and a category for Device Watch coverage failures. It excludes network names, addresses, URLs, paths, credentials, and raw errors. Nothing is uploaded.</p>
+    <p>Review a small versioned support snapshot before saving it. It contains build and module state, controller gaps, a category for Device Watch coverage failures, and separate database-quota and host-volume health states. It excludes storage sizes, network names, addresses, URLs, paths, credentials, and raw errors. Nothing is uploaded.</p>
     {mode === "demo" ? <p>Connect to the local controller to preview real diagnostics.</p> : <>
       <button className="diagnostics-action" type="button" onClick={() => void read()} disabled={state === "loading"}>{state === "loading" ? "Preparing preview…" : preview ? "Refresh preview" : "Preview diagnostics"}</button>
       {state === "error" ? <p role="alert">Diagnostic preview is unavailable. Try again while the local controller is running.</p> : null}
