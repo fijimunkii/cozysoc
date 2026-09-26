@@ -209,6 +209,8 @@ Device Watch currently declares zero deep links. Tools therefore links back to C
 
 ## Local diagnostic preview
 
+The same redacted snapshot is available without a browser through `cozysoc diagnostics-preview [--state-dir PATH]`. This is a parameterless authenticated controller read. It prints JSON to stdout so the local user can inspect it or explicitly redirect it to a file; Cozy SOC does not write or upload a bundle automatically.
+
 Tools offers an on-demand **Preview diagnostics** action for a connected local controller. The authenticated, parameterless `GET /api/diagnostics/preview` route reads a versioned `diagnostics.preview` controller result. No diagnostic read happens merely by opening Tools. The user sees the exact JSON snapshot before choosing **Save preview as JSON**; the browser creates that local download, and Cozy SOC does not upload it.
 
 Version 1 contains only the controller build/configuration schema, a bounded controller health state and gap count, the first-party Device Watch module's build/desired/verification state, and a bounded Device Watch coverage state and failure category. Unknown or malformed categories are reduced to `unknown` or rejected. The controller and web bridge do not copy capability descriptions, network/sensor/interface/device identifiers, settings, URLs, file paths, credentials, raw logs, database errors, or evidence payloads into the preview. A failed coverage read becomes a `read-failed` category without its raw error. This is a small support snapshot, not a log bundle or proof of complete monitoring; broader #30 export and recovery controls remain separate work.

@@ -55,6 +55,8 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) error {
 		return runReadCommand(ctx, api.MethodStatus, args[1:], stdout, stderr)
 	case "health":
 		return runReadCommand(ctx, api.MethodHealth, args[1:], stdout, stderr)
+	case "diagnostics-preview":
+		return runReadCommand(ctx, api.MethodDiagnosticsPreview, args[1:], stdout, stderr)
 	case "capabilities":
 		return runReadCommand(ctx, api.MethodCapabilitiesList, args[1:], stdout, stderr)
 	case "devices":
@@ -150,6 +152,7 @@ Usage:
   cozysoc network-quality-plan [--state-dir PATH] TARGET_IPV4
   cozysoc network-quality-check [--state-dir PATH] TARGET_IPV4  (experimental, interactive macOS only)
   cozysoc device-watch-coverage [--state-dir PATH]
+  cozysoc diagnostics-preview [--state-dir PATH]
   cozysoc device-watch-enable [--state-dir PATH]
   cozysoc device-watch-disable [--state-dir PATH]
   cozysoc device-label [--state-dir PATH] DEVICE_ID LABEL
