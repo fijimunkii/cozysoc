@@ -21,10 +21,11 @@ type DiagnosticController struct {
 }
 
 type DiagnosticModule struct {
-	ID           string `json:"id"`
-	BuildVersion string `json:"build_version"`
-	Desired      string `json:"desired"`
-	Verification string `json:"verification"`
+	ID string `json:"id"`
+	// AdapterBuildVersion is Cozy SOC's build, not an external service version.
+	AdapterBuildVersion string `json:"adapter_build_version"`
+	Desired             string `json:"desired"`
+	Verification        string `json:"verification"`
 }
 
 type DiagnosticCoverage struct {

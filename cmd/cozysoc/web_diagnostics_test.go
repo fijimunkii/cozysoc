@@ -13,11 +13,15 @@ import (
 
 func safeDiagnosticFixture() api.DiagnosticPreview {
 	return api.DiagnosticPreview{
-		SchemaVersion: 2, GeneratedAt: time.Unix(1_800_000_000, 0).UTC(),
+		SchemaVersion: 3, GeneratedAt: time.Unix(1_800_000_000, 0).UTC(),
 		Controller: api.DiagnosticController{BuildVersion: "dev", ConfigSchemaVersion: 4, HealthState: "ok"},
-		Modules:    []api.DiagnosticModule{{ID: "device-watch", BuildVersion: "dev", Desired: "enabled", Verification: "degraded"}},
-		Coverage:   []api.DiagnosticCoverage{{CapabilityID: "device-watch", State: "degraded", FailureCategory: "sensor"}},
-		Storage:    api.DiagnosticStorage{ReadState: "current", QuotaState: "pressure", VolumeState: "current"},
+		Modules: []api.DiagnosticModule{
+			{ID: "device-watch", AdapterBuildVersion: "dev", Desired: "enabled", Verification: "degraded"},
+			{ID: "adguard-home", AdapterBuildVersion: "dev", Desired: "enabled", Verification: "unverified"},
+			{ID: "opnsense", AdapterBuildVersion: "dev", Desired: "disabled", Verification: "unverified"},
+		},
+		Coverage: []api.DiagnosticCoverage{{CapabilityID: "device-watch", State: "degraded", FailureCategory: "sensor"}},
+		Storage:  api.DiagnosticStorage{ReadState: "current", QuotaState: "pressure", VolumeState: "current"},
 	}
 }
 
@@ -78,5 +82,26 @@ func TestWebDiagnosticPreviewRejectsUnreviewedStorageFieldWithoutEcho(t *testing
 	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/diagnostics/preview", nil))
 	if response.Code != http.StatusServiceUnavailable || strings.Contains(response.Body.String(), "private") || strings.Contains(response.Body.String(), "token=abc") {
 		t.Fatalf("unsafe storage preview = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestWebDiagnosticPreviewRejectsUnreviewedOrDuplicateModules(t *testing.T) {
+	const host = "127.0.0.1:43821"
+	for _, modules := range [][]api.DiagnosticModule{
+		{{ID: "private/router", AdapterBuildVersion: "dev", Desired: "enabled", Verification: "verified"}},
+		{{ID: "opnsense", AdapterBuildVersion: "v0.0.1", Desired: "enabled", Verification: "verified"}},
+		{{ID: "device-watch", AdapterBuildVersion: "dev", Desired: "enabled", Verification: "verified"}, {ID: "device-watch", AdapterBuildVersion: "dev", Desired: "enabled", Verification: "verified"}},
+	} {
+		handler := newWebHandler(host, testUIDir(t), testBootstrapToken, testSessionToken, func(context.Context) (coverageEnvelope, error) { return testCoverageEnvelope(), nil })
+		handler.loadDiagnostics = func(context.Context) (api.DiagnosticPreview, error) {
+			preview := safeDiagnosticFixture()
+			preview.Modules = modules
+			return preview, nil
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/diagnostics/preview", nil))
+		if response.Code != http.StatusServiceUnavailable || strings.Contains(response.Body.String(), "private/router") {
+			t.Fatalf("unreviewed modules = %d %s", response.Code, response.Body.String())
+		}
 	}
 }

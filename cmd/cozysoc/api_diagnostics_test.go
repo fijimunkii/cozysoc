@@ -21,6 +21,8 @@ func TestDiagnosticPreviewExcludesHouseholdAndRawErrorFields(t *testing.T) {
 	const private = "private-user@https://home.invalid/secret?token=abc"
 	controller := core.New(private, 4, time.Second, diagnosticLister{
 		{Manifest: capability.Manifest{ID: "device-watch", DisplayName: private, Summary: private}, State: capability.InstanceState{Desired: capability.DesiredEnabled, Verification: capability.VerificationDegraded}},
+		{Manifest: capability.Manifest{ID: "adguard-home", DisplayName: private, Summary: private}, State: capability.InstanceState{Desired: capability.DesiredEnabled, Verification: capability.VerificationUnverified}},
+		{Manifest: capability.Manifest{ID: "opnsense", DisplayName: private, Summary: private}, State: capability.InstanceState{Desired: capability.DesiredDisabled, Verification: capability.VerificationUnverified}},
 		{Manifest: capability.Manifest{ID: private, DisplayName: private}},
 	})
 	store := &fakeCoverageControllerStore{fakeDeviceStore: &fakeDeviceStore{}, err: errors.New(private)}
@@ -35,8 +37,13 @@ func TestDiagnosticPreviewExcludesHouseholdAndRawErrorFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preview.SchemaVersion != 2 || preview.Controller.BuildVersion != "redacted" || len(preview.Modules) != 1 || preview.Modules[0].ID != "device-watch" || len(preview.Coverage) != 1 || preview.Coverage[0].FailureCategory != "read-failed" || preview.Storage.ReadState != "unavailable" || preview.Storage.QuotaState != "unknown" || preview.Storage.VolumeState != "unknown" {
+	if preview.SchemaVersion != 3 || preview.Controller.BuildVersion != "redacted" || len(preview.Modules) != 3 || preview.Modules[0].ID != "device-watch" || preview.Modules[1].ID != "adguard-home" || preview.Modules[2].ID != "opnsense" || len(preview.Coverage) != 1 || preview.Coverage[0].FailureCategory != "read-failed" || preview.Storage.ReadState != "unavailable" || preview.Storage.QuotaState != "unknown" || preview.Storage.VolumeState != "unknown" {
 		t.Fatalf("diagnostic preview = %+v", preview)
+	}
+	for _, module := range preview.Modules {
+		if module.AdapterBuildVersion != "redacted" {
+			t.Fatalf("module version is not the bounded adapter build: %+v", module)
+		}
 	}
 	encoded, err := json.Marshal(preview)
 	if err != nil {
