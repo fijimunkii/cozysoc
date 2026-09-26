@@ -17,9 +17,11 @@ function detail(state: "visible" | "uncertain") {
 describe("DeviceDetailPanel", () => {
   it("separates presence, current identity evidence, and historical evidence without safety claims", () => {
     const { container } = render(<DeviceDetailPanel detail={detail("visible")} onBack={() => undefined} />);
-    expect(screen.getByText("Recent positive evidence supports visibility")).toBeTruthy();
-    expect(screen.getByText("Current identity evidence")).toBeTruthy();
-    expect(screen.getByText("Historical identity evidence")).toBeTruthy();
+    expect(screen.getByText("Recent positive evidence supported visibility at this read")).toBeTruthy();
+    expect(screen.getByText("Current identity evidence at read")).toBeTruthy();
+    expect(screen.getByText("Historical identity evidence at read")).toBeTruthy();
+    expect(screen.getByText(/Evidence read at/).querySelector("time")?.getAttribute("dateTime")).toBe("2026-09-10T13:00:00Z");
+    expect(screen.queryByText("Visible now")).toBeNull();
     expect(screen.getByText("ARP neighbor cache")).toBeTruthy();
     expect(screen.getByText("IPv6 neighbor cache (NDP)")).toBeTruthy();
     expect(screen.getByText(/association only, not device safety/)).toBeTruthy();
@@ -29,6 +31,7 @@ describe("DeviceDetailPanel", () => {
 
   it("explains uncertain as lack of recent positive evidence, not offline proof", () => {
     render(<DeviceDetailPanel detail={detail("uncertain")} onBack={() => undefined} />);
+    expect(screen.getByText("Uncertain at read")).toBeTruthy();
     expect(screen.getByText(/not proof the device is offline/)).toBeTruthy();
   });
 });

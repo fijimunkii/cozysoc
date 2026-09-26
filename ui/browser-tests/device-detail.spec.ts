@@ -55,8 +55,8 @@ test("device evidence failure, retry, details, and Back preserve focus and acces
   await checkPage(page);
   await page.getByRole("button", { name: "Retry evidence" }).press("Enter");
   await expect(page.getByRole("heading", { name: "Speaker" })).toBeFocused();
-  await expect(page.getByText("Current identity evidence", { exact: true })).toBeVisible();
-  await expect(page.getByText("Historical identity evidence", { exact: true })).toBeVisible();
+  await expect(page.getByText("Current identity evidence at read", { exact: true })).toBeVisible();
+  await expect(page.getByText("Historical identity evidence at read", { exact: true })).toBeVisible();
   await checkPage(page);
   await page.getByText("Technical provenance", { exact: true }).first().click();
   await checkPage(page);

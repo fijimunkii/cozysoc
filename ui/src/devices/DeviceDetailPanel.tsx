@@ -14,19 +14,20 @@ export function DeviceDetailPanel({ detail, onBack }: { detail: DeviceDetail; on
       <div className="product-card device-detail-card">
         <header className="device-detail-header">
           <div><p className="eyebrow">Device evidence</p><h2 id="device-detail-title" ref={heading} tabIndex={-1}>{label}</h2><code>{detail.device.id}</code></div>
-          <span className={`presence-pill presence-pill--${detail.device.state}`}>{detail.device.state === "visible" ? "Visible now" : "Uncertain"}</span>
+          <span className={`presence-pill presence-pill--${detail.device.state}`}>{detail.device.state === "visible" ? "Visible at read" : "Uncertain at read"}</span>
         </header>
         <div className="device-detail-presence">
-          <strong>{detail.device.state === "visible" ? "Recent positive evidence supports visibility" : "Recent visibility is uncertain"}</strong>
+          <p>Evidence read at <time dateTime={detail.as_of}>{formatTimestamp(detail.as_of)}</time>. Reopen this device from the list for a newer read; this view does not update automatically.</p>
+          <strong>{detail.device.state === "visible" ? "Recent positive evidence supported visibility at this read" : "Visibility was uncertain at this read"}</strong>
           <p>{detail.device.state === "visible"
-            ? "Device Watch recently observed this identity from this computer. That is presence evidence, not a trust or safety assessment."
-            : "Cozy SOC retains evidence for this device, but no sufficiently recent positive observation supports ‘visible now’. That is not proof the device is offline."}</p>
+            ? "Device Watch had recently observed this identity from this computer. That is presence evidence, not a trust or safety assessment."
+            : "Cozy SOC retained evidence for this device, but no sufficiently recent positive observation supported visibility at this read. That is not proof the device is offline."}</p>
           <dl><div><dt>First seen</dt><dd>{formatTimestamp(detail.device.first_seen)}</dd></div><div><dt>Last seen</dt><dd>{formatTimestamp(detail.device.last_seen)}</dd></div></dl>
         </div>
       </div>
 
       <div className="product-card device-evidence-card">
-        <header className="section-header"><div><p className="eyebrow">Identity evidence</p><h3>Why Cozy SOC associates these identities</h3><p>Current and historical identity evidence are separate from presence. Confidence here describes the association, not whether the device is safe.</p></div></header>
+        <header className="section-header"><div><p className="eyebrow">Identity evidence</p><h3>Why Cozy SOC associates these identities</h3><p>Current and historical labels are relative to the recorded read time, separately from presence. Confidence describes the association, not whether the device is safe.</p></div></header>
         {detail.truncated ? <div className="inline-notice" role="status">Only the most recent bounded set of retained identity evidence is shown.</div> : null}
         {detail.evidence.length === 0 ? <div className="empty-list-state"><strong>No retained identity evidence is available</strong><p>The device summary remains valid for the retained scope, but its source observations may have aged out under local retention.</p></div> : (
           <ul className="device-evidence-list">
@@ -42,7 +43,7 @@ function EvidenceItem({ item }: { item: DeviceIdentityEvidence }) {
   const confidence = item.link_confidence ?? item.claim_confidence;
   return (
     <li>
-      <div className="evidence-heading"><div><span className={`evidence-age evidence-age--${item.current ? "current" : "historical"}`}>{item.current ? "Current identity evidence" : "Historical identity evidence"}</span><h4>{claimLabel(item.kind)}</h4><code>{item.value}</code></div><span>{formatTimestamp(item.observed_at)}</span></div>
+      <div className="evidence-heading"><div><span className={`evidence-age evidence-age--${item.current ? "current" : "historical"}`}>{item.current ? "Current identity evidence at read" : "Historical identity evidence at read"}</span><h4>{claimLabel(item.kind)}</h4><code>{item.value}</code></div><span>{formatTimestamp(item.observed_at)}</span></div>
       <dl className="evidence-facts">
         <div><dt>Source</dt><dd>{sourceLabel(item)}</dd></div>
         <div><dt>Association</dt><dd>{item.authority === "user" ? "User-confirmed" : "Inferred"}</dd></div>
