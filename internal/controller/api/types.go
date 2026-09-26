@@ -34,6 +34,7 @@ const (
 	MethodAdGuardConnect      = "adguard.connect"
 	MethodAdGuardStatus       = "adguard.status"
 	MethodAdGuardDisconnect   = "adguard.disconnect"
+	MethodAdGuardCollect      = "adguard.collect"
 )
 
 type Request struct {

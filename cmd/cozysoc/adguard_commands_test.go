@@ -34,6 +34,13 @@ type adguardPromptClient struct {
 	params                api.AdGuardConnectParams
 }
 
+type adguardCollectionPromptClient struct{ calls int }
+
+func (c *adguardCollectionPromptClient) CollectAdGuard(_ context.Context, scopeID string) (api.AdGuardCollection, error) {
+	c.calls++
+	return api.AdGuardCollection{ScopeID: scopeID, Read: 2, Inserted: 1, SkippedOutsideScope: 1}, nil
+}
+
 func (c *adguardPromptClient) ConnectAdGuard(_ context.Context, p api.AdGuardConnectParams) (api.AdGuardConnection, error) {
 	c.connects++
 	c.params = p
@@ -88,5 +95,24 @@ func TestAdGuardPromptRejectsInvalidEndpointBeforeDisclosure(t *testing.T) {
 	}
 	if got := adguardCommandError(errors.New("private details")); strings.Contains(got.Error(), "private") {
 		t.Fatal(got)
+	}
+}
+
+func TestAdGuardCollectionRequiresExactScopeConsent(t *testing.T) {
+	for _, line := range []string{"collect\n", "yes\n", "collect scope.other\n", "collect scope.home", "collect scope.home\nextra"} {
+		client := &adguardCollectionPromptClient{}
+		terminal := &adguardPromptTerminal{line: line}
+		if err := performAdGuardCollect(context.Background(), client, terminal, "scope.home"); err == nil || client.calls != 0 || terminal.flushes != 1 {
+			t.Fatalf("unapproved collection %q: calls %d err %v", line, client.calls, err)
+		}
+	}
+	client := &adguardCollectionPromptClient{}
+	terminal := &adguardPromptTerminal{line: "collect scope.home\n"}
+	if err := performAdGuardCollect(context.Background(), client, terminal, "scope.home"); err != nil || client.calls != 1 {
+		t.Fatalf("approved collection failed: calls %d err %v", client.calls, err)
+	}
+	written := strings.Join(terminal.writes, "")
+	if !strings.Contains(written, "private browsing data") || !strings.Contains(written, `"inserted": 1`) || strings.Contains(written, "private.example") {
+		t.Fatalf("unsafe collection disclosure/result: %q", written)
 	}
 }

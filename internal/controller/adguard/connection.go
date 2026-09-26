@@ -39,6 +39,7 @@ type lifecycleState interface {
 
 type serviceProbe interface {
 	Probe(context.Context) (Status, error)
+	Read(context.Context) (Snapshot, error)
 }
 
 type Connection struct {
@@ -173,26 +174,7 @@ func (c *Connections) undoConnect(configuration capability.Configuration, cleanu
 func (c *Connections) Current(ctx context.Context) (Connection, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	configured, ok := c.config.Capability(CapabilityID)
-	if !ok || configured.Desired != capability.DesiredEnabled {
-		return Connection{}, ErrNotConnected
-	}
-	endpoint, username, ref, err := parseConnectionConfiguration(configured)
-	if err != nil {
-		return Connection{}, err
-	}
-	var password secretstore.Secret
-	if ref.String() != "" {
-		secrets, err := c.secretStore()
-		if err != nil {
-			return Connection{}, err
-		}
-		password, err = secrets.Get(ctx, ref)
-		if err != nil {
-			return Connection{}, err
-		}
-	}
-	client, err := c.probe(endpoint, username, password)
+	client, endpoint, username, err := c.configuredClient(ctx)
 	if err != nil {
 		return Connection{}, err
 	}
@@ -201,6 +183,49 @@ func (c *Connections) Current(ctx context.Context) (Connection, error) {
 		return Connection{}, err
 	}
 	return Connection{Endpoint: endpoint, Username: username, Status: status}, nil
+}
+
+// ReadSnapshot is available only to an explicit collection request. Normal
+// connection and status paths continue to use the status-only Probe method.
+func (c *Connections) ReadSnapshot(ctx context.Context) (Snapshot, string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	client, endpoint, _, err := c.configuredClient(ctx)
+	if err != nil {
+		return Snapshot{}, "", err
+	}
+	snapshot, err := client.Read(ctx)
+	if err != nil {
+		return Snapshot{}, "", err
+	}
+	return snapshot, endpoint, nil
+}
+
+func (c *Connections) configuredClient(ctx context.Context) (serviceProbe, string, string, error) {
+	configured, ok := c.config.Capability(CapabilityID)
+	if !ok || configured.Desired != capability.DesiredEnabled {
+		return nil, "", "", ErrNotConnected
+	}
+	endpoint, username, ref, err := parseConnectionConfiguration(configured)
+	if err != nil {
+		return nil, "", "", err
+	}
+	var password secretstore.Secret
+	if ref.String() != "" {
+		secrets, err := c.secretStore()
+		if err != nil {
+			return nil, "", "", err
+		}
+		password, err = secrets.Get(ctx, ref)
+		if err != nil {
+			return nil, "", "", err
+		}
+	}
+	client, err := c.probe(endpoint, username, password)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return client, endpoint, username, nil
 }
 
 // Disconnect disables local intent before deleting the Keychain item. A failed

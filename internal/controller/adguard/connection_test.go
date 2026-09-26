@@ -122,7 +122,8 @@ type fixedProbe struct {
 	err    error
 }
 
-func (p fixedProbe) Probe(context.Context) (Status, error) { return p.status, p.err }
+func (p fixedProbe) Probe(context.Context) (Status, error)  { return p.status, p.err }
+func (p fixedProbe) Read(context.Context) (Snapshot, error) { return Snapshot{Status: p.status}, p.err }
 
 func newFixtureConnections(t *testing.T) (*Connections, *memoryConfig, *memoryAudit, *memoryLifecycle, *memorySecrets) {
 	t.Helper()
