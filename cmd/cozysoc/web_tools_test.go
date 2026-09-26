@@ -78,14 +78,22 @@ func TestWebStorageOverviewIsAuthenticatedAndReadOnly(t *testing.T) {
 	} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code < 400 { t.Fatalf("unsafe storage read succeeded: %d", response.Code) }
+		if response.Code < 400 {
+			t.Fatalf("unsafe storage read succeeded: %d", response.Code)
+		}
 	}
-	if calls != 0 { t.Fatalf("rejected storage requests reached loader %d times", calls) }
+	if calls != 0 {
+		t.Fatalf("rejected storage requests reached loader %d times", calls)
+	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, authenticatedRequest(http.MethodGet, "http://"+host+"/api/storage", nil))
-	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(response.Body.String(), `"used_bytes":15`) { t.Fatalf("storage response = %d %s", response.Code, response.Body.String()) }
+	if response.Code != http.StatusOK || calls != 1 || !strings.Contains(response.Body.String(), `"used_bytes":15`) {
+		t.Fatalf("storage response = %d %s", response.Code, response.Body.String())
+	}
 	for _, forbidden := range []string{"private", "path", testBootstrapToken, testSessionToken} {
-		if strings.Contains(response.Body.String(), forbidden) { t.Fatalf("storage response leaked %s", forbidden) }
+		if strings.Contains(response.Body.String(), forbidden) {
+			t.Fatalf("storage response leaked %s", forbidden)
+		}
 	}
 }
 
