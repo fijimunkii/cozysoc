@@ -5,3 +5,4 @@
 .arrival-findings-list dl { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
 .arrival-findings-list dt { color: #74796f; font-size: .85rem; }
 .arrival-findings-list dd { margin: 0; }
+.arrival-findings-actions { display: flex; flex-wrap: wrap; gap: .75rem; }

@@ -35,4 +35,6 @@ test("informational arrivals load on demand and keep source expiry visible", asy
   expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(result.violations).toEqual([]);
+  await page.getByRole("button", { name: "Review activity" }).click();
+  await expect(page.getByRole("heading", { name: "What changed on your visible network" })).toBeVisible();
 });

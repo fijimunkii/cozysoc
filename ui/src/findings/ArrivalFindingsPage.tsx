@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { loadArrivalFindings, type ArrivalFindingList } from "./arrivals";
 import "./arrivals.css";
 
-export function ArrivalFindingsPage({ mode }: { mode: "live" | "demo" }) {
+export function ArrivalFindingsPage({ mode, onNavigate }: { mode: "live" | "demo"; onNavigate: (page: "devices" | "activity") => void }) {
   const [state, setState] = useState<{ status: "loading" | "ready" | "failed"; data?: ArrivalFindingList }>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -22,6 +22,8 @@ export function ArrivalFindingsPage({ mode }: { mode: "live" | "demo" }) {
     <section className="product-card">
       <h2>Informational arrival findings</h2>
       <p>Each item records a newly observed network identity from Device Watch's passive neighbor cache. A returning device with a changed address, an observation gap, or incomplete visibility can look new. These items are not security verdicts or desktop notifications.</p>
+      <p>Next step: review Devices and Activity around the recorded time. Confirm identity from context you trust before changing a label; an arrival alone calls for no network action.</p>
+      <div className="arrival-findings-actions"><button type="button" className="secondary-action" onClick={() => onNavigate("devices")}>Review devices</button><button type="button" className="secondary-action" onClick={() => onNavigate("activity")}>Review activity</button></div>
     </section>
     {state.status === "loading" ? <section className="product-card" role="status">Reading retained findings…</section> : null}
     {state.status === "failed" ? <section className="product-card" role="alert"><h2>Findings are temporarily unavailable</h2><p>Other local evidence remains available.</p><button type="button" className="primary-action" onClick={() => setAttempt((value) => value + 1)}>Retry findings</button></section> : null}
