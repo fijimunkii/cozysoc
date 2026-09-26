@@ -1,13 +1,30 @@
 # External OPNsense read boundary
 
-Issue #17 selects OPNsense as the first read-only router reference. The current
-Go candidate is an internal client for the exact 26.7.4 API shape; it is not
-connected to controller configuration, commands, or the browser, and no router
-version is yet a Cozy SOC support claim. An owned 26.7.4 lab must verify the
-response schema, TLS enrollment, effective privileges, failures and recovery
-before the adapter can be exposed or listed as supported.
-The controller integration must bind each read to an enrolled network and
-revalidate the selected endpoint and scope before taking a sample.
+Issue #17 selects OPNsense as the first read-only router reference. The Go
+candidate targets the exact 26.7.4 API shape. A native, foreground-only
+`cozysoc opnsense-connect` command can now enroll a status-only external
+connection. `opnsense-status` makes a fresh version read, and
+`opnsense-disconnect` disables local intent before removing the protected
+credential. There is no browser setup, background polling, neighbor import,
+network-changing operation, or supported-router claim. An owned 26.7.4 lab
+must verify response schema, TLS enrollment, effective privileges, failures,
+and recovery before the adapter can be listed as supported. Any later neighbor
+import must bind each read to an enrolled network and revalidate endpoint and
+scope before taking a sample.
+
+The native connection accepts only a private IP-literal HTTPS origin. Setup
+asks for foreground approval before reading the API key and secret with terminal
+echo disabled. A self-signed router needs an explicitly supplied regular PEM
+file (at most 32 KiB); setup shows the SHA-256 of its bytes for independent
+review. The controller probes version before saving an enabled connection.
+Durable configuration contains the approved origin and an opaque protected
+reference only. The API credential and optional PEM are stored together in
+the desktop protected store; the stored origin must still match the approved
+origin before the credential can be reused. A failed protected-store deletion
+leaves the connection durably disabled for a retry. Native IPC requires an
+authenticated, verified same-user OS peer and returns fixed, redacted failures.
+The status result contains only connected state, approved origin and the exact
+supported version. It does not return router hostname or neighbor data.
 
 The client accepts one private IP-literal HTTPS origin with no URL credentials,
 path, query, or fragment. It uses OS certificate roots plus an optional

@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "id": "opnsense",
+  "display_name": "Router connection",
+  "summary": "Connect to an existing OPNsense router for candidate read-only status without changing its configuration or ownership.",
+  "release": "v0.2",
+  "ownership": ["external"],
+  "targets": [
+    {"os": "darwin", "arch": "arm64", "min_version": "13.0", "support": "candidate", "evidence": "docs/development/opnsense-readonly.md"}
+  ],
+  "inputs": [
+    {"id": "approved-endpoint", "required": true, "description": "An explicitly approved private IP-literal HTTPS OPNsense origin."},
+    {"id": "api-credential", "required": true, "description": "An API key and secret supplied through protected local credential storage."},
+    {"id": "certificate-trust", "required": false, "description": "An explicitly enrolled PEM certificate for a router not trusted by system roots."}
+  ],
+  "privileges": [
+    {"id": "external-api-read", "requirement": "required", "description": "Constrained upstream API privileges and deny-config-write on the exact tested release."}
+  ],
+  "dependencies": [
+    {"id": "opnsense", "kind": "service", "required": true, "version_constraint": "26.7.4", "description": "A separately operated OPNsense router at the approved origin."}
+  ],
+  "config": {
+    "schema_version": 1,
+    "fields": [
+      {"name": "endpoint", "type": "string", "required": true, "description": "Approved private HTTPS IP-literal origin."},
+      {"name": "credential_ref", "type": "secret-ref", "required": true, "description": "Controller-owned protected reference to API credential and optional enrolled certificate."}
+    ]
+  },
+  "resources": {"measurement": "unmeasured", "profile": "external-read-only", "evidence": "Owned-router runtime measurements remain release-gated."},
+  "provenance": {
+    "kind": "third-party", "license": "BSD-2-Clause", "source": "https://github.com/opnsense/core",
+    "version_policy": "The external owner chooses the installed version; Cozy SOC's candidate API accepts only 26.7.4 until an owned lab validates more versions."
+  },
+  "health": {"process_required": false, "verification_signals": ["endpoint-authenticated", "version-supported"], "coverage_requires_verification": true},
+  "data_handling": {
+    "activation": "Connection setup reads version state after deliberate approval; no background polling or external settings change.",
+    "sources": ["Approved external OPNsense system-information GET endpoint."],
+    "stored": ["External ownership, approved origin, protected credential reference and redacted control audit records."],
+    "excluded": ["API credentials or enrolled certificate in ordinary configuration and diagnostics, neighbor tables during setup, and all router configuration changes."]
+  },
+  "outputs": [{"kind": "integration-status", "schema_version": 1}],
+  "deep_links": [],
+  "lifecycle": ["preflight", "connect", "verify", "disconnect"]
+}
