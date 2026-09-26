@@ -107,7 +107,7 @@ function RunDetails({ run }: { run: HTTPSHistoryRun }) {
    <div><dt>Request reference</dt><dd>{run.selection.request_id}</dd></div>
    <div><dt>Run reference</dt><dd>{run.run_id}</dd></div>
   </dl>
-  <p>A matching status does not prove body correctness. Compare evidence from the same time; any new check needs separate native approval.</p>
+  <p>A matching status does not prove body correctness. Compare evidence from the same time; any new check needs a separate one-shot review and approval in the browser or native command.</p>
   <p>Private endpoint addresses, TLS names, request paths and response content are not loaded here. The historical interface may differ from the controller's current network.</p>
  </details>;
 }

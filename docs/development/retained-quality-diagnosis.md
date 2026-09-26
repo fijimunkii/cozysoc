@@ -88,7 +88,8 @@ Conclusions keep unknown/limited confidence, evidence and safe next steps. They 
 not establish internet availability, a captive portal, an ISP/root-cause diagnosis,
 security or monitoring coverage. A DNS error reply is a response, and the selected
 ICMP target's gateway role remains unverified. New measurements still require
-separate experimental startup opt-in and deliberate one-shot native approval.
+separate experimental startup opt-in and deliberate one-shot review and approval
+through the native command or authenticated local browser.
 
 ## Read-only browser presentation
 

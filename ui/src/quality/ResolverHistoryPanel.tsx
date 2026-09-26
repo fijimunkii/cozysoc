@@ -107,7 +107,7 @@ function RunDetails({ run }: { run: ResolverHistoryRun }) {
       <div><dt>Query reference</dt><dd>{run.selection.query_id}</dd></div>
       <div><dt>Run reference</dt><dd>{run.run_id}</dd></div>
     </dl>
-    <p><strong>Next step:</strong> Compare evidence from the same time and review the original query expectation and resolver policy. A differing reply alone does not prove a broken resolver. Any new check needs separate native approval.</p>
+    <p><strong>Next step:</strong> Compare evidence from the same time and review the original query expectation and resolver policy. A differing reply alone does not prove a broken resolver. Any new check needs a separate one-shot review and approval in the browser or native command.</p>
     <p>References identify the original saved selection. Private query names, resolver addresses, and raw answers are not loaded here. The historical interface may differ from the controller's current network.</p>
   </details>;
 }
