@@ -50,3 +50,36 @@ func TestWebArrivalFindingsRequireSessionAndReturnOnlyProjection(t *testing.T) {
 		}
 	}
 }
+
+func TestWebArrivalAcknowledgementRequiresCSRFAndStrictBody(t *testing.T) {
+	const host = "127.0.0.1:43821"
+	h := newWebHandler(host, testUIDir(t), testBootstrapToken, testSessionToken, nil)
+	h.csrfToken = "csrf"
+	calls := 0
+	h.acknowledgeArrival = func(_ context.Context, params api.ArrivalAcknowledgeParams) (api.ArrivalAcknowledgeResult, error) {
+		calls++
+		return api.ArrivalAcknowledgeResult{FindingID: params.FindingID, AcknowledgedAt: time.Unix(1, 0).UTC(), Changed: true}, nil
+	}
+	request := func(body string, csrf bool) *httptest.ResponseRecorder {
+		r := authenticatedRequest(http.MethodPost, "http://"+host+"/api/findings/arrivals/acknowledge", strings.NewReader(body))
+		r.Header.Set("Origin", "http://"+host)
+		r.Header.Set("Content-Type", "application/json")
+		if csrf {
+			r.Header.Set(webCSRFHeader, "csrf")
+		}
+		response := httptest.NewRecorder()
+		h.ServeHTTP(response, r)
+		return response
+	}
+	if got := request(`{"finding_id":"finding.one"}`, false); got.Code != http.StatusForbidden || calls != 0 {
+		t.Fatal(got.Code, calls)
+	}
+	for _, body := range []string{`{}`, `{"finding_id":"finding.one","extra":true}`, `{"finding_id":"<script>"}`, `{"finding_id":"finding.one"} {}`} {
+		if got := request(body, true); got.Code != http.StatusBadRequest || calls != 0 {
+			t.Fatal(got.Code, calls, got.Body.String())
+		}
+	}
+	if got := request(`{"finding_id":"finding.one"}`, true); got.Code != http.StatusOK || calls != 1 || !strings.Contains(got.Body.String(), `"changed":true`) {
+		t.Fatal(got.Code, calls, got.Body.String())
+	}
+}

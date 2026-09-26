@@ -3,8 +3,12 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/fijimunkii/cozysoc/internal/controller/domain"
 )
 
 const MaxRecentArrivalFindings = 100
@@ -16,6 +20,7 @@ type ArrivalFinding struct {
 	RecordedAt            time.Time
 	EvidenceObservationID string
 	EvidenceRetained      bool
+	AcknowledgedAt        *time.Time
 }
 
 type ArrivalFindingPage struct {
@@ -35,7 +40,7 @@ func (s *Store) ListRecentArrivalFindings(ctx context.Context, asOf time.Time) (
 		return ArrivalFindingPage{}, fmt.Errorf("begin arrival finding read: %w", err)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT f.id,f.scope_id,f.observed_at_ns,f.created_at_ns,e.observation_id
+	rows, err := tx.QueryContext(ctx, `SELECT f.id,f.scope_id,f.observed_at_ns,f.created_at_ns,e.observation_id,f.acknowledged_at_ns
 		FROM findings f JOIN finding_evidence e ON e.finding_id=f.id
 		WHERE f.detector_id='device-watch-arrival' AND f.detector_version='1'
 		AND f.category='new-device' AND f.severity='informational'
@@ -48,7 +53,8 @@ func (s *Store) ListRecentArrivalFindings(ctx context.Context, asOf time.Time) (
 	for rows.Next() {
 		var item ArrivalFinding
 		var observed, recorded int64
-		if err := rows.Scan(&item.ID, &item.ScopeID, &observed, &recorded, &item.EvidenceObservationID); err != nil {
+		var acknowledged sql.NullInt64
+		if err := rows.Scan(&item.ID, &item.ScopeID, &observed, &recorded, &item.EvidenceObservationID, &acknowledged); err != nil {
 			rows.Close()
 			return ArrivalFindingPage{}, fmt.Errorf("scan arrival finding: %w", err)
 		}
@@ -66,6 +72,10 @@ func (s *Store) ListRecentArrivalFindings(ctx context.Context, asOf time.Time) (
 		}
 		item.ObservedAt = time.Unix(0, observed).UTC()
 		item.RecordedAt = time.Unix(0, recorded).UTC()
+		if acknowledged.Valid && acknowledged.Int64 <= asOf.UnixNano() {
+			at := time.Unix(0, acknowledged.Int64).UTC()
+			item.AcknowledgedAt = &at
+		}
 		page.Findings = append(page.Findings, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -95,4 +105,64 @@ func (s *Store) ListRecentArrivalFindings(ctx context.Context, asOf time.Time) (
 		return ArrivalFindingPage{}, fmt.Errorf("finish arrival finding read: %w", err)
 	}
 	return page, nil
+}
+
+var ErrArrivalFindingNotFound = errors.New("arrival finding is not available")
+
+// Acknowledgement means a local user has reviewed this retained informational
+// finding. It does not validate the inferred identity or suppress future data.
+func (s *Store) AcknowledgeArrivalFinding(ctx context.Context, findingID string) (time.Time, bool, error) {
+	if s == nil || s.conn == nil {
+		return time.Time{}, false, fmt.Errorf("storage is unavailable")
+	}
+	if err := validateQueryID("finding id", findingID); err != nil {
+		return time.Time{}, false, err
+	}
+	now := s.now().UTC()
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("begin arrival acknowledgement: %w", err)
+	}
+	defer tx.Rollback()
+	var acknowledged sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT acknowledged_at_ns FROM findings
+		WHERE id=? AND detector_id='device-watch-arrival' AND detector_version='1'
+		AND category='new-device' AND severity='informational' AND expires_at_ns>?`, findingID, now.UnixNano()).Scan(&acknowledged)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, ErrArrivalFindingNotFound
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("read arrival finding: %w", err)
+	}
+	if acknowledged.Valid {
+		return time.Unix(0, acknowledged.Int64).UTC(), false, nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE findings SET acknowledged_at_ns=? WHERE id=? AND acknowledged_at_ns IS NULL`, now.UnixNano(), findingID); err != nil {
+		return time.Time{}, false, wrapWrite("acknowledge arrival finding", err)
+	}
+	payload, err := json.Marshal(map[string]any{"schema_version": 1, "finding_id": findingID, "state": "acknowledged"})
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("encode arrival acknowledgement: %w", err)
+	}
+	auditID, err := randomID("audit.finding-acknowledgement")
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	event := domain.AuditEvent{ID: auditID, Kind: "finding-acknowledgement", Actor: "local-os-user", OccurredAt: now, SchemaVersion: 1, Payload: payload, Retention: domain.RetentionAudit}
+	if err := domain.ValidateAuditEvent(event); err != nil {
+		return time.Time{}, false, err
+	}
+	expiresAt, err := s.expiry(domain.RetentionAudit)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_events
+		(id,kind,actor,occurred_at_ns,schema_version,payload,retention_class,expires_at_ns)
+		VALUES (?,?,?,?,?,?,?,?)`, event.ID, event.Kind, event.Actor, now.UnixNano(), event.SchemaVersion, string(event.Payload), event.Retention, expiresAt); err != nil {
+		return time.Time{}, false, wrapWrite("audit arrival acknowledgement", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return time.Time{}, false, wrapWrite("commit arrival acknowledgement", err)
+	}
+	return now, true, nil
 }

@@ -19,6 +19,7 @@ const (
 	MethodDeviceDetail        = "device.detail"
 	MethodDeviceActivity      = "device.activity"
 	MethodArrivalFindings     = "findings.arrivals"
+	MethodArrivalAcknowledge  = "findings.arrival.acknowledge"
 	MethodDeviceLabel         = "device.label"
 	MethodDeviceMerge         = "device.merge"
 	MethodDeviceUnmerge       = "device.unmerge"
@@ -211,12 +212,23 @@ type ArrivalFindingList struct {
 }
 
 type ArrivalFindingItem struct {
-	ID                    string    `json:"id"`
-	ScopeID               string    `json:"scope_id"`
-	ObservedAt            time.Time `json:"observed_at"`
-	RecordedAt            time.Time `json:"recorded_at"`
-	EvidenceObservationID string    `json:"evidence_observation_id"`
-	EvidenceRetained      bool      `json:"evidence_retained"`
+	ID                    string     `json:"id"`
+	ScopeID               string     `json:"scope_id"`
+	ObservedAt            time.Time  `json:"observed_at"`
+	RecordedAt            time.Time  `json:"recorded_at"`
+	EvidenceObservationID string     `json:"evidence_observation_id"`
+	EvidenceRetained      bool       `json:"evidence_retained"`
+	AcknowledgedAt        *time.Time `json:"acknowledged_at,omitempty"`
+}
+
+type ArrivalAcknowledgeParams struct {
+	FindingID string `json:"finding_id"`
+}
+
+type ArrivalAcknowledgeResult struct {
+	FindingID      string    `json:"finding_id"`
+	AcknowledgedAt time.Time `json:"acknowledged_at"`
+	Changed        bool      `json:"changed"`
 }
 
 type DeviceLabelParams struct {

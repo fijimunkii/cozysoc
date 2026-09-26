@@ -17,6 +17,10 @@ test("informational arrivals load on demand and keep source expiry visible", asy
         reads++;
         return reply({ as_of: "2026-09-26T17:00:00Z", truncated: false,
           items: [{ id: "finding.one", scope_id: "scope.home", observed_at: "2026-09-26T16:00:00Z", recorded_at: "2026-09-26T16:01:00Z", evidence_observation_id: "obs.one", evidence_retained: false, payload: "private mac 02:00:00:00:00:01" }] });
+      case "/api/findings/arrivals/acknowledge":
+        expect(route.request().method()).toBe("POST");
+        expect(route.request().headers()["x-cozy-csrf"]).toBe("c".repeat(43));
+        return reply({ finding_id: "finding.one", acknowledged_at: "2026-09-26T17:05:00Z", changed: true });
       default: return reply({ error: "unavailable" }, 503);
     }
   });
@@ -35,6 +39,8 @@ test("informational arrivals load on demand and keep source expiry visible", asy
   expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(result.violations).toEqual([]);
+  await page.getByRole("button", { name: "Mark as reviewed" }).click();
+  await expect(page.getByText(/this records review only/i)).toBeVisible();
   await page.getByRole("button", { name: "Review activity" }).click();
   await expect(page.getByRole("heading", { name: "What changed on your visible network" })).toBeVisible();
 });
