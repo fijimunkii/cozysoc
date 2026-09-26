@@ -182,6 +182,17 @@ func TestMalformedFilterMetadataDoesNotHideValidServiceStatus(t *testing.T) {
 	}
 }
 
+func TestFilterInventoryAcceptsNullEmptyListFromReleaseAPI(t *testing.T) {
+	block := json.RawMessage(`[{"enabled":true,"id":7,"name":"Example","rules_count":12}]`)
+	inventory := decodeFilterInventory(block, json.RawMessage(`null`))
+	if !inventory.Available || inventory.BlocklistTotal != 1 || inventory.AllowlistTotal != 0 || len(inventory.Sources) != 1 {
+		t.Fatalf("null empty allowlist hid filter inventory: %+v", inventory)
+	}
+	if decodeFilterInventory(nil, json.RawMessage(`[]`)).Available {
+		t.Fatal("missing list looked complete")
+	}
+}
+
 func TestEndpointAndResponseBoundaries(t *testing.T) {
 	for _, endpoint := range []string{"http://example.test", "http://localhost:3000", "https://example.test", "file:///tmp/test", "https://user:pass@127.0.0.1", "https://127.0.0.1/path", "https://127.0.0.1/%2F", "https://127.0.0.1?", "https://127.0.0.1/?q=1", "https://127.0.0.1/#part", "https://127.0.0.1:0"} {
 		if _, err := NewClient(endpoint, "", secretstore.Secret{}); !errors.Is(err, ErrEndpoint) {

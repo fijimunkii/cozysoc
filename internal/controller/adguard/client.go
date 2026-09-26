@@ -154,8 +154,15 @@ func projectFilterInventory(blocklists, allowlists *[]filterItem) FilterInventor
 }
 
 func decodeFilterInventory(blockRaw, allowRaw json.RawMessage) FilterInventory {
-	if len(blockRaw) == 0 || len(allowRaw) == 0 || bytes.Equal(blockRaw, []byte("null")) || bytes.Equal(allowRaw, []byte("null")) {
+	if len(blockRaw) == 0 || len(allowRaw) == 0 {
 		return FilterInventory{}
+	}
+	// The release API serializes an empty list as null on a fresh instance.
+	if bytes.Equal(bytes.TrimSpace(blockRaw), []byte("null")) {
+		blockRaw = []byte("[]")
+	}
+	if bytes.Equal(bytes.TrimSpace(allowRaw), []byte("null")) {
+		allowRaw = []byte("[]")
 	}
 	var blocklists, allowlists []filterItem
 	if json.Unmarshal(blockRaw, &blocklists) != nil || json.Unmarshal(allowRaw, &allowlists) != nil {

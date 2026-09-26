@@ -86,8 +86,8 @@ These observations are private browsing data. The one-shot collection path
 persists selected DNS name, client IP, query type, response status and filtering
 reason in the controller's local evidence store with `ephemeral` retention
 (24 hours by default); configured ephemeral retention may be shorter. Client
-IDs are used only to form opaque deduplication keys and are
-not stored in the observation payload. Query names and addresses never enter
+IDs are used only to form opaque deduplication keys and are not stored in the
+observation payload. Query names and addresses never enter
 index keys, native results, logs, or diagnostics. Retained events state
 `device-identity-unverified`; they do not create device identity claims or
 coverage samples. A matching prefix means only that the reported client IP
@@ -97,9 +97,19 @@ retention/deletion controls remain separate work under #30.
 
 The source contract is the [AdGuard Home v0.107.79 OpenAPI definition](https://github.com/AdguardTeam/AdGuardHome/blob/v0.107.79/openapi/openapi.yaml).
 The API and connection paths are tested against local HTTP and in-memory
-Keychain fixtures, including the canonical durable config manager. A live
-v0.107.79 instance and signed macOS Keychain runtime exercise remain release
-gates under #8 and #29. The one-shot collection path has local HTTP and store
-round-trip fixtures, including deduplication and scope exclusions. This is
-candidate support; live signed runtime, device-history validation, managed
-configuration and coverage verification remain later #16 gates.
+Keychain fixtures, including the canonical durable config manager. The one-shot
+collection path has local HTTP and store round-trip fixtures, including
+deduplication and scope exclusions.
+
+### Isolated instance evidence — 2026-09-26
+
+The official `linux/arm64` v0.107.79 container image at digest
+`sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0`
+was configured in a disposable local Docker lab. Only its web port was
+published to host loopback; DNS port 53 was not published. The actual
+controller client completed a status probe and a bounded empty query-log read.
+It observed two blocklists and the release API's `null` empty allowlist shape;
+both are now handled by the filter inventory parser. This exercise does not
+validate DNS traffic from household clients, signed macOS Keychain access,
+device-history attribution, managed configuration, or coverage. This remains
+candidate support; those release gates stay open under #16 and #29.
