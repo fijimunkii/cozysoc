@@ -1,3 +1,5 @@
+import { readBoundedWebJSON } from "../web-json";
+
 const maxDevices = 4096;
 const maxIdentifierLength = 128;
 const maxLabelLength = 160;
@@ -77,15 +79,11 @@ export async function loadDevicesFromWeb(): Promise<DeviceList> {
     throw new DeviceLoadError("Open the authenticated local URL printed by `cozysoc web`, then retry.");
   }
   if (!response.ok) throw new DeviceLoadError(`Live device request failed with status ${response.status}.`);
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
-    throw new DeviceLoadError("Live device response was not JSON.");
-  }
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = await readBoundedWebJSON(response);
   } catch {
-    throw new DeviceLoadError("Live device response was not valid JSON.");
+    throw new DeviceLoadError("Live device response was invalid or too large.");
   }
   return parseDeviceList(payload);
 }

@@ -1,6 +1,7 @@
 import { parseGatewayCheckResult, parseGatewayCheckReview, type GatewayCheckClient } from "../quality/gateway-check";
 import { parseResolverSelections, parseResolverReview, parseResolverResult, type ResolverCheckClient, type ResolverSelection, type ResolverSettings } from "../quality/resolver-check";
 import { parseHTTPSSelections, parseHTTPSReview, parseHTTPSResult, type HTTPSCheckClient, type HTTPSSelection, type HTTPSSettings } from "../quality/https-check";
+import { maxWebErrorJSONBytes, readBoundedWebJSON } from "../web-json";
 
 const maxCandidates = 64;
 const maxPrefixes = 64;
@@ -495,7 +496,7 @@ async function responseError(response: Response): Promise<SetupRequestError> {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.toLowerCase().startsWith("application/json")) {
     try {
-      const value = objectValue(await response.json(), "error response");
+      const value = objectValue(await readBoundedWebJSON(response, maxWebErrorJSONBytes), "error response");
       if (typeof value.error === "string" && value.error.length <= 64 && !controlCharacters.test(value.error)) code = value.error;
       if (typeof value.message === "string" && value.message.length <= 256 && !controlCharacters.test(value.message)) message = value.message;
     } catch {
@@ -506,14 +507,10 @@ async function responseError(response: Response): Promise<SetupRequestError> {
 }
 
 async function readJSON(response: Response, label: string): Promise<unknown> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
-    throw new SetupRequestError("invalid_response", `${label} was not JSON.`);
-  }
   try {
-    return await response.json();
+    return await readBoundedWebJSON(response);
   } catch {
-    throw new SetupRequestError("invalid_response", `${label} was not valid JSON.`);
+    throw new SetupRequestError("invalid_response", `${label} was invalid or too large.`);
   }
 }
 

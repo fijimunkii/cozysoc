@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { demoCapabilitiesRaw, demoStatusRaw } from "../src/demo/tools";
+import { maxWebJSONBytes } from "../src/web-json";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
@@ -66,4 +67,29 @@ test("live outage and stale refresh recover without substituting demo evidence",
   await expect(page.getByRole("status", { name: "Live controller data" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "No coverage reports yet" })).toBeVisible();
   expect(coverageReads).toBe(4);
+});
+
+test("oversized live coverage JSON fails closed and a later bounded read recovers", async ({ page }) => {
+  const asOf = new Date().toISOString();
+  const oversized = JSON.stringify({ as_of: asOf, reports: [], private_value: `household-secret${"x".repeat(maxWebJSONBytes)}` });
+  let coverageReads = 0;
+  await page.route("**/api/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const reply = (value: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(value) });
+    switch (path) {
+      case "/api/coverage":
+        coverageReads++;
+        return coverageReads === 1 ? route.fulfill({ status: 200, contentType: "application/json", body: oversized }) : reply({ as_of: asOf, reports: [] });
+      case "/api/devices": return reply({ configured: false, as_of: asOf, devices: [], truncated: false });
+      case "/api/networks": return reply({ candidates: [], candidates_truncated: false });
+      case "/api/activity": return reply({ configured: false, since: new Date(Date.parse(asOf) - 86400000).toISOString(), as_of: asOf, items: [], truncated: false });
+      default: return reply({ error: "unavailable" }, 503);
+    }
+  });
+  await page.goto("/");
+  await expect(page.getByRole("alert", { name: "Live monitoring unavailable" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("household-secret");
+  await page.getByRole("button", { name: "Retry live connection" }).click();
+  await expect(page.getByRole("status", { name: "Live controller data" })).toBeVisible();
+  expect(coverageReads).toBe(2);
 });

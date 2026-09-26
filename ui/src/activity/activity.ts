@@ -1,3 +1,5 @@
+import { readBoundedWebJSON } from "../web-json";
+
 const maxActivityItems = 100;
 const identifierPattern = /^[a-z][a-z0-9._:-]{0,127}$/;
 const macPattern = /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/;
@@ -90,10 +92,8 @@ export async function loadDeviceActivityFromWeb(): Promise<DeviceActivityList> {
   }
   if (response.status === 401) throw new ActivityLoadError("Open the authenticated local URL printed by `cozysoc web`, then retry.");
   if (!response.ok) throw new ActivityLoadError(`Live activity request failed with status ${response.status}.`);
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) throw new ActivityLoadError("Live activity response was not JSON.");
   let payload: unknown;
-  try { payload = await response.json(); } catch { throw new ActivityLoadError("Live activity response was not valid JSON."); }
+  try { payload = await readBoundedWebJSON(response); } catch { throw new ActivityLoadError("Live activity response was invalid or too large."); }
   return parseDeviceActivity(payload);
 }
 

@@ -136,9 +136,9 @@ export function App({ loadData = loadAppDataFromWeb, setupClient, deviceLabelCli
           setView({ mode: "live", data });
         }
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : "Live Cozy SOC data is unavailable.";
+          const message = "Live Cozy SOC data is unavailable. Retry the read or reopen the authenticated local URL if the session expired.";
           setView((current) => current.mode === "live"
             ? { mode: "stale", lastReadAt: lastSuccessfulRead.current ?? Date.now(), message }
             : current.mode === "stale"

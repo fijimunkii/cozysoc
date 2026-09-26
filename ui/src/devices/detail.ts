@@ -1,4 +1,5 @@
 import { DeviceLoadError, parseDevicePresence, type DevicePresence } from "./devices";
+import { readBoundedWebJSON } from "../web-json";
 
 const maxEvidence = 100;
 const idPattern = /^[a-z][a-z0-9._:-]{0,127}$/;
@@ -73,10 +74,8 @@ export async function loadDeviceDetailFromWeb(deviceID: string): Promise<DeviceD
   if (response.status === 401) throw new DeviceLoadError("The local web session expired. Reopen the authenticated Cozy SOC URL and try again.");
   if (response.status === 404) throw new DeviceLoadError("This device is no longer available in the current authorized scope. Refresh the device list and try again.");
   if (!response.ok) throw new DeviceLoadError(`Live device evidence request failed with status ${response.status}.`);
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) throw new DeviceLoadError("Live device evidence response was not JSON.");
   let payload: unknown;
-  try { payload = await response.json(); } catch { throw new DeviceLoadError("Live device evidence response was not valid JSON."); }
+  try { payload = await readBoundedWebJSON(response); } catch { throw new DeviceLoadError("Live device evidence response was invalid or too large."); }
   const detail = parseDeviceDetail(payload);
   if (detail.device.id !== deviceID) throw new DeviceLoadError("Live device evidence response did not match the requested device.");
   return detail;

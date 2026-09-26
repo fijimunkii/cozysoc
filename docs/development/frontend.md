@@ -116,6 +116,8 @@ The root UI establishes or reuses its local web session and then attempts the sa
 - If a later refresh fails, the last successful read time remains visible with an out-of-date warning. Prior device, activity, coverage and tool data are withheld until a live read succeeds again, so old presence is not described as current. Setup, label and network-quality actions are also withheld. Neither a failed refresh nor tab resume starts an active network check.
 - If only the device projection fails while a fresh coverage read succeeds, Overview keeps that coverage and other successful views available. Presence becomes explicitly unknown, the Devices page offers a retry, and setup controls pause because the current Device Watch intent cannot be inferred from missing device data. An empty device list is never synthesized from a failed read.
 
+Core browser reads for coverage, devices, activity, device detail, tools, storage, diagnostics and setup accept at most 4 MiB of JSON before decoding and schema validation. Setup error JSON has an 8 KiB limit. The shared reader requires a JSON content type and valid UTF-8 and cancels an oversized stream; individual projections retain their tighter field and collection bounds. Failed live reads show fixed retry/session guidance rather than copying parser or transport diagnostics into the interface. Narrow quality-history and check readers retain their separate smaller limits.
+
 Demo data remains source code only; it is not written into controller storage or mixed with real observations/findings.
 
 ## Static asset boundary

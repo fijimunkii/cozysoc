@@ -1,3 +1,5 @@
+import { readBoundedWebJSON } from "../web-json";
+
 const QUOTA_STATES = new Set(["current", "pressure", "at-quota"]);
 const FILESYSTEM_STATES = new Set(["current", "pressure", "full", "unavailable", "unsupported"]);
 const RETENTION_CLASSES = ["ephemeral", "short", "standard", "audit"] as const;
@@ -19,7 +21,7 @@ export interface StorageOverview {
 export async function loadStorageOverviewFromWeb(): Promise<StorageOverview> {
   const response = await fetch("/api/storage", { credentials: "same-origin", headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("Storage information is unavailable.");
-  return parseStorageOverview(await response.json());
+  return parseStorageOverview(await readBoundedWebJSON(response));
 }
 
 export function parseStorageOverview(raw: unknown): StorageOverview {

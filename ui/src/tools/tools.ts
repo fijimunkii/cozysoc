@@ -1,3 +1,5 @@
+import { readBoundedWebJSON } from "../web-json";
+
 const ID_PATTERN = /^[a-z][a-z0-9._:-]{0,127}$/;
 const SUPPORT = new Set(["candidate", "planned", "tested", "limited"]);
 const OWNERSHIP = new Set(["builtin", "external", "managed-local", "managed-remote"]);
@@ -77,9 +79,10 @@ export async function loadToolsFromWeb(): Promise<ToolsSnapshot> {
     fetch("/api/status", { credentials: "same-origin", headers: { Accept: "application/json" } }),
     fetch("/api/capabilities", { credentials: "same-origin", headers: { Accept: "application/json" } }),
   ]);
-  if (!statusResponse.ok) throw new Error(await responseMessage(statusResponse, "Controller status is unavailable."));
-  if (!capabilitiesResponse.ok) throw new Error(await responseMessage(capabilitiesResponse, "Capability information is unavailable."));
-  return parseToolsSnapshot(await statusResponse.json(), await capabilitiesResponse.json());
+  if (!statusResponse.ok) throw new Error("Controller status is unavailable.");
+  if (!capabilitiesResponse.ok) throw new Error("Capability information is unavailable.");
+  const [status, capabilities] = await Promise.all([readBoundedWebJSON(statusResponse), readBoundedWebJSON(capabilitiesResponse)]);
+  return parseToolsSnapshot(status, capabilities);
 }
 
 export function parseToolsSnapshot(statusRaw: unknown, capabilitiesRaw: unknown): ToolsSnapshot {
@@ -267,13 +270,4 @@ function uniqueLiteralArray(value: unknown, allowed: Set<string>, label: string,
   const items = array(value, label, maxItems).map((item, index) => literal(item, allowed, `${label} ${index}`));
   if (new Set(items).size !== items.length) throw new Error(`${label} contains duplicates`);
   return items;
-}
-
-async function responseMessage(response: Response, fallback: string): Promise<string> {
-  try {
-    const value = object(await response.json(), "web error");
-    return typeof value.message === "string" && value.message.length <= 512 ? value.message : fallback;
-  } catch {
-    return fallback;
-  }
 }

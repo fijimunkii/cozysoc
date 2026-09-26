@@ -55,7 +55,8 @@ describe("loadAppDataFromWeb", () => {
     expect(result.networks).toBe(networks);
     expect(result.tools).toBe(tools);
     expect(result.activity).toBeNull();
-    expect(result.activity_error).toBe("activity projection unavailable");
+    expect(result.activity_error).toMatch(/Device activity is temporarily unavailable/);
+    expect(JSON.stringify(result)).not.toContain("activity projection unavailable");
   });
 
   it("keeps core evidence live when only tools fail", async () => {
@@ -66,7 +67,8 @@ describe("loadAppDataFromWeb", () => {
     expect(result.coverage).toBe(coverage);
     expect(result.devices).toBe(devices);
     expect(result.tools).toBeNull();
-    expect(result.tools_error).toBe("capability projection unavailable");
+    expect(result.tools_error).toMatch(/Tool information is temporarily unavailable/);
+    expect(JSON.stringify(result)).not.toContain("capability projection unavailable");
   });
 
   it("keeps coverage live but marks current presence unknown when the device read fails", async () => {
@@ -86,6 +88,13 @@ describe("loadAppDataFromWeb", () => {
     expect(result.tools).toBe(tools);
     expect(result.storage).toBeNull();
     expect(result.storage_error).toBe("Storage information is temporarily unavailable.");
+  });
+
+  it("does not copy network parser diagnostics into the setup view", async () => {
+    vi.mocked(loadNetworksFromWeb).mockRejectedValue(new Error("private interface name"));
+    const result = await loadAppDataFromWeb();
+    expect(result.network_error).toMatch(/Network setup information is temporarily unavailable/);
+    expect(JSON.stringify(result)).not.toContain("private interface name");
   });
 
   it("still fails the live bundle when the core coverage read fails", async () => {

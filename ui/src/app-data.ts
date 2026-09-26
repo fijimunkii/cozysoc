@@ -29,24 +29,24 @@ export async function loadAppDataFromWeb(): Promise<AppData> {
     .catch(() => ({ devices: null, devices_error: "Device evidence is temporarily unavailable." }));
   const activityPromise = loadDeviceActivityFromWeb()
     .then((activity) => ({ activity }))
-    .catch((error: unknown) => ({
+    .catch(() => ({
       activity: null,
-      activity_error: error instanceof Error ? error.message : "Device activity is unavailable.",
+      activity_error: "Device activity is temporarily unavailable. Retry the read or reopen the authenticated local URL if the session expired.",
     }));
   const toolsPromise = loadToolsFromWeb()
     .then((tools) => ({ tools }))
-    .catch((error: unknown) => ({
+    .catch(() => ({
       tools: null,
-      tools_error: error instanceof Error ? error.message : "Tool information is unavailable.",
+      tools_error: "Tool information is temporarily unavailable. Retry the read or reopen the authenticated local URL if the session expired.",
     }));
   const storagePromise = loadStorageOverviewFromWeb()
     .then((storage) => ({ storage }))
     .catch(() => ({ storage: null, storage_error: "Storage information is temporarily unavailable." }));
   const networksPromise = loadNetworksFromWeb()
     .then((networks) => ({ networks }))
-    .catch((error: unknown) => ({
+    .catch(() => ({
       networks: { candidates: [], candidates_truncated: false } as NetworkList,
-      network_error: error instanceof Error ? error.message : "Network setup information is unavailable.",
+      network_error: "Network setup information is temporarily unavailable. Retry the read or reopen the authenticated local URL if the session expired.",
     }));
   const [deviceState, activityState, toolsState, storageState, networkState] = await Promise.all([devicesPromise, activityPromise, toolsPromise, storagePromise, networksPromise]);
   return { coverage, ...deviceState, ...activityState, ...toolsState, ...storageState, ...networkState };

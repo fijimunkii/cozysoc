@@ -152,8 +152,9 @@ describe("App product navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh evidence" }));
     expect(screen.getByText("Living Room TV")).toBeTruthy();
     await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
-    await act(async () => { rejectRefresh(new Error("controller unavailable")); });
+    await act(async () => { rejectRefresh(new Error("private controller diagnostic")); });
     expect(screen.getByRole("alert", { name: "Live evidence out of date" })).toBeTruthy();
+    expect(screen.queryByText(/private controller diagnostic/)).toBeNull();
     expect(screen.queryByText("Living Room TV")).toBeNull();
     expect(screen.queryByRole("button", { name: "Rename Living Room TV" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
@@ -253,8 +254,9 @@ describe("App product navigation", () => {
   });
 
   it("does not silently replace an unavailable controller with demo data", async () => {
-    render(<App loadData={async () => Promise.reject(new Error("offline"))} />);
+    render(<App loadData={async () => Promise.reject(new Error("private offline diagnostic"))} />);
     expect(await screen.findByRole("alert", { name: "Live monitoring unavailable" })).toBeTruthy();
+    expect(screen.queryByText(/private offline diagnostic/)).toBeNull();
     expect(screen.queryByRole("status", { name: "Synthetic demo data" })).toBeNull();
     expect(screen.queryByText("Living Room TV")).toBeNull();
   });
