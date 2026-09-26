@@ -96,6 +96,19 @@ type StorageOverview struct {
 	FilesystemTotalBytes     int64              `json:"filesystem_total_bytes"`
 	FilesystemAvailableBytes int64              `json:"filesystem_available_bytes"`
 	Retention                []StorageRetention `json:"retention"`
+	Inventory                StorageInventory   `json:"inventory"`
+}
+
+// StorageInventory is a count of stored records, not a per-class byte estimate.
+type StorageInventory struct {
+	BatchEvidenceRecords int64 `json:"batch_evidence_records"`
+	OtherObservations    int64 `json:"other_observations"`
+	IdentityClaims       int64 `json:"identity_claims"`
+	CoverageSamples      int64 `json:"coverage_samples"`
+	Findings             int64 `json:"findings"`
+	AuditEvents          int64 `json:"audit_events"`
+	SavedCheckSelections int64 `json:"saved_check_selections"`
+	LabeledDevices       int64 `json:"labeled_devices"`
 }
 
 type CapabilityList struct {

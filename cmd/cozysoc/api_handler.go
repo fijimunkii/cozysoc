@@ -55,6 +55,7 @@ type deviceWatchOperationalControl interface {
 
 type storageOverviewReader interface {
 	Health(context.Context) (storage.Health, error)
+	Inventory(context.Context) (storage.Inventory, error)
 	RetentionDurations() map[domain.RetentionClass]time.Duration
 }
 
@@ -140,6 +141,10 @@ func (h *controllerAPIHandler) StorageOverview(ctx context.Context) (api.Storage
 	if err != nil {
 		return api.StorageOverview{}, err
 	}
+	inventory, err := h.storageOverview.Inventory(ctx)
+	if err != nil {
+		return api.StorageOverview{}, err
+	}
 	durations := h.storageOverview.RetentionDurations()
 	retention := make([]api.StorageRetention, 0, 4)
 	for _, class := range []domain.RetentionClass{domain.RetentionEphemeral, domain.RetentionShort, domain.RetentionStandard, domain.RetentionAudit} {
@@ -155,6 +160,16 @@ func (h *controllerAPIHandler) StorageOverview(ctx context.Context) (api.Storage
 		FilesystemState: string(health.FilesystemState), FilesystemSupported: health.FilesystemSupported,
 		FilesystemTotalBytes: health.FilesystemTotalBytes, FilesystemAvailableBytes: health.FilesystemAvailableBytes,
 		Retention: retention,
+		Inventory: api.StorageInventory{
+			BatchEvidenceRecords: inventory.BatchEvidenceRecords,
+			OtherObservations:    inventory.OtherObservations,
+			IdentityClaims:       inventory.IdentityClaims,
+			CoverageSamples:      inventory.CoverageSamples,
+			Findings:             inventory.Findings,
+			AuditEvents:          inventory.AuditEvents,
+			SavedCheckSelections: inventory.SavedCheckSelections,
+			LabeledDevices:       inventory.LabeledDevices,
+		},
 	}, nil
 }
 

@@ -100,6 +100,7 @@ type webStorageOverview struct {
 	FilesystemTotalBytes     int64                  `json:"filesystem_total_bytes,omitempty"`
 	FilesystemAvailableBytes int64                  `json:"filesystem_available_bytes,omitempty"`
 	Retention                []api.StorageRetention `json:"retention"`
+	Inventory                api.StorageInventory   `json:"inventory"`
 }
 
 func loadStorageOverviewFromController(ctx context.Context, stateDir string) (api.StorageOverview, error) {
@@ -124,6 +125,7 @@ func projectWebStorageOverview(native api.StorageOverview) webStorageOverview {
 		FilesystemState: native.FilesystemState, FilesystemSupported: native.FilesystemSupported,
 		FilesystemTotalBytes: native.FilesystemTotalBytes, FilesystemAvailableBytes: native.FilesystemAvailableBytes,
 		Retention: append([]api.StorageRetention(nil), native.Retention...),
+		Inventory: native.Inventory,
 	}
 }
 

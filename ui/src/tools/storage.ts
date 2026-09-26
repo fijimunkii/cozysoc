@@ -16,6 +16,18 @@ export interface StorageOverview {
   filesystem_total_bytes: number;
   filesystem_available_bytes: number;
   retention: { class: typeof RETENTION_CLASSES[number]; duration_seconds: number }[];
+  inventory: StorageInventory;
+}
+
+export interface StorageInventory {
+  batch_evidence_records: number;
+  other_observations: number;
+  identity_claims: number;
+  coverage_samples: number;
+  findings: number;
+  audit_events: number;
+  saved_check_selections: number;
+  labeled_devices: number;
 }
 
 export async function loadStorageOverviewFromWeb(): Promise<StorageOverview> {
@@ -47,11 +59,22 @@ export function parseStorageOverview(raw: unknown): StorageOverview {
     if (typeof duration !== "number" || !Number.isSafeInteger(duration) || duration <= 0 || duration > 10 * 365 * 86400) throw new Error("Storage retention duration is invalid.");
     return { class: retentionClass, duration_seconds: duration };
   });
+  const rawInventory = object(value.inventory);
+  const inventory: StorageInventory = {
+    batch_evidence_records: count(rawInventory.batch_evidence_records),
+    other_observations: count(rawInventory.other_observations),
+    identity_claims: count(rawInventory.identity_claims),
+    coverage_samples: count(rawInventory.coverage_samples),
+    findings: count(rawInventory.findings),
+    audit_events: count(rawInventory.audit_events),
+    saved_check_selections: count(rawInventory.saved_check_selections),
+    labeled_devices: count(rawInventory.labeled_devices),
+  };
   return {
     as_of: asOf, quota_state: value.quota_state as StorageOverview["quota_state"],
     database_bytes: databaseBytes, used_bytes: usedBytes, reusable_bytes: reusableBytes, max_bytes: maxBytes,
     filesystem_state: value.filesystem_state, filesystem_supported: value.filesystem_supported,
-    filesystem_total_bytes: totalBytes, filesystem_available_bytes: availableBytes, retention,
+    filesystem_total_bytes: totalBytes, filesystem_available_bytes: availableBytes, retention, inventory,
   };
 }
 
@@ -62,5 +85,10 @@ function object(value: unknown): Record<string, unknown> {
 
 function bytes(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("Storage byte count is invalid.");
+  return value;
+}
+
+function count(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("Storage record count is invalid.");
   return value;
 }
