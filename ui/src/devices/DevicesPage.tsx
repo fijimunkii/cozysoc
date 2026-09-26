@@ -8,7 +8,7 @@ import { SetupRequestError, validateDeviceLabelInput } from "../setup/setup";
 import "./devices.css";
 import type { DeviceList, DevicePresence, DevicePresenceState } from "./devices";
 
-export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
+export function DevicesPage({ devices, labelClient, onChanged, onNavigate, loadDetail }: { devices: DeviceList; labelClient?: DeviceLabelClient; onChanged?: () => void; onNavigate?: (page: "overview" | "coverage") => void; loadDetail?: (deviceID: string) => Promise<DeviceDetail> }) {
   const [detailView, setDetailView] = useState<{ deviceID: string; state: "loading" | "ready" | "error"; detail?: DeviceDetail; message?: string } | null>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const statusHeading = useRef<HTMLHeadingElement>(null);
@@ -42,6 +42,7 @@ export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { d
         <h2 id="devices-title" ref={listHeading} tabIndex={-1}>Device visibility is not configured</h2>
         <p>Cozy SOC has not been authorized to observe a home network yet. It will not choose or probe a network on its own.</p>
         <p className="quiet-note">Use the guided setup on Overview to authorize a network and enable Device Watch separately.</p>
+        {onNavigate ? <button type="button" className="primary-action" onClick={() => onNavigate("overview")}>Open guided setup</button> : null}
       </section>
     );
   }
@@ -74,6 +75,10 @@ export function DevicesPage({ devices, labelClient, onChanged, loadDetail }: { d
           <div className="empty-list-state">
             <strong>No devices are visible yet</strong>
             <p>A quiet neighbor cache can be valid. Cozy SOC will wait for positive evidence rather than invent an offline or safe state.</p>
+            {onNavigate || onChanged ? <div className="device-empty-actions">
+              {onNavigate ? <button type="button" className="secondary-action" onClick={() => onNavigate("coverage")}>Review coverage</button> : null}
+              {onChanged ? <button type="button" className="quiet-button" onClick={onChanged}>Refresh device evidence</button> : null}
+            </div> : null}
           </div>
         ) : (
           <div className="device-table-wrap">

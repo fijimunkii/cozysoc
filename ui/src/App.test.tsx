@@ -34,6 +34,34 @@ const liveData: AppData = {
 };
 
 describe("App product navigation", () => {
+  it("opens guided setup directly from unconfigured Devices", async () => {
+    const unconfigured: AppData = {
+      ...liveData,
+      coverage: parseCoverageBundle({ as_of: "2026-09-10T01:00:00Z", reports: [] }),
+      devices: parseDeviceList({ configured: false, as_of: "2026-09-10T01:00:00Z", devices: [], truncated: false }),
+      networks: parseNetworkList({ candidates: [], candidates_truncated: false }),
+    };
+    render(<App loadData={async () => unconfigured} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    expect(screen.getByRole("heading", { name: "Device visibility is not configured" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open guided setup" }));
+    expect(screen.getByRole("heading", { name: "Your home at a glance" })).toBe(document.activeElement);
+  });
+
+  it("offers coverage and a fresh read when a configured network has no devices yet", async () => {
+    const empty: AppData = { ...liveData, devices: parseDeviceList({ configured: true, scope_id: "scope.home", as_of: "2026-09-10T01:00:00Z", devices: [], truncated: false }) };
+    const loadData = vi.fn(async () => empty);
+    render(<App loadData={loadData} />);
+    await screen.findByRole("status", { name: "Live controller data" });
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    expect(screen.getByText("No devices are visible yet")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh device evidence" }));
+    await waitFor(() => expect(loadData).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Review coverage" }));
+    expect(screen.getByRole("heading", { name: "Know what is visible. Know what is not." })).toBe(document.activeElement);
+  });
+
   it("moves keyboard focus to the selected section without stealing it on a live refresh", async () => {
     const updated = { ...liveData, devices: parseDeviceList({
       configured: true,
